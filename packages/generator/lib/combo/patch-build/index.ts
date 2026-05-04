@@ -12,6 +12,7 @@ import { Patchfile } from './patchfile';
 import { patchRandomizer } from '../randomizer';
 import { bufReadU32BE, bufWriteU32BE } from '../util/buffer';
 import { FileResolver } from '../file-resolver';
+import { patchAnimationPorts } from '../custom/custom-animation-builder';
 
 export type BuildPatchfileIn = {
   patch: Patchfile;
@@ -104,6 +105,7 @@ export async function buildPatchfiles(args: BuildPatchfileIn): Promise<Patchfile
 
   for (let world = 0; world < args.settings.players; ++world) {
     const p = args.patch.dup();
+    await patchAnimationPorts(args.roms, p);
     const groups = asmPatchGroups(args.logic.worlds[world], args.settings);
 
     for (const game of GAMES) {
