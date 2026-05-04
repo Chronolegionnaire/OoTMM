@@ -811,6 +811,8 @@ const ITEM_NAMES: {[k in ItemID]: string} = {
   SHARED_MASK_BLAST: "Blast Mask",
   OOT_MASK_STONE: "Stone Mask (OoT)",
   SHARED_MASK_STONE: "Stone Mask",
+  OOT_MASK_KAMARO: "Kamaro Mask (OoT)",
+  SHARED_MASK_KAMARO: "Kamaro Mask",
   OOT_SONG_EMPTINESS: "Elegy of Emptiness (OoT)",
   SHARED_SONG_EMPTINESS: "Elegy of Emptiness",
   MM_CLOCK: "Progressive Clock",

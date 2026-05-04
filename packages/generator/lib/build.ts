@@ -14,6 +14,7 @@ import { Patchfile } from './combo/patch-build/patchfile';
 import { CodeGen } from './combo/util/codegen';
 
 import { setupAssetsMap } from './build/build-assets-map';
+import { setupAnimationPorts } from './combo/custom/custom-animation-builder';
 
 const env = process.env.NODE_ENV || 'development';
 const isProd = (env === 'production');
@@ -81,6 +82,8 @@ async function codegenCustomAssets(monitor: Monitor) {
 
 async function build() {
   const dummyMonitor = new Monitor({});
+
+  await setupAnimationPorts();
 
   await Promise.all([
     codegenCustomAssets(dummyMonitor),
