@@ -118,8 +118,7 @@ const BLITZ_BASE: PartialDeep<Settings> = {
     MM_OCARINA: 1,
     OOT_OCARINA: 1,
     MM_SWORD: 1,
-    MM_SONG_SOARING: 1,
-    SHARED_MASK_KAMARO: 1,
+    MM_SONG_SOARING: 1
   },
   tricks: [
     "MM_LENS",
