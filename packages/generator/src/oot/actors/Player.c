@@ -12,9 +12,18 @@
 #include <combo/hint.h>
 #include <combo/entrance.h>
 #include <actors/En_Kanban/En_Kanban.h>
+#include <combo/oot/player_action.h>
 
 void ArrowCycle_Handle(Player* link, PlayState* play);
 void Ocarina_HandleCustomSongs(Player* link, PlayState* play);
+
+void Player_UpdateKamaroMaskOoT(PlayState* play, Player* link, Input* input);
+void Player_StopKamaroMaskOoT(PlayState* play, Player* link);
+void Player_ResetKamaroMaskStateOoT(Player* link);
+s32 Player_IsKamaroMaskActiveOoT(Player* link);
+
+static Input sKamaroInput;
+static s32 sKamaroInputValid;
 
 void* Player_AllocObjectBuffer(u32 size)
 {
@@ -66,6 +75,9 @@ void Player_UseItem(PlayState* play, Player* link, s16 itemId)
         break;
     case ITEM_OOT_MASK_STONE:
         maskToggle(play, link, MASK_STONE);
+        break;
+    case ITEM_OOT_MASK_KAMARO:
+        maskToggle(play, link, MASK_KAMARO);
         break;
     case ITEM_OOT_BOOTS_IRON:
         Player_UseBoots(play, link, 2);
@@ -213,6 +225,16 @@ static void DrawExtendedMaskStone(PlayState* play, Player* link)
     CLOSE_DISPS();
 }
 
+static void DrawExtendedMaskKamaro(PlayState* play, Player* link)
+{
+    if (!prepareMask(play, 0x25F | MASK_FOREIGN_OBJECT, 1))
+        return;
+
+    OPEN_DISPS(play->state.gfxCtx);
+    gSPDisplayList(POLY_OPA_DISP++, 0x0a000ef0);
+    CLOSE_DISPS();
+}
+
 typedef void (*MaskCallback)(PlayState*, Player*);
 
 static const MaskCallback kMaskCallbacks[] = {
@@ -226,6 +248,7 @@ static const MaskCallback kMaskCallbacks[] = {
     DrawExtendedMaskTruth,
     DrawExtendedMaskBlast,
     DrawExtendedMaskStone,
+    DrawExtendedMaskKamaro,
 };
 
 void comboDrawExtendedMask(void)
@@ -265,6 +288,8 @@ static void updateKokiriSwordLength(void)
 
 void Player_UpdateWrapper(Player* this, PlayState* play)
 {
+    Input* input;
+    Input* kamaroInput;
     updateKokiriSwordLength();
 
     if (gBlastMaskDelayAcc)
@@ -275,7 +300,11 @@ void Player_UpdateWrapper(Player* this, PlayState* play)
     }
 
     ArrowCycle_Handle(this, play);
+    sKamaroInputValid = 0;
     Player_Update(this, play);
+    input = *(Input**)(OverlayAddr(0x80856734));
+    kamaroInput = sKamaroInputValid ? &sKamaroInput : input;
+    Player_UpdateKamaroMaskOoT(play, this, kamaroInput);
     Player_HandleBronzeScale(this, play);
     Ocarina_HandleCustomSongs(this, play);
     Dpad_Update(play);
@@ -402,10 +431,17 @@ void Player_ProcessItemButtonsWrapper(Player* link, PlayState* play)
     {
         switch (link->mask)
         {
-        case 9:
-            Player_BlastMask(play, link);
-            input->press.button &= ~B_BUTTON;
-            break;
+            case MASK_KAMARO:
+                sKamaroInput = *input;
+                sKamaroInputValid = 1;
+
+                input->press.button &= ~B_BUTTON;
+                break;
+
+            case MASK_BLAST:
+                Player_BlastMask(play, link);
+                input->press.button &= ~B_BUTTON;
+                break;
         }
     }
 
@@ -1028,6 +1064,7 @@ static s32 sCustomItemActions[] =
 {
     0,                                  /* ITEM_OOT_MASK_BLAST */
     0,                                  /* ITEM_OOT_MASK_STONE */
+    0,                                  /* ITEM_OOT_MASK_KAMARO */
     PLAYER_CUSTOM_IA_MAGIC_MUSHROOM,    /* ITEM_OOT_MAGIC_MUSHROOM */
     PLAYER_CUSTOM_IA_CHATEAU,           /* ITEM_OOT_CHATEAU */
     PLAYER_CUSTOM_IA_GOLD_DUST,         /* ITEM_OOT_GOLD_DUST */
@@ -1443,6 +1480,8 @@ void Player_AfterInit(PlayState* play)
     Map_SetAreaEntrypoint(play);
 
     Player* player = GET_PLAYER(play);
+
+    Player_ResetKamaroMaskStateOoT(player);
 
     Player_SetLastSafePos(play, player);
     gPlayerLastSafeExists = 0;
