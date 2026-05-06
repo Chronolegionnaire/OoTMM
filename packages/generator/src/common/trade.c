@@ -31,6 +31,7 @@ const u8 kOotTradeChild[] = {
     ITEM_OOT_MASK_OF_TRUTH,
     ITEM_OOT_MASK_BLAST,
     ITEM_OOT_MASK_STONE,
+    ITEM_OOT_MASK_KAMARO,
     ITEM_OOT_BOTTLE_EMPTY,
 };
 
