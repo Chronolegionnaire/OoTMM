@@ -32,11 +32,11 @@ typedef struct ComboImportedAnimStaticHeader {
     u32 animation;
     u32 frameCount;
     u32 frameSize;
-    u32 offset;
+    u32 frameVrom;
 } ComboImportedAnimStaticHeader;
 
-#define COMBO_IMPORTED_ANIM_STATIC_ENTRY(symbol, vrom, headerSegmented, customOffset, frameCount, frameSize) \
-    { headerSegmented, frameCount, frameSize, customOffset },
+#define COMBO_IMPORTED_ANIM_STATIC_ENTRY(symbol, headerSegmented, frameVrom, frameCount, frameSize) \
+{ headerSegmented, frameCount, frameSize, frameVrom },
 
 static const ComboImportedAnimStaticHeader kComboImportedAnimStaticHeaders[] = {
     COMBO_IMPORTED_LINK_ANIMATION_LIST(COMBO_IMPORTED_ANIM_STATIC_ENTRY)
@@ -89,21 +89,7 @@ static int Combo_IsLikelySegmented(void* ptr) {
     return segment < 0x10;
 }
 
-static int Combo_RangeInsideFile(u32 offset, u32 size, u32 fileSize) {
-    u32 end;
-
-    if (size == 0) {
-        return 0;
-    }
-
-    end = offset + size;
-
-    if (end < offset) {
-        return 0;
-    }
-
-    return end <= fileSize;
-}
+#if defined(GAME_OOT)
 
 static int Combo_ImportedAnimFrameDmaInfo(
     void* animation,
@@ -115,7 +101,7 @@ static int Combo_ImportedAnimFrameDmaInfo(
     const ComboImportedAnimStaticHeader* imported;
     u32 frameCount;
     u32 frameSize;
-    u32 offset;
+    u32 frameVrom;
 
     imported = Combo_FindImportedAnimStaticHeader(animation);
 
@@ -125,7 +111,7 @@ static int Combo_ImportedAnimFrameDmaInfo(
 
     frameCount = imported->frameCount;
     frameSize = imported->frameSize;
-    offset = imported->offset;
+    frameVrom = imported->frameVrom;
 
     if (frame >= (s32)frameCount) {
         if (ootClampFrame) {
@@ -135,13 +121,13 @@ static int Combo_ImportedAnimFrameDmaInfo(
         }
     }
 
-    offset += frameSize * frame;
-
-    *outVrom = COMBO_IMPORTED_LINK_ANIM_VROM + offset;
+    *outVrom = frameVrom + frameSize * frame;
     *outSize = frameSize;
 
     return COMBO_IMPORTED_ANIM_SUCCESS;
 }
+
+#endif
 
 #if defined(GAME_OOT)
 
@@ -223,18 +209,8 @@ static int Combo_LinkAnimFrameDmaInfo(
         frame = frameCount - 1;
     }
 
-    /*
-     * OoT vanilla ignores header + 0x02.
-     * Always compute DMA frame size from runtime limbCount.
-     */
     frameSize = sizeof(Vec3s) * limbCount + sizeof(s16);
     offset += frameSize * frame;
-
-    if (segment == COMBO_IMPORTED_LINK_ANIM_SEGMENT) {
-        *outVrom = COMBO_IMPORTED_LINK_ANIM_VROM + offset;
-        *outSize = frameSize;
-        return 1;
-    }
 
     if (segment != 0x07) {
         return 0;
@@ -420,7 +396,6 @@ static int Combo_MM_LinkAnimFrameDmaInfo(
     u32 frameSize;
     u32 frameCount;
     u32 baseOffset;
-    u32 finalOffset;
 
     frameSize = sizeof(Vec3s) * limbCount + sizeof(s16);
 
@@ -433,9 +408,7 @@ static int Combo_MM_LinkAnimFrameDmaInfo(
             return 0;
         }
 
-        finalOffset = imported->offset + frameSize * frame;
-
-        *outVrom = COMBO_IMPORTED_LINK_ANIM_VROM + finalOffset;
+        *outVrom = imported->frameVrom + frameSize * frame;
         *outSize = frameSize;
 
         return 1;
@@ -445,13 +418,12 @@ static int Combo_MM_LinkAnimFrameDmaInfo(
 
     segment = header->linkAnimSegment >> 24;
     baseOffset = header->linkAnimSegment & 0x00ffffff;
-    finalOffset = baseOffset + frameSize * frame;
 
     if (segment != 0x07) {
         return 0;
     }
 
-    *outVrom = COMBO_LINK_ANIMETION_VROM + finalOffset;
+    *outVrom = COMBO_LINK_ANIMETION_VROM + baseOffset + frameSize * frame;
     *outSize = frameSize;
 
     return 1;
