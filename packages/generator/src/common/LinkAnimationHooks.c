@@ -8,12 +8,6 @@
 #define COMBO_ANIM_TASK_MSGQUEUE_OFFSET  0x24
 #define COMBO_ANIM_TASK_MSG_OFFSET       0x3c
 
-#define COMBO_ARRAY_COUNT(arr) ((s32)(sizeof(arr) / sizeof((arr)[0])))
-
-#define COMBO_IMPORTED_ANIM_NOT_FOUND 0
-#define COMBO_IMPORTED_ANIM_SUCCESS   1
-#define COMBO_IMPORTED_ANIM_FAIL     -1
-
 typedef void ImportedAnimTaskQueue;
 typedef void ImportedAnimTask;
 
@@ -27,38 +21,6 @@ typedef struct ComboDmaRequest {
     OSMesgQueue* notifyQueue;
     OSMesg notifyMsg;
 } ComboDmaRequest;
-
-typedef struct ComboImportedAnimStaticHeader {
-    u32 animation;
-    u32 frameCount;
-    u32 frameSize;
-    u32 frameVrom;
-} ComboImportedAnimStaticHeader;
-
-#define COMBO_IMPORTED_ANIM_STATIC_ENTRY(symbol, headerSegmented, frameVrom, frameCount, frameSize) \
-{ headerSegmented, frameCount, frameSize, frameVrom },
-
-static const ComboImportedAnimStaticHeader kComboImportedAnimStaticHeaders[] = {
-    COMBO_IMPORTED_LINK_ANIMATION_LIST(COMBO_IMPORTED_ANIM_STATIC_ENTRY)
-    { 0, 0, 0, 0 },
-};
-
-#undef COMBO_IMPORTED_ANIM_STATIC_ENTRY
-
-static const ComboImportedAnimStaticHeader* Combo_FindImportedAnimStaticHeader(void* animation) {
-    u32 anim;
-    s32 i;
-
-    anim = (u32)animation;
-
-    for (i = 0; i < COMBO_ARRAY_COUNT(kComboImportedAnimStaticHeaders); i++) {
-        if (kComboImportedAnimStaticHeaders[i].animation == anim) {
-            return &kComboImportedAnimStaticHeaders[i];
-        }
-    }
-
-    return NULL;
-}
 
 static ComboDmaRequest* Combo_AnimTaskReq(ImportedAnimTask* task) {
     return (ComboDmaRequest*)((u8*)task + COMBO_ANIM_TASK_REQ_OFFSET);
@@ -80,54 +42,8 @@ static int Combo_IsKseg0OrKseg1(void* ptr) {
 }
 
 static int Combo_IsLikelySegmented(void* ptr) {
-    u32 p;
-    u32 segment;
-
-    p = (u32)ptr;
-    segment = p >> 24;
-
-    return segment < 0x10;
+    return ((u32)ptr >> 24) < 0x10;
 }
-
-#if defined(GAME_OOT)
-
-static int Combo_ImportedAnimFrameDmaInfo(
-    void* animation,
-    s32 frame,
-    u32* outVrom,
-    u32* outSize,
-    int ootClampFrame
-) {
-    const ComboImportedAnimStaticHeader* imported;
-    u32 frameCount;
-    u32 frameSize;
-    u32 frameVrom;
-
-    imported = Combo_FindImportedAnimStaticHeader(animation);
-
-    if (imported == NULL) {
-        return COMBO_IMPORTED_ANIM_NOT_FOUND;
-    }
-
-    frameCount = imported->frameCount;
-    frameSize = imported->frameSize;
-    frameVrom = imported->frameVrom;
-
-    if (frame >= (s32)frameCount) {
-        if (ootClampFrame) {
-            frame = frameCount - 1;
-        } else {
-            return COMBO_IMPORTED_ANIM_FAIL;
-        }
-    }
-
-    *outVrom = frameVrom + frameSize * frame;
-    *outSize = frameSize;
-
-    return COMBO_IMPORTED_ANIM_SUCCESS;
-}
-
-#endif
 
 #if defined(GAME_OOT)
 
@@ -136,15 +52,45 @@ static int Combo_ImportedAnimFrameDmaInfo(
 #define COMBO_DMAMGR_REQUEST_ASYNC_ADDR                0x80000d28
 
 #define COMBO_PLAY_ANIM_TASK_QUEUE_OFFSET 0x10b20
+#define COMBO_FOREIGN_LINK_ANIMETION_VROM COMBO_LINK_ANIMETION_MM_VROM
 
-typedef struct ImportedLinkAnimationHeader {
-    u16 frameCount;
-    u16 frameSize;
-    u32 segment;
-} ImportedLinkAnimationHeader;
+#elif defined(GAME_MM)
+
+#define COMBO_ANIMTASKQUEUE_ADD_LOAD_PLAYER_FRAME_ADDR 0x80135954
+#define COMBO_ANIMTASKQUEUE_NEW_TASK_ADDR              0x8013591c
+#define COMBO_ANIMATION_GET_LENGTH_ADDR                0x80134724
+#define COMBO_ANIMATION_GET_LAST_FRAME_ADDR            0x80134748
+#define COMBO_LIB_SEGMENTED_TO_VIRTUAL_ADDR            0x80100504
+#define COMBO_DMAMGR_REQUEST_ASYNC_ADDR                0x80080c04
+
+#define COMBO_PLAY_ANIM_TASK_QUEUE_OFFSET 0x17104
+#define COMBO_FOREIGN_LINK_ANIMETION_VROM COMBO_LINK_ANIMETION_OOT_VROM
+
+#endif
+
+#if defined(GAME_OOT) || defined(GAME_MM)
+
+#define COMBO_IMPORTED_ANIM_HEADER_ENTRY(symbol, sourceOffset, frameCount, frameSize) \
+    const ComboImportedPlayerAnimationHeader symbol = {                              \
+        frameCount,                                                                  \
+        frameSize,                                                                   \
+        (COMBO_IMPORTED_LINK_ANIM_SEGMENT << 24) | ((sourceOffset) & 0x00ffffff),     \
+    };
+
+COMBO_IMPORTED_LINK_ANIMATION_LIST(COMBO_IMPORTED_ANIM_HEADER_ENTRY)
+
+#undef COMBO_IMPORTED_ANIM_HEADER_ENTRY
 
 typedef ImportedAnimTask* (*ComboAnimTaskQueueNewTaskFn)(ImportedAnimTaskQueue* queue, s32 type);
 
+#if defined(GAME_MM)
+typedef void* (*ComboLibSegmentedToVirtualFn)(void* ptr);
+
+#define Combo_Lib_SegmentedToVirtual \
+    ((ComboLibSegmentedToVirtualFn)COMBO_LIB_SEGMENTED_TO_VIRTUAL_ADDR)
+#endif
+
+#if defined(GAME_OOT)
 typedef s32 (*ComboDmaMgrRequestAsyncFn)(
     ComboDmaRequest* req,
     void* ram,
@@ -156,6 +102,17 @@ typedef s32 (*ComboDmaMgrRequestAsyncFn)(
     const char* file,
     s32 line
 );
+#else
+typedef s32 (*ComboDmaMgrRequestAsyncFn)(
+    ComboDmaRequest* req,
+    void* ram,
+    u32 vrom,
+    u32 size,
+    u32 unk,
+    OSMesgQueue* queue,
+    OSMesg msg
+);
+#endif
 
 #define Combo_AnimTaskQueue_NewTask \
     ((ComboAnimTaskQueueNewTaskFn)COMBO_ANIMTASKQUEUE_NEW_TASK_ADDR)
@@ -163,54 +120,80 @@ typedef s32 (*ComboDmaMgrRequestAsyncFn)(
 #define Combo_DmaMgr_RequestAsync \
     ((ComboDmaMgrRequestAsyncFn)COMBO_DMAMGR_REQUEST_ASYNC_ADDR)
 
-static ImportedLinkAnimationHeader* Combo_LinkAnimHeaderToVirtual(ImportedLinkAnimationHeader* animation) {
+static ComboImportedPlayerAnimationHeader* Combo_LinkAnimHeaderToVirtual(
+    ComboImportedPlayerAnimationHeader* animation
+) {
     if (Combo_IsKseg0OrKseg1(animation)) {
         return animation;
     }
 
-    if (Combo_IsLikelySegmented(animation)) {
-        return SEGMENTED_TO_VIRTUAL(animation);
+    if (!Combo_IsLikelySegmented(animation)) {
+        return NULL;
     }
 
-    return NULL;
+#if defined(GAME_OOT)
+    return SEGMENTED_TO_VIRTUAL(animation);
+#else
+    return Combo_Lib_SegmentedToVirtual(animation);
+#endif
+}
+
+static u32 Combo_LinkAnimFrameSize(
+    ComboImportedPlayerAnimationHeader* header,
+    s32 limbCount
+) {
+    if (header->frameSize != 0) {
+        return header->frameSize;
+    }
+
+    return sizeof(Vec3s) * limbCount + sizeof(s16);
 }
 
 static int Combo_LinkAnimFrameDmaInfo(
-    ImportedLinkAnimationHeader* animation,
+    ComboImportedPlayerAnimationHeader* animation,
     s32 frame,
     s32 limbCount,
     u32* outVrom,
     u32* outSize
 ) {
-    ImportedLinkAnimationHeader* header;
+    ComboImportedPlayerAnimationHeader* header;
     u32 segment;
     u32 offset;
     u32 frameSize;
     u32 frameCount;
-    int importedResult;
-
-    importedResult = Combo_ImportedAnimFrameDmaInfo(animation, frame, outVrom, outSize, 1);
-
-    if (importedResult == COMBO_IMPORTED_ANIM_SUCCESS) {
-        return 1;
-    }
-
-    if (importedResult == COMBO_IMPORTED_ANIM_FAIL) {
-        return 0;
-    }
 
     header = Combo_LinkAnimHeaderToVirtual(animation);
 
-    frameCount = header->frameCount;
-    segment = header->segment >> 24;
-    offset = header->segment & 0x00ffffff;
+    if (header == NULL) {
+        return 0;
+    }
 
+    frameCount = header->frameCount;
+
+    if (frameCount == 0) {
+        return 0;
+    }
+
+#if defined(GAME_OOT)
     if (frame >= (s32)frameCount) {
         frame = frameCount - 1;
     }
+#else
+    if (frame >= (s32)frameCount) {
+        return 0;
+    }
+#endif
 
-    frameSize = sizeof(Vec3s) * limbCount + sizeof(s16);
+    segment = header->linkAnimSegment >> 24;
+    offset = header->linkAnimSegment & 0x00ffffff;
+    frameSize = Combo_LinkAnimFrameSize(header, limbCount);
     offset += frameSize * frame;
+
+    if (segment == COMBO_IMPORTED_LINK_ANIM_SEGMENT) {
+        *outVrom = (COMBO_FOREIGN_LINK_ANIMETION_VROM + offset) | VROM_FOREIGN_OFFSET;
+        *outSize = frameSize;
+        return 1;
+    }
 
     if (segment != 0x07) {
         return 0;
@@ -224,7 +207,7 @@ static int Combo_LinkAnimFrameDmaInfo(
 
 static void Combo_AnimTaskQueue_AddLoadPlayerFrame(
     void* play,
-    ImportedLinkAnimationHeader* animation,
+    ComboImportedPlayerAnimationHeader* animation,
     s32 frame,
     s32 limbCount,
     Vec3s* frameTable
@@ -247,6 +230,7 @@ static void Combo_AnimTaskQueue_AddLoadPlayerFrame(
         1
     );
 
+#if defined(GAME_OOT)
     Combo_DmaMgr_RequestAsync(
         Combo_AnimTaskReq(task),
         frameTable,
@@ -258,202 +242,7 @@ static void Combo_AnimTaskQueue_AddLoadPlayerFrame(
         "ComboLinkAnimationHooks",
         __LINE__
     );
-}
-
-PATCH_FUNC(
-    COMBO_ANIMTASKQUEUE_ADD_LOAD_PLAYER_FRAME_ADDR,
-    Combo_AnimTaskQueue_AddLoadPlayerFrame
-);
-
-#elif defined(GAME_MM)
-
-#define COMBO_ANIMTASKQUEUE_ADD_LOAD_PLAYER_FRAME_ADDR 0x80135954
-#define COMBO_ANIMTASKQUEUE_NEW_TASK_ADDR              0x8013591c
-#define COMBO_ANIMATION_GET_LENGTH_ADDR                0x80134724
-#define COMBO_ANIMATION_GET_LAST_FRAME_ADDR            0x80134748
-#define COMBO_LIB_SEGMENTED_TO_VIRTUAL_ADDR            0x80100504
-#define COMBO_DMAMGR_REQUEST_ASYNC_ADDR                0x80080c04
-
-#define COMBO_PLAY_ANIM_TASK_QUEUE_OFFSET 0x17104
-
-typedef struct ImportedPlayerAnimationHeader {
-    u16 frameCount;
-    s16 frameSize;
-    u32 linkAnimSegment;
-} ImportedPlayerAnimationHeader;
-
-typedef ImportedAnimTask* (*ComboAnimTaskQueueNewTaskFn)(ImportedAnimTaskQueue* queue, s32 type);
-typedef void* (*ComboLibSegmentedToVirtualFn)(void* ptr);
-
-typedef s32 (*ComboDmaMgrRequestAsyncFn)(
-    ComboDmaRequest* req,
-    void* ram,
-    u32 vrom,
-    u32 size,
-    u32 unk,
-    OSMesgQueue* queue,
-    OSMesg msg
-);
-
-#define Combo_AnimTaskQueue_NewTask \
-    ((ComboAnimTaskQueueNewTaskFn)COMBO_ANIMTASKQUEUE_NEW_TASK_ADDR)
-
-#define Combo_Lib_SegmentedToVirtual \
-    ((ComboLibSegmentedToVirtualFn)COMBO_LIB_SEGMENTED_TO_VIRTUAL_ADDR)
-
-#define Combo_DmaMgr_RequestAsync \
-    ((ComboDmaMgrRequestAsyncFn)COMBO_DMAMGR_REQUEST_ASYNC_ADDR)
-
-static ImportedPlayerAnimationHeader* Combo_LinkAnimHeaderToVirtual(ImportedPlayerAnimationHeader* animation) {
-    if (Combo_IsKseg0OrKseg1(animation)) {
-        return animation;
-    }
-
-    if (Combo_IsLikelySegmented(animation)) {
-        return Combo_Lib_SegmentedToVirtual(animation);
-    }
-
-    return NULL;
-}
-
-static const ComboImportedAnimStaticHeader* Combo_MM_FindImportedAnimStaticHeader(void* animation) {
-    const ComboImportedAnimStaticHeader* imported;
-    void* virtualAnimation;
-    void* importedVirtualAnimation;
-    s32 i;
-
-    imported = Combo_FindImportedAnimStaticHeader(animation);
-
-    if (imported != NULL) {
-        return imported;
-    }
-
-    if (Combo_IsKseg0OrKseg1(animation)) {
-        virtualAnimation = animation;
-    } else if (Combo_IsLikelySegmented(animation)) {
-        virtualAnimation = Combo_Lib_SegmentedToVirtual(animation);
-    } else {
-        return NULL;
-    }
-
-    for (i = 0; i < COMBO_ARRAY_COUNT(kComboImportedAnimStaticHeaders); i++) {
-        if (kComboImportedAnimStaticHeaders[i].animation == 0) {
-            continue;
-        }
-
-        importedVirtualAnimation = Combo_Lib_SegmentedToVirtual(
-            (void*)kComboImportedAnimStaticHeaders[i].animation
-        );
-
-        if (importedVirtualAnimation == virtualAnimation) {
-            return &kComboImportedAnimStaticHeaders[i];
-        }
-    }
-
-    return NULL;
-}
-
-static s16 Combo_MM_Animation_GetLength(void* animation) {
-    const ComboImportedAnimStaticHeader* imported;
-    ImportedPlayerAnimationHeader* header;
-
-    imported = Combo_MM_FindImportedAnimStaticHeader(animation);
-
-    if (imported != NULL) {
-        return imported->frameCount;
-    }
-
-    header = Combo_LinkAnimHeaderToVirtual(animation);
-
-    return header->frameCount;
-}
-
-static s16 Combo_MM_Animation_GetLastFrame(void* animation) {
-    const ComboImportedAnimStaticHeader* imported;
-    ImportedPlayerAnimationHeader* header;
-
-    imported = Combo_MM_FindImportedAnimStaticHeader(animation);
-
-    if (imported != NULL) {
-        return (u16)imported->frameCount - 1;
-    }
-
-    header = Combo_LinkAnimHeaderToVirtual(animation);
-
-    return header->frameCount - 1;
-}
-
-static int Combo_MM_LinkAnimFrameDmaInfo(
-    ImportedPlayerAnimationHeader* animation,
-    s32 frame,
-    s32 limbCount,
-    u32* outVrom,
-    u32* outSize
-) {
-    const ComboImportedAnimStaticHeader* imported;
-    ImportedPlayerAnimationHeader* header;
-    u32 segment;
-    u32 frameSize;
-    u32 frameCount;
-    u32 baseOffset;
-
-    frameSize = sizeof(Vec3s) * limbCount + sizeof(s16);
-
-    imported = Combo_MM_FindImportedAnimStaticHeader(animation);
-
-    if (imported != NULL) {
-        frameCount = imported->frameCount;
-
-        if (frame >= (s32)frameCount) {
-            return 0;
-        }
-
-        *outVrom = imported->frameVrom + frameSize * frame;
-        *outSize = frameSize;
-
-        return 1;
-    }
-
-    header = Combo_LinkAnimHeaderToVirtual(animation);
-
-    segment = header->linkAnimSegment >> 24;
-    baseOffset = header->linkAnimSegment & 0x00ffffff;
-
-    if (segment != 0x07) {
-        return 0;
-    }
-
-    *outVrom = COMBO_LINK_ANIMETION_VROM + baseOffset + frameSize * frame;
-    *outSize = frameSize;
-
-    return 1;
-}
-
-static void Combo_AnimTaskQueue_AddLoadPlayerFrame(
-    void* play,
-    ImportedPlayerAnimationHeader* animation,
-    s32 frame,
-    s32 limbCount,
-    Vec3s* frameTable
-) {
-    ImportedAnimTaskQueue* queue;
-    ImportedAnimTask* task;
-    u32 size;
-    u32 vrom;
-
-    if (!Combo_MM_LinkAnimFrameDmaInfo(animation, frame, limbCount, &vrom, &size)) {
-        return;
-    }
-
-    queue = (ImportedAnimTaskQueue*)((u8*)play + COMBO_PLAY_ANIM_TASK_QUEUE_OFFSET);
-    task = Combo_AnimTaskQueue_NewTask(queue, ANIMTASK_LOAD_PLAYER_FRAME);
-
-    osCreateMesgQueue(
-        Combo_AnimTaskMsgQueue(task),
-        Combo_AnimTaskMsg(task),
-        1
-    );
-
+#else
     Combo_DmaMgr_RequestAsync(
         Combo_AnimTaskReq(task),
         frameTable,
@@ -463,6 +252,33 @@ static void Combo_AnimTaskQueue_AddLoadPlayerFrame(
         Combo_AnimTaskMsgQueue(task),
         NULL
     );
+#endif
+}
+
+#if defined(GAME_MM)
+
+static s16 Combo_MM_Animation_GetLength(void* animation) {
+    ComboImportedPlayerAnimationHeader* header;
+
+    header = Combo_LinkAnimHeaderToVirtual(animation);
+
+    if (header == NULL) {
+        return 0;
+    }
+
+    return header->frameCount;
+}
+
+static s16 Combo_MM_Animation_GetLastFrame(void* animation) {
+    ComboImportedPlayerAnimationHeader* header;
+
+    header = Combo_LinkAnimHeaderToVirtual(animation);
+
+    if (header == NULL || header->frameCount == 0) {
+        return 0;
+    }
+
+    return header->frameCount - 1;
 }
 
 PATCH_FUNC(
@@ -474,6 +290,8 @@ PATCH_FUNC(
     COMBO_ANIMATION_GET_LAST_FRAME_ADDR,
     Combo_MM_Animation_GetLastFrame
 );
+
+#endif
 
 PATCH_FUNC(
     COMBO_ANIMTASKQUEUE_ADD_LOAD_PLAYER_FRAME_ADDR,

@@ -1,5 +1,5 @@
 #include <combo.h>
-#include <assets/mm/objects/gameplay_keep.h>
+#include <combo/imported_animations.h>
 #include <combo/custom.h>
 #include <combo/entrance.h>
 #include <combo/player.h>
@@ -1906,9 +1906,9 @@ PATCH_FUNC(0x8083375C, Player_SetMeleeWeaponInfo)
 
 static AttackAnimInfo sHammerAttackAnimInfo[] = {
     /* PLAYER_MWA_HAMMER_FORWARD */
-    { (PlayerAnimationHeader*)gPlayerAnim_link_hammer_hit, (PlayerAnimationHeader*)gPlayerAnim_link_hammer_hit_end, (PlayerAnimationHeader*)gPlayerAnim_link_hammer_hit_endR, 3, 10 },
+    { (PlayerAnimationHeader*)&gPlayerAnim_link_hammer_hit, (PlayerAnimationHeader*)&gPlayerAnim_link_hammer_hit_end, (PlayerAnimationHeader*)&gPlayerAnim_link_hammer_hit_endR, 3, 10 },
     /* PLAYER_MWA_HAMMER_SIDE */
-    { (PlayerAnimationHeader*)gPlayerAnim_link_hammer_side_hit, (PlayerAnimationHeader*)gPlayerAnim_link_hammer_side_hit_end, (PlayerAnimationHeader*)gPlayerAnim_link_hammer_side_hit_endR, 2, 11 },
+    { (PlayerAnimationHeader*)&gPlayerAnim_link_hammer_side_hit, (PlayerAnimationHeader*)&gPlayerAnim_link_hammer_side_hit_end, (PlayerAnimationHeader*)&gPlayerAnim_link_hammer_side_hit_endR, 2, 11 },
 };
 
 AttackAnimInfo* Player_GetMeleeAttackAnimInfo(void* a0, Player* player, PlayerMeleeWeaponAnimation meleeWeaponAnim) {

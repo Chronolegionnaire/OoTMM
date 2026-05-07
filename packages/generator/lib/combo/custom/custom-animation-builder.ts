@@ -35,31 +35,17 @@ type ImportedAnimation = {
     frameCount: number;
     frameDataOffset: number;
     frameSize: number;
-    headerOffset: number;
 };
 
 type ImportedAnimationPack = {
     entries: ImportedAnimation[];
 };
 
-type GameplayKeepAppendPlan = {
-    game: Game;
-    baseData: Uint8Array;
-    parts: Uint8Array[];
-    size: number;
-    xmlUpdates: Array<{
-        name: string;
-        offset: number;
-    }>;
-};
-
 const GENERATOR_ROOT = path.resolve(__dirname, '../../..');
 const PROJECT_ROOT = path.resolve(GENERATOR_ROOT, '../..');
 
 const DEFS_FILE = path.join(PROJECT_ROOT, 'data/defs/linkanimations.yml');
-const SETUP_DIR = path.join(GENERATOR_ROOT, 'data/setup');
 const BUILD_INCLUDE_DIR = path.join(GENERATOR_ROOT, 'build/include/combo');
-const BUILD_ASSETS_DIR = path.join(GENERATOR_ROOT, 'build/assets');
 
 const PLAYER_LIMB_COUNT = 0x16;
 const VEC3S_SIZE = 6;
@@ -70,17 +56,6 @@ const FILES_TO_INDEX = {
     oot: arrayToIndexMap(GAME_FILES.oot),
     mm: arrayToIndexMap(GAME_FILES.mm),
 };
-
-const FILES = {
-    oot: {
-        gameplayKeepXml: path.join(SETUP_DIR, 'oot/objects/gameplay_keep.xml'),
-        gameplayKeepBin: path.join(BUILD_ASSETS_DIR, 'oot/objects/gameplay_keep.zobj'),
-    },
-    mm: {
-        gameplayKeepXml: path.join(SETUP_DIR, 'mm/objects/gameplay_keep.xml'),
-        gameplayKeepBin: path.join(BUILD_ASSETS_DIR, 'mm/objects/gameplay_keep.zobj'),
-    },
-} as const;
 
 function assertGame(game: string, label: string): asserts game is Game {
     if (game !== 'oot' && game !== 'mm') {
@@ -133,10 +108,6 @@ function otherGame(game: Game): Game {
     return game === 'oot' ? 'mm' : 'oot';
 }
 
-function align(n: number, alignment: number): number {
-    return (n + alignment - 1) & ~(alignment - 1);
-}
-
 function hex(n: number, width = 0): string {
     const s = (n >>> 0).toString(16).toUpperCase();
     return `0x${width ? s.padStart(width, '0') : s}`;
@@ -153,30 +124,6 @@ function readU32BE(buf: Uint8Array, off: number): number {
             (buf[off + 2] << 8) |
             buf[off + 3]) >>> 0
     );
-}
-
-function writeU16BE(buf: Uint8Array, off: number, v: number) {
-    buf[off] = (v >>> 8) & 0xff;
-    buf[off + 1] = v & 0xff;
-}
-
-function writeU32BE(buf: Uint8Array, off: number, v: number) {
-    buf[off] = (v >>> 24) & 0xff;
-    buf[off + 1] = (v >>> 16) & 0xff;
-    buf[off + 2] = (v >>> 8) & 0xff;
-    buf[off + 3] = v & 0xff;
-}
-
-function concatBuffers(...parts: Uint8Array[]): Uint8Array {
-    const out = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
-    let off = 0;
-
-    for (const part of parts) {
-        out.set(part, off);
-        off += part.length;
-    }
-
-    return out;
 }
 
 async function readFileUint8(file: string): Promise<Uint8Array> {
@@ -269,28 +216,6 @@ function parseSourcePlayerAnimHeader(buf: Uint8Array, off: number): SourcePlayer
     };
 }
 
-function buildImportedLinkAnimHeader(dstGame: Game, frameCount: number, frameSize: number): Uint8Array {
-    if (frameCount <= 0 || frameCount > 0xffff) {
-        throw new Error(`Imported animation frame count does not fit u16: ${frameCount}`);
-    }
-
-    if (frameSize <= 0 || frameSize > 0xffff) {
-        throw new Error(`Imported animation frame size does not fit u16: ${hex(frameSize)}`);
-    }
-
-    const out = new Uint8Array(8);
-
-    writeU16BE(out, 0x00, frameCount);
-
-    if (dstGame === 'mm') {
-        writeU16BE(out, 0x02, frameSize);
-    }
-
-    writeU32BE(out, 0x04, IMPORTED_LINK_ANIM_SEGMENT << 24);
-
-    return out;
-}
-
 function buildImportedAnimation(roms: DecompressedRoms, def: AnimationDef): ImportedAnimation {
     const srcGame = def.home_game;
     const dstGame = otherGame(srcGame);
@@ -344,7 +269,6 @@ function buildImportedAnimation(roms: DecompressedRoms, def: AnimationDef): Impo
         frameCount,
         frameDataOffset,
         frameSize: PLAYER_ANIM_FRAME_SIZE,
-        headerOffset: 0,
     };
 }
 
@@ -352,122 +276,6 @@ function buildImportedAnimationPack(roms: DecompressedRoms, defs: AnimationDef[]
     return {
         entries: defs.map((def) => buildImportedAnimation(roms, def)),
     };
-}
-
-function createGameplayKeepAppendPlans(roms: DecompressedRoms): Record<Game, GameplayKeepAppendPlan> {
-    return {
-        oot: {
-            game: 'oot',
-            baseData: getFileFromRom(roms, 'oot', 'objects/gameplay_keep'),
-            parts: [],
-            size: getFileFromRom(roms, 'oot', 'objects/gameplay_keep').length,
-            xmlUpdates: [],
-        },
-        mm: {
-            game: 'mm',
-            baseData: getFileFromRom(roms, 'mm', 'objects/gameplay_keep'),
-            parts: [],
-            size: getFileFromRom(roms, 'mm', 'objects/gameplay_keep').length,
-            xmlUpdates: [],
-        },
-    };
-}
-
-function appendToGameplayKeepPlan(plan: GameplayKeepAppendPlan, payload: Uint8Array, alignment: number): number {
-    const outOffset = align(plan.size, alignment);
-    const padSize = outOffset - plan.size;
-
-    if (padSize !== 0) {
-        plan.parts.push(new Uint8Array(padSize));
-    }
-
-    plan.parts.push(payload);
-    plan.size = outOffset + payload.length;
-
-    return outOffset;
-}
-
-function planAnimationSymbol(plan: GameplayKeepAppendPlan, entry: ImportedAnimation) {
-    entry.headerOffset = appendToGameplayKeepPlan(
-        plan,
-        buildImportedLinkAnimHeader(entry.dstGame, entry.frameCount, entry.frameSize),
-        0x8
-    );
-
-    plan.xmlUpdates.push({
-        name: entry.def.name,
-        offset: entry.headerOffset,
-    });
-}
-
-function planAnimationSymbols(roms: DecompressedRoms, pack: ImportedAnimationPack): Record<Game, GameplayKeepAppendPlan> {
-    const plans = createGameplayKeepAppendPlans(roms);
-
-    for (const entry of pack.entries) {
-        planAnimationSymbol(plans[entry.dstGame], entry);
-    }
-
-    return plans;
-}
-
-async function writeGameplayKeepPlan(plan: GameplayKeepAppendPlan) {
-    const out = concatBuffers(plan.baseData, ...plan.parts);
-
-    await atomicWriteFile(FILES[plan.game].gameplayKeepBin, out);
-
-    for (const update of plan.xmlUpdates) {
-        await insertXmlPlayerAnimation(plan.game, update.name, update.offset);
-    }
-}
-
-function escapeXmlAttr(value: string): string {
-    return value
-        .replace(/&/g, '&amp;')
-        .replace(/"/g, '&quot;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
-}
-
-async function insertXmlPlayerAnimation(game: Game, name: string, offset: number) {
-    const xmlFile = FILES[game].gameplayKeepXml;
-    const xml = await fs.readFile(xmlFile, 'utf8');
-    const offsetText = hex(offset);
-    let found = false;
-
-    const updatedXml = xml.replace(
-        /^([ \t]*<PlayerAnimation\b[^\r\n]*\/>[ \t]*)$/gm,
-        (line: string) => {
-            const nameMatch = line.match(/\bName\s*=\s*"([^"]*)"/);
-
-            if (!nameMatch || nameMatch[1] !== name) {
-                return line;
-            }
-
-            found = true;
-
-            if (/\bOffset\s*=\s*"[^"]*"/.test(line)) {
-                return line.replace(/\bOffset\s*=\s*"[^"]*"/, `Offset="${offsetText}"`);
-            }
-
-            return line.replace(/\s*\/>/, ` Offset="${offsetText}"/>`);
-        }
-    );
-
-    if (found) {
-        await atomicWriteFile(xmlFile, updatedXml);
-        return;
-    }
-
-    const marker = '    </File>';
-    const pos = updatedXml.lastIndexOf(marker);
-
-    if (pos < 0) {
-        throw new Error(`${xmlFile}: missing ${marker}`);
-    }
-
-    const line = `        <PlayerAnimation Name="${escapeXmlAttr(name)}" Offset="${offsetText}"/>\n`;
-
-    await atomicWriteFile(xmlFile, updatedXml.slice(0, pos) + line + updatedXml.slice(pos));
 }
 
 function defineBaseForAnimation(name: string): string {
@@ -482,15 +290,6 @@ function cSymbolForAnimation(name: string): string {
     }
 
     return symbol;
-}
-
-function foreignFrameVromExpr(entry: ImportedAnimation): string {
-    const sourceVromMacro =
-        entry.srcGame === 'oot'
-            ? 'COMBO_LINK_ANIMETION_OOT_VROM'
-            : 'COMBO_LINK_ANIMETION_MM_VROM';
-
-    return `((${sourceVromMacro} + ${hex(entry.frameDataOffset)}) | VROM_FOREIGN_OFFSET)`;
 }
 
 function pushAnimationListMacro(lines: string[], macroName: string, entries: ImportedAnimation[]) {
@@ -510,7 +309,7 @@ function pushAnimationListMacro(lines: string[], macroName: string, entries: Imp
         const continuation = i + 1 === entries.length ? '' : ` ${slash}`;
 
         lines.push(
-            `    _(${symbol}, ${base}_HEADER_SEGMENTED, ${base}_FRAME_VROM, ${base}_FRAMECOUNT, ${base}_FRAMESIZE)${continuation}`
+            `    _(${symbol}, ${base}_SOURCE_OFFSET, ${base}_FRAMECOUNT, ${base}_FRAMESIZE)${continuation}`
         );
     }
 }
@@ -532,22 +331,21 @@ async function emitImportedAnimationsHeader(roms: DecompressedRoms, pack: Import
     lines.push(`#define COMBO_LINK_ANIMETION_OOT_VROM ${hex(ootLinkAnimDma.virtStart)}`);
     lines.push(`#define COMBO_LINK_ANIMETION_MM_VROM ${hex(mmLinkAnimDma.virtStart)}`);
     lines.push('');
-    lines.push('#define COMBO_CUSTOM_DMA_FILE_LIST_OOT(_)');
-    lines.push('#define COMBO_CUSTOM_DMA_FILE_LIST_MM(_)');
+    lines.push('typedef struct ComboImportedPlayerAnimationHeader {');
+    lines.push('    u16 frameCount;');
+    lines.push('    s16 frameSize;');
+    lines.push('    u32 linkAnimSegment;');
+    lines.push('} ComboImportedPlayerAnimationHeader;');
     lines.push('');
 
     for (const entry of pack.entries) {
         const base = defineBaseForAnimation(entry.def.name);
-        const headerSegmented = (0x04 << 24) | entry.headerOffset;
         const totalSize = entry.frameCount * entry.frameSize;
 
         lines.push(`#define ${base}_FRAMECOUNT ${entry.frameCount}`);
         lines.push(`#define ${base}_FRAMESIZE ${hex(entry.frameSize)}`);
         lines.push(`#define ${base}_TOTALSIZE ${hex(totalSize)}`);
         lines.push(`#define ${base}_SOURCE_OFFSET ${hex(entry.frameDataOffset)}`);
-        lines.push(`#define ${base}_FRAME_VROM ${foreignFrameVromExpr(entry)}`);
-        lines.push(`#define ${base}_HEADER_OFFSET ${hex(entry.headerOffset)}`);
-        lines.push(`#define ${base}_HEADER_SEGMENTED ${hex(headerSegmented)}`);
         lines.push(`#define ${base}_SRC_${entry.srcGame.toUpperCase()} 1`);
         lines.push(`#define ${base}_DST_${entry.dstGame.toUpperCase()} 1`);
         lines.push('');
@@ -567,17 +365,26 @@ async function emitImportedAnimationsHeader(roms: DecompressedRoms, pack: Import
     );
     lines.push('');
 
+    lines.push('#define COMBO_IMPORTED_ANIM_EXTERN(symbol, sourceOffset, frameCount, frameSize) \\');
+    lines.push('    extern const ComboImportedPlayerAnimationHeader symbol;');
+    lines.push('');
+    lines.push('#if defined(GAME_OOT)');
+    lines.push('COMBO_IMPORTED_LINK_ANIMATION_LIST_OOT(COMBO_IMPORTED_ANIM_EXTERN)');
+    lines.push('#elif defined(GAME_MM)');
+    lines.push('COMBO_IMPORTED_LINK_ANIMATION_LIST_MM(COMBO_IMPORTED_ANIM_EXTERN)');
+    lines.push('#endif');
+    lines.push('');
+    lines.push('#undef COMBO_IMPORTED_ANIM_EXTERN');
+    lines.push('');
+
     lines.push('#if defined(GAME_OOT)');
     lines.push('# define COMBO_LINK_ANIMETION_VROM COMBO_LINK_ANIMETION_OOT_VROM');
     lines.push('# define COMBO_IMPORTED_LINK_ANIMATION_LIST(_) COMBO_IMPORTED_LINK_ANIMATION_LIST_OOT(_)');
-    lines.push('# define COMBO_CUSTOM_DMA_FILE_LIST(_) COMBO_CUSTOM_DMA_FILE_LIST_OOT(_)');
     lines.push('#elif defined(GAME_MM)');
     lines.push('# define COMBO_LINK_ANIMETION_VROM COMBO_LINK_ANIMETION_MM_VROM');
     lines.push('# define COMBO_IMPORTED_LINK_ANIMATION_LIST(_) COMBO_IMPORTED_LINK_ANIMATION_LIST_MM(_)');
-    lines.push('# define COMBO_CUSTOM_DMA_FILE_LIST(_) COMBO_CUSTOM_DMA_FILE_LIST_MM(_)');
     lines.push('#else');
     lines.push('# define COMBO_IMPORTED_LINK_ANIMATION_LIST(_)');
-    lines.push('# define COMBO_CUSTOM_DMA_FILE_LIST(_)');
     lines.push('#endif');
     lines.push('');
     lines.push('#endif');
@@ -586,7 +393,7 @@ async function emitImportedAnimationsHeader(roms: DecompressedRoms, pack: Import
     await atomicWriteFile(path.join(BUILD_INCLUDE_DIR, 'imported_animations.h'), lines.join('\n'));
 }
 
-export async function patchAnimationPorts(roms: DecompressedRoms, _patch?: unknown) {
+export async function patchAnimationPorts(roms: DecompressedRoms) {
     const defs = await readYaml();
 
     if (!defs.length) {
@@ -596,7 +403,6 @@ export async function patchAnimationPorts(roms: DecompressedRoms, _patch?: unkno
 
     const pack = buildImportedAnimationPack(roms, defs);
 
-    planAnimationSymbols(roms, pack);
     await emitImportedAnimationsHeader(roms, pack);
 }
 
@@ -615,9 +421,6 @@ export async function setupAnimationPorts() {
     ]);
     const roms = await decompressGames(monitor, { oot, mm });
     const pack = buildImportedAnimationPack(roms, defs);
-    const plans = planAnimationSymbols(roms, pack);
 
-    await writeGameplayKeepPlan(plans.oot);
-    await writeGameplayKeepPlan(plans.mm);
     await emitImportedAnimationsHeader(roms, pack);
 }

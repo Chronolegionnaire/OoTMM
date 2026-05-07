@@ -1521,11 +1521,5 @@
         <Texture Name="gElectricSpark2Tex" OutName="electric_spark_2" Format="i4" Width="32" Height="32" Offset="0x91FE0" />
         <Texture Name="gElectricSpark3Tex" OutName="electric_spark_3" Format="i4" Width="32" Height="32" Offset="0x921E0" />
         <Texture Name="gElectricSpark4Tex" OutName="electric_spark_4" Format="i4" Width="32" Height="32" Offset="0x923E0" />
-        <PlayerAnimation Name="gPlayerAnim_link_hammer_hit" Offset="0x925E0"/>
-        <PlayerAnimation Name="gPlayerAnim_link_hammer_hit_end" Offset="0x925E8"/>
-        <PlayerAnimation Name="gPlayerAnim_link_hammer_hit_endR" Offset="0x925F0"/>
-        <PlayerAnimation Name="gPlayerAnim_link_hammer_side_hit" Offset="0x925F8"/>
-        <PlayerAnimation Name="gPlayerAnim_link_hammer_side_hit_end" Offset="0x92600"/>
-        <PlayerAnimation Name="gPlayerAnim_link_hammer_side_hit_endR" Offset="0x92608"/>
     </File>
 </Root>

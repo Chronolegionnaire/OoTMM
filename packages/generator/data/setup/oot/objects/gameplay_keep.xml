@@ -998,6 +998,5 @@
         <Texture Name="gEffSpark2Tex" OutName="eff_spark_2" Format="i4" Width="32" Height="32" Offset="0x5B6E0"/>
         <Texture Name="gEffSpark3Tex" OutName="eff_spark_3" Format="i4" Width="32" Height="32" Offset="0x5B8E0"/>
         <Texture Name="gEffSpark4Tex" OutName="eff_spark_4" Format="i4" Width="32" Height="32" Offset="0x5BAE0"/>
-        <PlayerAnimation Name="gPlayerAnim_alink_dance_loop" Offset="0x5BCE0"/>
     </File>
 </Root>
