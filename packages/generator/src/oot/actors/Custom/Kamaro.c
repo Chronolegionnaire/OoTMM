@@ -1,11 +1,10 @@
 #include <combo.h>
-#include <assets/oot/objects/gameplay_keep.h>
 #include <combo/player.h>
 #include <combo/mask.h>
 #include <combo/oot/player_action.h>
 #include "combo/oot/player.h"
 #include <combo/common/animation.h>
-
+#include <combo/imported_animations.h>
 #define KAMARO_DANCE_STATE_FRAME PLAYER_STATE2_5
 
 #define PLAYER_CUSTOM_STATE2_KAMARO_DANCE (1 << 0)
@@ -266,7 +265,7 @@ static void Player_StartKamaroDanceOoT(PlayState* play, Player* link)
     LinkAnimation_PlayLoopSetSpeed(
         play,
         &link->skelAnime,
-        (LinkAnimationHeader*)gPlayerAnim_alink_dance_loop,
+        (LinkAnimationHeader*)&gPlayerAnim_alink_dance_loop,
         KAMARO_DANCE_SPEED
     );
 
