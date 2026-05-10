@@ -117,5 +117,6 @@ emit('data-drawgi', loadYaml('defs/drawgi.yml'));
 emit('data-files', DATA_FILES);
 emit('data-macros', MACROS);
 emit('data-pool', POOL);
+emit('data-link-animations', loadYaml('defs/link-animations.yml'));
 
 buildGossips();

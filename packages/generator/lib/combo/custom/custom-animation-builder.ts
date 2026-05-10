@@ -1,10 +1,9 @@
 import type { DecompressedRoms } from '../decompress.ts';
-import type { Game } from '@ootmm/core';
+import type { CustomAnimation, Game } from '@ootmm/core';
 
 import { promises as fs } from 'fs';
 import path from 'path';
-import YAML from 'yaml';
-import { FILES as GAME_FILES } from '@ootmm/core';
+import { DATA_ANIMATIONS, FILES as GAME_FILES } from '@ootmm/core';
 
 import { DmaData } from '../dma.ts';
 import { arrayToIndexMap } from '../util.ts';
@@ -16,10 +15,6 @@ type AnimationDef = {
   header_offset: number | string;
   frame_data_size?: number | string;
   frame_count?: number | string;
-};
-
-type AnimationsYaml = {
-  animations?: AnimationDef[];
 };
 
 type SourcePlayerAnimHeader = {
@@ -36,14 +31,7 @@ type ImportedAnimation = {
   frameSize: number;
 };
 
-type ImportedAnimationPack = {
-  entries: ImportedAnimation[];
-};
-
 const GENERATOR_ROOT = path.resolve(__dirname, '../../..');
-const PROJECT_ROOT = path.resolve(GENERATOR_ROOT, '../..');
-
-const DEFS_FILE = path.join(PROJECT_ROOT, 'data/defs/linkanimations.yml');
 const BUILD_INCLUDE_DIR = path.join(GENERATOR_ROOT, 'include/combo');
 
 const PLAYER_LIMB_COUNT = 0x16;
@@ -134,37 +122,6 @@ async function atomicWriteFile(file: string, data: string | Uint8Array) {
   await fs.rename(tmp, file);
 }
 
-async function removeFileIfExists(file: string) {
-  await fs.unlink(file).catch((err: any) => {
-    if (err.code !== 'ENOENT') {
-      throw err;
-    }
-  });
-}
-
-async function readYaml(): Promise<AnimationDef[]> {
-  let raw: string;
-
-  try {
-    raw = await fs.readFile(DEFS_FILE, 'utf8');
-  } catch (err: any) {
-    if (err.code === 'ENOENT') {
-      return [];
-    }
-
-    throw err;
-  }
-
-  const parsed = YAML.parse(raw) as AnimationsYaml | null;
-  const defs = parsed?.animations || [];
-
-  for (const def of defs) {
-    assertGame(def.home_game, `${def.name}.home_game`);
-  }
-
-  return defs;
-}
-
 function findFileKey(game: Game, wanted: string): string {
   const keys = Object.keys(FILES_TO_INDEX[game]);
   const exact = keys.find((key) => key === wanted);
@@ -206,7 +163,7 @@ function parseSourcePlayerAnimHeader(buf: Uint8Array, off: number): SourcePlayer
   };
 }
 
-function buildImportedAnimation(roms: DecompressedRoms, def: AnimationDef): ImportedAnimation {
+function buildImportedAnimation(roms: DecompressedRoms, def: CustomAnimation): ImportedAnimation {
   const srcGame = def.home_game;
   const dstGame = otherGame(srcGame);
   const frameDataOffset = parseNum(def.frame_data_offset, `${def.name}.frame_data_offset`);
@@ -215,14 +172,8 @@ function buildImportedAnimation(roms: DecompressedRoms, def: AnimationDef): Impo
   const srcLinkAnim = getFileFromRom(roms, srcGame, 'link_animetion');
   const sourceHeader = parseSourcePlayerAnimHeader(srcGameplayKeep, headerOffset);
   const sourceFrameDataOffset = sourceHeader.frameDataSegmented & 0x00ffffff;
-  const frameCount =
-  def.frame_count === undefined
-  ? sourceHeader.frameCount
-  : parseNum(def.frame_count, `${def.name}.frame_count`);
-  const frameDataSize =
-  def.frame_data_size === undefined
-  ? sourceHeader.frameCount * PLAYER_ANIM_FRAME_SIZE
-  : parseNum(def.frame_data_size, `${def.name}.frame_data_size`);
+  const frameCount = sourceHeader.frameCount;
+  const frameDataSize = sourceHeader.frameCount * PLAYER_ANIM_FRAME_SIZE;
   const expectedFrameDataSize = sourceHeader.frameCount * PLAYER_ANIM_FRAME_SIZE;
 
   if (sourceHeader.frameCount <= 0) {
@@ -262,10 +213,8 @@ function buildImportedAnimation(roms: DecompressedRoms, def: AnimationDef): Impo
   };
 }
 
-function buildImportedAnimationPack(roms: DecompressedRoms, defs: AnimationDef[]): ImportedAnimationPack {
-  return {
-    entries: defs.map((def) => buildImportedAnimation(roms, def)),
-  };
+function buildImportedAnimationPack(roms: DecompressedRoms): ImportedAnimation[] {
+  return DATA_ANIMATIONS.map(anim => buildImportedAnimation(roms, anim));
 }
 
 function defineBaseForAnimation(name: string): string {
@@ -304,7 +253,7 @@ function pushAnimationListMacro(lines: string[], macroName: string, entries: Imp
   }
 }
 
-async function emitImportedAnimationsHeader(roms: DecompressedRoms, pack: ImportedAnimationPack) {
+async function emitImportedAnimationsHeader(roms: DecompressedRoms, pack: ImportedAnimation[]) {
   const ootLinkAnimIndex = FILES_TO_INDEX.oot[findFileKey('oot', 'link_animetion')];
   const mmLinkAnimIndex = FILES_TO_INDEX.mm[findFileKey('mm', 'link_animetion')];
   const ootLinkAnimDma = new DmaData(roms.oot.dma).read(ootLinkAnimIndex);
@@ -328,7 +277,7 @@ async function emitImportedAnimationsHeader(roms: DecompressedRoms, pack: Import
   lines.push('} ComboImportedPlayerAnimationHeader;');
   lines.push('');
 
-  for (const entry of pack.entries) {
+  for (const entry of pack) {
     const base = defineBaseForAnimation(entry.def.name);
     const totalSize = entry.frameCount * entry.frameSize;
 
@@ -344,14 +293,14 @@ async function emitImportedAnimationsHeader(roms: DecompressedRoms, pack: Import
   pushAnimationListMacro(
     lines,
     'COMBO_IMPORTED_LINK_ANIMATION_LIST_OOT',
-    pack.entries.filter((entry) => entry.dstGame === 'oot')
+    pack.filter((entry) => entry.dstGame === 'oot')
   );
   lines.push('');
 
   pushAnimationListMacro(
     lines,
     'COMBO_IMPORTED_LINK_ANIMATION_LIST_MM',
-    pack.entries.filter((entry) => entry.dstGame === 'mm')
+    pack.filter((entry) => entry.dstGame === 'mm')
   );
   lines.push('');
 
@@ -384,8 +333,6 @@ async function emitImportedAnimationsHeader(roms: DecompressedRoms, pack: Import
 }
 
 export async function patchAnimationPorts(roms: DecompressedRoms) {
-  const defs = await readYaml();
-  const pack = buildImportedAnimationPack(roms, defs);
-
+  const pack = buildImportedAnimationPack(roms);
   await emitImportedAnimationsHeader(roms, pack);
 }
