@@ -44,26 +44,28 @@ typedef struct EffectBlureInit1 {
 #define MM_EFFECT_GET_BY_INDEX                     0x800AF720
 #define MM_GFX_SETUPDL25_OPA                       0x8012C28C
 
+#define MM_MATRIX_ROTATE_XF                        0x80180610
+#define MM_MATRIX_ROTATE_YF                        0x80180B48
+#define MM_MATRIX_ROTATE_ZF                        0x80180E90
 #define MM_MATRIX_MULTVEC3F                        0x80181A98
 #define MM_MATRIX_FINALIZE                         0x80181A40
 #define MM_MATRIX_ROTATE_XS                        0x80180478
 #define MM_MATRIX_ROTATE_YS                        0x801809AC
 #define MM_MATRIX_ROTATE_ZS                        0x80180CF8
+#define MM_MALLOC                                  0x80086DD0
+#define MM_FREE                                    0x80086E50
 #define MM_EFFECT_DESTROY                          0x800AFDCC
 #define MM_MATH_COS_S                              0x800FED44
 #define MM_MATH_SIN_S                              0x800FED84
 #define MM_MATRIX_TRANSLATE                        0x8018029c
 #define MM_MATRIX_SCALE                            0x8018039C
 #define ACTOR_FLAG_HOOKSHOT_ATTACHED               (1 << 13)
-
 #define PLAYER_FOCUS_ACTOR(player) \
 (*(Actor**)((u8*)(player) + 0x730))
 
 #define PLAYER_ZORA_BOOMERANG_ACTOR(player) \
 (*(Actor**)((u8*)(player) + 0xA7C))
-
 #define FLAGS (ACTOR_FLAG_UPDATE_CULLING_DISABLED | ACTOR_FLAG_DRAW_CULLING_DISABLED)
-
 extern int prepareObject(PlayState* play, u16 objectId);
 
 typedef void (*MmMatrixScaleFunc)(
@@ -205,6 +207,11 @@ typedef void (*MmGfxSetupDL25OpaFunc)(
     GraphicsContext* gfxCtx
 );
 
+typedef void (*MmMatrixRotateFFunc)(
+    f32 angle,
+    s32 mode
+);
+
 typedef void (*MmMatrixMultVec3fFunc)(
     Vec3f* src,
     Vec3f* dest
@@ -212,6 +219,14 @@ typedef void (*MmMatrixMultVec3fFunc)(
 
 typedef Mtx* (*MmMatrixFinalizeFunc)(
     GraphicsContext* gfxCtx
+);
+
+typedef void* (*MmMallocFunc)(
+    size_t size
+);
+
+typedef void (*MmFreeFunc)(
+    void* ptr
 );
 
 typedef void (*MmActorMoveWithGravityFunc)(
@@ -232,7 +247,6 @@ static void CustomBoomerang_MatrixScale(f32 x, f32 y, f32 z, s32 mode)
 
     func(x, y, z, mode);
 }
-
 static void CustomBoomerang_MatrixTranslate(f32 x, f32 y, f32 z, s32 mode)
 {
     MmMatrixTranslateFunc func =
@@ -452,6 +466,30 @@ static void CustomBoomerang_GfxSetupDL25Opa(GraphicsContext* gfxCtx)
     func(gfxCtx);
 }
 
+static void CustomBoomerang_MatrixRotateXF(f32 angle, s32 mode)
+{
+    MmMatrixRotateFFunc func =
+        (MmMatrixRotateFFunc)MM_MATRIX_ROTATE_XF;
+
+    func(angle, mode);
+}
+
+static void CustomBoomerang_MatrixRotateYF(f32 angle, s32 mode)
+{
+    MmMatrixRotateFFunc func =
+        (MmMatrixRotateFFunc)MM_MATRIX_ROTATE_YF;
+
+    func(angle, mode);
+}
+
+static void CustomBoomerang_MatrixRotateZF(f32 angle, s32 mode)
+{
+    MmMatrixRotateFFunc func =
+        (MmMatrixRotateFFunc)MM_MATRIX_ROTATE_ZF;
+
+    func(angle, mode);
+}
+
 static void CustomBoomerang_MatrixMultVec3f(Vec3f* src, Vec3f* dest)
 {
     MmMatrixMultVec3fFunc func =
@@ -466,6 +504,20 @@ static Mtx* CustomBoomerang_MatrixFinalize(GraphicsContext* gfxCtx)
         (MmMatrixFinalizeFunc)MM_MATRIX_FINALIZE;
 
     return func(gfxCtx);
+}
+
+static void* CustomBoomerang_Malloc(size_t size)
+{
+    MmMallocFunc func = (MmMallocFunc)MM_MALLOC;
+
+    return func(size);
+}
+
+static void CustomBoomerang_Free(void* ptr)
+{
+    MmFreeFunc func = (MmFreeFunc)MM_FREE;
+
+    func(ptr);
 }
 
 void CustomBoomerang_Init(Actor_CustomBoomerang* boom, PlayState* play);
@@ -526,8 +578,6 @@ void CustomBoomerang_Init(Actor_CustomBoomerang* boom, PlayState* play)
 
     EffectBlureInit1 blureInit;
     s32 i;
-
-    CustomBoomerang_ActorProcessInitChain(&boom->actor, sInitChain);
 
     bzero(&blureInit, sizeof(blureInit));
 
@@ -706,9 +756,8 @@ void CustomBoomerang_Update(Actor_CustomBoomerang* boom, PlayState* play)
     }
 }
 
-#define BOOMERANG_MODEL_SCALE 0.0125f
+#define BOOMERANG_MODEL_SCALE 0.015f
 #define BOOMERANG_BLURE_HALF_LEN (960.0f * BOOMERANG_MODEL_SCALE)
-
 void CustomBoomerang_Draw(Actor_CustomBoomerang* boom, PlayState* play)
 {
     static Vec3f sPosAOffset = { -BOOMERANG_BLURE_HALF_LEN, 0.0f, 0.0f };
@@ -746,7 +795,7 @@ void CustomBoomerang_Draw(Actor_CustomBoomerang* boom, PlayState* play)
 
     CustomBoomerang_GfxSetupDL25Opa(play->state.gfxCtx);
     CustomBoomerang_MatrixRotateYS(
-        boom->activeTimer * -0x2EE0,
+        boom->activeTimer * 0x2EE0,
         MTXMODE_APPLY
     );
     CustomBoomerang_MatrixRotateXS(
