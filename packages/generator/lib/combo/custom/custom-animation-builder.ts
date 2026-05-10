@@ -245,7 +245,7 @@ async function emitImportedAnimationsHeader(roms: DecompressedRoms, pack: Import
   const mmLinkAnimIndex = FILES_TO_INDEX.mm[findFileKey('mm', 'link_animetion')];
   const ootLinkAnimDma = new DmaData(roms.oot.dma).read(ootLinkAnimIndex);
   const mmLinkAnimDma = new DmaData(roms.mm.dma).read(mmLinkAnimIndex);
-  const cg = new CodeGen('build/include/combo/custom_animations.h', 'COMBO_IMPORTED_ANIMATIONS_H');
+  const cg = new CodeGen('include/combo/custom_animations.h', 'COMBO_IMPORTED_ANIMATIONS_H');
 
   cg.include('combo.h');
   cg.define('COMBO_IMPORTED_LINK_ANIM_SEGMENT', IMPORTED_LINK_ANIM_SEGMENT);
