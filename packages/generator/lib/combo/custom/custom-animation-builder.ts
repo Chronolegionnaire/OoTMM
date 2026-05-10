@@ -1,12 +1,11 @@
 import type { DecompressedRoms } from '../decompress.ts';
 import type { CustomAnimation, Game } from '@ootmm/core';
 
-import { promises as fs } from 'fs';
-import path from 'path';
 import { DATA_ANIMATIONS, FILES as GAME_FILES } from '@ootmm/core';
 
 import { DmaData } from '../dma.ts';
 import { arrayToIndexMap } from '../util.ts';
+import { CodeGen } from '../util/codegen.ts';
 
 type AnimationDef = {
   name: string;
@@ -30,9 +29,6 @@ type ImportedAnimation = {
   frameDataOffset: number;
   frameSize: number;
 };
-
-const GENERATOR_ROOT = path.resolve(__dirname, '../../..');
-const BUILD_INCLUDE_DIR = path.join(GENERATOR_ROOT, 'include/combo');
 
 const PLAYER_LIMB_COUNT = 0x16;
 const VEC3S_SIZE = 6;
@@ -111,15 +107,6 @@ function readU32BE(buf: Uint8Array, off: number): number {
     (buf[off + 2] << 8) |
     buf[off + 3]) >>> 0
   );
-}
-
-async function atomicWriteFile(file: string, data: string | Uint8Array) {
-  await fs.mkdir(path.dirname(file), { recursive: true });
-
-  const tmp = `${file}.tmp-${process.pid}-${Date.now()}`;
-
-  await fs.writeFile(tmp, data);
-  await fs.rename(tmp, file);
 }
 
 function findFileKey(game: Game, wanted: string): string {
@@ -231,15 +218,15 @@ function cSymbolForAnimation(name: string): string {
   return symbol;
 }
 
-function pushAnimationListMacro(lines: string[], macroName: string, entries: ImportedAnimation[]) {
+function pushAnimationListMacro(cg: CodeGen, macroName: string, entries: ImportedAnimation[]) {
   const slash = '\\';
 
   if (entries.length === 0) {
-    lines.push(`#define ${macroName}(_)`);
+    cg.raw(`#define ${macroName}(_)`);
     return;
   }
 
-  lines.push(`#define ${macroName}(_) ${slash}`);
+  cg.raw(`#define ${macroName}(_) ${slash}`);
 
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i];
@@ -247,7 +234,7 @@ function pushAnimationListMacro(lines: string[], macroName: string, entries: Imp
     const symbol = cSymbolForAnimation(entry.def.name);
     const continuation = i + 1 === entries.length ? '' : ` ${slash}`;
 
-    lines.push(
+    cg.raw(
       `    _(${symbol}, ${base}_SOURCE_OFFSET, ${base}_FRAMECOUNT, ${base}_FRAMESIZE)${continuation}`
     );
   }
@@ -258,78 +245,71 @@ async function emitImportedAnimationsHeader(roms: DecompressedRoms, pack: Import
   const mmLinkAnimIndex = FILES_TO_INDEX.mm[findFileKey('mm', 'link_animetion')];
   const ootLinkAnimDma = new DmaData(roms.oot.dma).read(ootLinkAnimIndex);
   const mmLinkAnimDma = new DmaData(roms.mm.dma).read(mmLinkAnimIndex);
-  const lines: string[] = [];
+  const cg = new CodeGen('build/include/combo/custom_animations.h', 'COMBO_IMPORTED_ANIMATIONS_H');
 
-  lines.push('#ifndef COMBO_IMPORTED_ANIMATIONS_H');
-  lines.push('#define COMBO_IMPORTED_ANIMATIONS_H');
-  lines.push('');
-  lines.push('#include <combo.h>');
-  lines.push('');
-  lines.push(`#define COMBO_IMPORTED_LINK_ANIM_SEGMENT ${hex(IMPORTED_LINK_ANIM_SEGMENT)}`);
-  lines.push(`#define COMBO_IMPORTED_LINK_ANIM_FRAME_SIZE ${hex(PLAYER_ANIM_FRAME_SIZE)}`);
-  lines.push(`#define COMBO_LINK_ANIMETION_OOT_VROM ${hex(ootLinkAnimDma.virtStart)}`);
-  lines.push(`#define COMBO_LINK_ANIMETION_MM_VROM ${hex(mmLinkAnimDma.virtStart)}`);
-  lines.push('');
-  lines.push('typedef struct ComboImportedPlayerAnimationHeader {');
-  lines.push('    u16 frameCount;');
-  lines.push('    s16 frameSize;');
-  lines.push('    u32 linkAnimSegment;');
-  lines.push('} ComboImportedPlayerAnimationHeader;');
-  lines.push('');
+  cg.include('combo.h');
+  cg.define('COMBO_IMPORTED_LINK_ANIM_SEGMENT', IMPORTED_LINK_ANIM_SEGMENT);
+  cg.define('COMBO_IMPORTED_LINK_ANIM_FRAME_SIZE', PLAYER_ANIM_FRAME_SIZE);
+  cg.define('COMBO_LINK_ANIMETION_OOT_VROM', ootLinkAnimDma.virtStart);
+  cg.define('COMBO_LINK_ANIMETION_MM_VROM', mmLinkAnimDma.virtStart);
+  cg.raw('typedef struct ComboImportedPlayerAnimationHeader {');
+  cg.raw('    u16 frameCount;');
+  cg.raw('    s16 frameSize;');
+  cg.raw('    u32 linkAnimSegment;');
+  cg.raw('} ComboImportedPlayerAnimationHeader;');
+  cg.raw('');
 
   for (const entry of pack) {
     const base = defineBaseForAnimation(entry.def.name);
     const totalSize = entry.frameCount * entry.frameSize;
 
-    lines.push(`#define ${base}_FRAMECOUNT ${entry.frameCount}`);
-    lines.push(`#define ${base}_FRAMESIZE ${hex(entry.frameSize)}`);
-    lines.push(`#define ${base}_TOTALSIZE ${hex(totalSize)}`);
-    lines.push(`#define ${base}_SOURCE_OFFSET ${hex(entry.frameDataOffset)}`);
-    lines.push(`#define ${base}_SRC_${entry.srcGame.toUpperCase()} 1`);
-    lines.push(`#define ${base}_DST_${entry.dstGame.toUpperCase()} 1`);
-    lines.push('');
+    cg.raw(`#define ${base}_FRAMECOUNT ${entry.frameCount}`);
+    cg.raw(`#define ${base}_FRAMESIZE ${hex(entry.frameSize)}`);
+    cg.raw(`#define ${base}_TOTALSIZE ${hex(totalSize)}`);
+    cg.raw(`#define ${base}_SOURCE_OFFSET ${hex(entry.frameDataOffset)}`);
+    cg.raw(`#define ${base}_SRC_${entry.srcGame.toUpperCase()} 1`);
+    cg.raw(`#define ${base}_DST_${entry.dstGame.toUpperCase()} 1`);
+    cg.raw('');
   }
 
   pushAnimationListMacro(
-    lines,
+    cg,
     'COMBO_IMPORTED_LINK_ANIMATION_LIST_OOT',
     pack.filter((entry) => entry.dstGame === 'oot')
   );
-  lines.push('');
+  cg.raw('');
 
   pushAnimationListMacro(
-    lines,
+    cg,
     'COMBO_IMPORTED_LINK_ANIMATION_LIST_MM',
     pack.filter((entry) => entry.dstGame === 'mm')
   );
-  lines.push('');
+  cg.raw('');
 
-  lines.push('#define COMBO_IMPORTED_ANIM_EXTERN(symbol, sourceOffset, frameCount, frameSize) \\');
-  lines.push('    extern const ComboImportedPlayerAnimationHeader symbol;');
-  lines.push('');
-  lines.push('#if defined(GAME_OOT)');
-  lines.push('COMBO_IMPORTED_LINK_ANIMATION_LIST_OOT(COMBO_IMPORTED_ANIM_EXTERN)');
-  lines.push('#elif defined(GAME_MM)');
-  lines.push('COMBO_IMPORTED_LINK_ANIMATION_LIST_MM(COMBO_IMPORTED_ANIM_EXTERN)');
-  lines.push('#endif');
-  lines.push('');
-  lines.push('#undef COMBO_IMPORTED_ANIM_EXTERN');
-  lines.push('');
+  cg.raw('#define COMBO_IMPORTED_ANIM_EXTERN(symbol, sourceOffset, frameCount, frameSize) \\');
+  cg.raw('    extern const ComboImportedPlayerAnimationHeader symbol;');
+  cg.raw('');
+  cg.raw('#if defined(GAME_OOT)');
+  cg.raw('COMBO_IMPORTED_LINK_ANIMATION_LIST_OOT(COMBO_IMPORTED_ANIM_EXTERN)');
+  cg.raw('#elif defined(GAME_MM)');
+  cg.raw('COMBO_IMPORTED_LINK_ANIMATION_LIST_MM(COMBO_IMPORTED_ANIM_EXTERN)');
+  cg.raw('#endif');
+  cg.raw('');
+  cg.raw('#undef COMBO_IMPORTED_ANIM_EXTERN');
+  cg.raw('');
 
-  lines.push('#if defined(GAME_OOT)');
-  lines.push('# define COMBO_LINK_ANIMETION_VROM COMBO_LINK_ANIMETION_OOT_VROM');
-  lines.push('# define COMBO_IMPORTED_LINK_ANIMATION_LIST(_) COMBO_IMPORTED_LINK_ANIMATION_LIST_OOT(_)');
-  lines.push('#elif defined(GAME_MM)');
-  lines.push('# define COMBO_LINK_ANIMETION_VROM COMBO_LINK_ANIMETION_MM_VROM');
-  lines.push('# define COMBO_IMPORTED_LINK_ANIMATION_LIST(_) COMBO_IMPORTED_LINK_ANIMATION_LIST_MM(_)');
-  lines.push('#else');
-  lines.push('# define COMBO_IMPORTED_LINK_ANIMATION_LIST(_)');
-  lines.push('#endif');
-  lines.push('');
-  lines.push('#endif');
-  lines.push('');
+  cg.raw('#if defined(GAME_OOT)');
+  cg.raw('# define COMBO_LINK_ANIMETION_VROM COMBO_LINK_ANIMETION_OOT_VROM');
+  cg.raw('# define COMBO_IMPORTED_LINK_ANIMATION_LIST(_) COMBO_IMPORTED_LINK_ANIMATION_LIST_OOT(_)');
+  cg.raw('#elif defined(GAME_MM)');
+  cg.raw('# define COMBO_LINK_ANIMETION_VROM COMBO_LINK_ANIMETION_MM_VROM');
+  cg.raw('# define COMBO_IMPORTED_LINK_ANIMATION_LIST(_) COMBO_IMPORTED_LINK_ANIMATION_LIST_MM(_)');
+  cg.raw('#else');
+  cg.raw('# define COMBO_IMPORTED_LINK_ANIMATION_LIST(_)');
+  cg.raw('#endif');
+  cg.raw('');
 
-  await atomicWriteFile(path.join(BUILD_INCLUDE_DIR, 'custom_animations.h'), lines.join('\n'));
+  await cg.emit();
 }
 
 export async function patchAnimationPorts(roms: DecompressedRoms) {
