@@ -17,6 +17,7 @@ import { grayscale } from '../image';
 import { CustomObjectsBuilder } from './custom-objects-builder';
 import { bufReadU32BE, bufWriteU32BE } from '../util/buffer';
 import { ObjectEditor } from './object-editor';
+import { patchAnimationPorts } from './custom-animation-builder';
 
 const FILES_TO_INDEX = {
   oot: arrayToIndexMap(FILES.oot),
@@ -410,6 +411,11 @@ class CustomAssetsBuilder {
 
   async run() {
     this.monitor.log("Building custom objects");
+
+    /* Build custom animations */
+    if (!process.env.__IS_BROWSER__) {
+      await patchAnimationPorts(this.roms);
+    }
 
     /* Build custom objects */
     const customObjectsBuilder = new CustomObjectsBuilder(this.roms);

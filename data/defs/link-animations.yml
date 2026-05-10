@@ -1,0 +1,35 @@
+animations:
+  - name: gPlayerAnim_alink_dance_loop
+    home_game: mm
+    header_offset: 0xCF98
+    frame_data_offset: 0x2CB480
+
+  - name: gPlayerAnim_link_hammer_hit
+    home_game: oot
+    header_offset: 0x2C40
+    frame_data_offset: 0x125170
+
+  - name: gPlayerAnim_link_hammer_hit_end
+    home_game: oot
+    header_offset: 0x2C50
+    frame_data_offset: 0x125740
+
+  - name: gPlayerAnim_link_hammer_hit_endR
+    home_game: oot
+    header_offset: 0x2C48
+    frame_data_offset: 0x126350
+
+  - name: gPlayerAnim_link_hammer_side_hit
+    home_game: oot
+    header_offset: 0x2C70
+    frame_data_offset: 0x128EE0
+
+  - name: gPlayerAnim_link_hammer_side_hit_end
+    home_game: oot
+    header_offset: 0x2C80
+    frame_data_offset: 0x129530
+
+  - name: gPlayerAnim_link_hammer_side_hit_endR
+    home_game: oot
+    header_offset: 0x2C78
+    frame_data_offset: 0x12A140
