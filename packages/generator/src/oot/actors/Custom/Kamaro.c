@@ -5,6 +5,29 @@
 #include "combo/oot/player.h"
 #include <combo/common/animation.h>
 #include <combo/imported_animations.h>
+
+typedef s32 (*LinkAnimation_Update_t)(PlayState* play, SkelAnime* skelAnime);
+typedef void (*LinkAnimation_PlayOnce_t)(PlayState* play, SkelAnime* skelAnime, LinkAnimationHeader* anim);
+typedef void (*LinkAnimation_PlayLoopSetSpeed_t)(
+    PlayState* play,
+    SkelAnime* skelAnime,
+    LinkAnimationHeader* anim,
+    f32 speed
+);
+
+#define LinkAnimation_Update_ADDR           0x8008bca4
+#define LinkAnimation_PlayOnce_ADDR         0x8008c178
+#define LinkAnimation_PlayLoopSetSpeed_ADDR 0x8008c298
+
+#define LinkAnimation_Update_OOT \
+((LinkAnimation_Update_t)LinkAnimation_Update_ADDR)
+
+#define LinkAnimation_PlayOnce_OOT \
+((LinkAnimation_PlayOnce_t)LinkAnimation_PlayOnce_ADDR)
+
+#define LinkAnimation_PlayLoopSetSpeed_OOT \
+((LinkAnimation_PlayLoopSetSpeed_t)LinkAnimation_PlayLoopSetSpeed_ADDR)
+
 #define KAMARO_DANCE_STATE_FRAME PLAYER_STATE2_5
 
 #define PLAYER_CUSTOM_STATE2_KAMARO_DANCE (1 << 0)
@@ -127,7 +150,7 @@ static void Player_EndKamaroDanceOoT(PlayState* play, Player* link)
     Player_RestoreKamaroItemActionOoT(link);
 
     Player_SetupActionPreserveItemActionOoT(play, link, Player_GetIdleActionOoT(), 1);
-    LinkAnimation_PlayOnce(play, &link->skelAnime, Player_GetIdleAnimOoT(link));
+    LinkAnimation_PlayOnce_OOT(play, &link->skelAnime, Player_GetIdleAnimOoT(link));
 
     Player_RefreshKamaroHeldItemModelOoT(link);
 
@@ -239,7 +262,7 @@ static void Player_UpdateKamaroDanceAnimOoT(PlayState* play, Player* link)
     link->skelAnime.curFrame = sKamaroDanceFrame;
     link->skelAnime.playSpeed = 0.0f;
 
-    LinkAnimation_Update(play, &link->skelAnime);
+    LinkAnimation_Update_OOT(play, &link->skelAnime);
 
     link->skelAnime.curFrame = sKamaroDanceFrame;
     link->skelAnime.playSpeed = oldPlaySpeed;
@@ -262,7 +285,7 @@ static void Player_StartKamaroDanceOoT(PlayState* play, Player* link)
 
     Player_SetupActionPreserveItemActionOoT(play, link, Player_KamaroDanceActionOoT, 0);
 
-    LinkAnimation_PlayLoopSetSpeed(
+    LinkAnimation_PlayLoopSetSpeed_OOT(
         play,
         &link->skelAnime,
         (LinkAnimationHeader*)&gPlayerAnim_alink_dance_loop,
