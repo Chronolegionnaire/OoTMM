@@ -1,4 +1,5 @@
 #include <combo.h>
+#include <combo/custom_animations.h>
 #include <combo/custom.h>
 #include <combo/entrance.h>
 #include <combo/player.h>
@@ -1905,11 +1906,9 @@ PATCH_FUNC(0x8083375C, Player_SetMeleeWeaponInfo)
 
 static AttackAnimInfo sHammerAttackAnimInfo[] = {
     /* PLAYER_MWA_HAMMER_FORWARD */
-    //{ &gPlayerAnim_link_hammer_hit, &gPlayerAnim_link_hammer_hit_end, &gPlayerAnim_link_hammer_hit_endR, 3, 10 },
-    { (PlayerAnimationHeader*)0x0400E4E8, (PlayerAnimationHeader*)0x0400E4F0, (PlayerAnimationHeader*)0x0400E4E0, 3, 10 },
+    { (PlayerAnimationHeader*)&gPlayerAnim_link_hammer_hit, (PlayerAnimationHeader*)&gPlayerAnim_link_hammer_hit_end, (PlayerAnimationHeader*)&gPlayerAnim_link_hammer_hit_endR, 3, 10 },
     /* PLAYER_MWA_HAMMER_SIDE */
-    //{ &gPlayerAnim_link_hammer_side_hit, &gPlayerAnim_link_hammer_side_hit_end, &gPlayerAnim_link_hammer_side_hit_endR, 2, 11 },
-    { (PlayerAnimationHeader*)0x0400E4D8, (PlayerAnimationHeader*)0x0400E4D0, (PlayerAnimationHeader*)0x0400E4C8, 2, 11 },
+    { (PlayerAnimationHeader*)&gPlayerAnim_link_hammer_side_hit, (PlayerAnimationHeader*)&gPlayerAnim_link_hammer_side_hit_end, (PlayerAnimationHeader*)&gPlayerAnim_link_hammer_side_hit_endR, 2, 11 },
 };
 
 AttackAnimInfo* Player_GetMeleeAttackAnimInfo(void* a0, Player* player, PlayerMeleeWeaponAnimation meleeWeaponAnim) {
