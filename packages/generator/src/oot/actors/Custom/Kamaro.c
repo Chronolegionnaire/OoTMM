@@ -4,7 +4,7 @@
 #include <combo/oot/player_action.h>
 #include "combo/oot/player.h"
 #include <combo/common/animation.h>
-#include <combo/imported_animations.h>
+#include <combo/custom_animations.h>
 
 typedef s32 (*LinkAnimation_Update_t)(PlayState* play, SkelAnime* skelAnime);
 typedef void (*LinkAnimation_PlayOnce_t)(PlayState* play, SkelAnime* skelAnime, LinkAnimationHeader* anim);
