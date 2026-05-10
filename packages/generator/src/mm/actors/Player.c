@@ -1,5 +1,5 @@
 #include <combo.h>
-#include <combo/imported_animations.h>
+#include <combo/custom_animations.h>
 #include <combo/custom.h>
 #include <combo/entrance.h>
 #include <combo/player.h>

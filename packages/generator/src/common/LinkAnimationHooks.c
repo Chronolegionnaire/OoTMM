@@ -1,6 +1,6 @@
 #include <combo.h>
 #include <combo/patch.h>
-#include <combo/imported_animations.h>
+#include <combo/custom_animations.h>
 
 #define ANIMTASK_LOAD_PLAYER_FRAME 0
 

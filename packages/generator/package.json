@@ -60,7 +60,8 @@
         ],
         "outputs": [
           "{projectRoot}/dist/**/*",
-          "{projectRoot}/include/combo/custom.h"
+          "{projectRoot}/include/combo/custom.h",
+          "{projectRoot}/include/combo/custom_animations.h"
         ]
       },
       "test": {
