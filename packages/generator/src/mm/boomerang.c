@@ -218,7 +218,12 @@ s32 Player_TryStartHeldItemAction(Player* player, PlayState* play) {
 }
 
 /*
+ * Upper-action callback.
+ *
  * This used to be func_80835800.
+ * Do not use the normal init signature here. PlayerUpperActionFunc expects:
+ *
+ *     s32 func(Player* player, PlayState* play)
  */
 s32 Player_InitItemAction_CustomBoomerang(Player* player, PlayState* play) {
     if (Player_TryShield(play, player)) {
@@ -239,6 +244,9 @@ s32 Player_InitItemAction_CustomBoomerang(Player* player, PlayState* play) {
 
 /*
  * Init hook used by Player_RunCustomItemActionInitFunc.
+ *
+ * This only marks the custom boomerang state as active. The real upper-action
+ * behavior is handled by Player_InitItemAction_CustomBoomerang above.
  */
 s32 Player_InitItemAction_CustomBoomerang_Upper(Player* player, PlayState* play) {
     player->stateFlags1 |= PLAYER_STATE1_MM_1000000;
@@ -286,10 +294,10 @@ s32 Player_CustomBoomerang_PlayCatchAnimation(Player* player, PlayState* play) {
 /* Original OoT address name: func_80834EB8 */
 s32 Player_CheckCustomBoomerangAimReady(Player* player, PlayState* play) {
     if ((player->unk_AA5 == 0) || (player->unk_AA5 == 3)) {
-        if (Player_IsZTargeting(player, play) || (PLAYER_FOCUS_ACTOR(player) != NULL) ||
+        if (Player_IsZTargeting(player, play) ||
             (Camera_CheckValidMode(Play_GetCamera(play, CAM_ID_MAIN), CAM_MODE_BOWARROW) == 0)) {
             return true;
-            }
+        }
 
         player->unk_AA5 = 3;
     }
