@@ -1728,16 +1728,16 @@ class LogicPassWorldTransform {
 
     /* Alter the item pools */
     switch (settings.itemPool) {
-      case 'scarce':
-        this.scarcifyPool(1);
-        break;
-      case 'minimal':
-      case 'barren':
-        this.scarcifyPool(2);
-        break;
-      case 'plentiful':
-        this.plentifulPool();
-        break;
+    case 'scarce':
+      this.scarcifyPool(1);
+      break;
+    case 'minimal':
+    case 'barren':
+      this.scarcifyPool(2);
+      break;
+    case 'plentiful':
+      this.plentifulPool();
+      break;
     }
 
     /* handle random bottle contents */
