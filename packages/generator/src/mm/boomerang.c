@@ -1,7 +1,7 @@
 #include <combo.h>
 #include <combo/mm/boomerang.h>
 #include <combo/mm/player.h>
-#include <combo/imported_animations.h>
+#include <combo/custom_animations.h>
 #include <assets/mm/objects/gameplay_keep.h>
 #include <combo/common/animation.h>
 #include <combo/controller.h>

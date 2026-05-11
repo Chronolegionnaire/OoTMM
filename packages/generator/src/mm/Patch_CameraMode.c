@@ -1,4 +1,4 @@
-#include <combo.h>
+/*#include <combo.h>
 
 #define PLAYER_UNKAA5_3 3
 #define PLAYER_STATE1_1000000 (1 << 24)
@@ -50,4 +50,4 @@ s32 Player_Patched_CameraModeForAA5(PlayState* play, Player* this) {
     return Camera_ChangeMode_addr(camera, camMode);
 }
 
-PATCH_FUNC(0x8083868C, Player_Patched_CameraModeForAA5);
+PATCH_FUNC(0x8083868C, Player_Patched_CameraModeForAA5);*/
