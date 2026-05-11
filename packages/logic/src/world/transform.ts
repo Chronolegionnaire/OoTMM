@@ -299,6 +299,7 @@ const ITEM_POOL_PLENTIFUL = new Set([
   Items.SHARED_SCALE,
   Items.SHARED_STRENGTH,
   Items.SHARED_HAMMER,
+  Items.SHARED_BOOMERANG,
 ]);
 
 const ITEMS_HEART_PIECES_CONTAINERS_BY_GAME = {
@@ -667,8 +668,8 @@ class LogicPassWorldTransform {
       return;
 
     const junkCount = Array.from(this.pool.entries())
-      .filter(([pi, _]) => this.state.itemProperties.junk.has(pi.item))
-      .reduce((acc, [_, count]) => acc + count, 0);
+        .filter(([pi, _]) => this.state.itemProperties.junk.has(pi.item))
+        .reduce((acc, [_, count]) => acc + count, 0);
     const trapCount = (junkCount * amountFactor) / ((this.state.settings.trapsLink ? 1 : this.state.worlds.length) * extraTraps.length * 100);
     addTraps(extraTraps, trapCount);
   }
