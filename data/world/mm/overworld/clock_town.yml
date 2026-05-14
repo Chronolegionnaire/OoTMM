@@ -151,7 +151,7 @@
     "Clock Town Bank Reward 1": "soul_banker && can_use_wallet(1)"
     "Clock Town Bank Reward 2": "soul_banker && (can_use_wallet(2) || (can_use_wallet(1) && (trick(MM_BANK_ONE_WALLET) || trick(MM_BANK_NO_WALLET))))"
     "Clock Town Bank Reward 3": "soul_banker && (can_use_wallet(3) || (can_use_wallet(2) && trick(MM_BANK_ONE_WALLET)) || (can_use_wallet(1) && trick(MM_BANK_NO_WALLET)))"
-    "Clock Town Rosa Sisters HP": "soul_citizen && has(MASK_KAMARO) && (is_night1 || is_night2)"
+    "Clock Town Rosa Sisters HP": "soul_citizen && has_mask_kamaro && (is_night1 || is_night2)"
 
 "Clock Town East Main":
   region: CLOCK_TOWN_EAST
