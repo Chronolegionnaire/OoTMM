@@ -116,6 +116,7 @@
 #define IA_TRANSCENDENT_FAIRY   0x6a
 #define IA_OOT_PLATINUM_TOKEN   0x6b
 #define IA_MM_PLATINUM_TOKEN    0x6c
+#define IA_OOT_HAMMER_GFS       0x6d
 #define IA_NONE                 0xff
 
 #define ITT_NONE        0x00
@@ -209,6 +210,7 @@ extern const u8 kMmTrade1[];
 extern const u8 kMmTrade2[];
 extern const u8 kMmTrade3[];
 extern const u8 kMmGFSHammer[];
+extern const u8 kOotHammerGFS[];
 
 void comboSyncItems(void);
 

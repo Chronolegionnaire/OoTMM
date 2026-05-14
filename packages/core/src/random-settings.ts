@@ -388,6 +388,7 @@ export async function applyRandomSettings(rnd: OptionRandomSettings, oldSettings
   case 5:
     base.agelessBoomerang = true;
     base.agelessSticks = true;
+    base.agelessGFS = true;
     base.agelessHammer = true;
     base.agelessHookshot = true;
     base.agelessTunics = true;
@@ -398,6 +399,7 @@ export async function applyRandomSettings(rnd: OptionRandomSettings, oldSettings
   default:
     base.agelessBoomerang = booleanWeighted(random, 0.1);
     base.agelessSticks = booleanWeighted(random, 0.1);
+    base.agelessGFS = booleanWeighted(random, 0.1);
     base.agelessHammer = booleanWeighted(random, 0.1);
     base.agelessHookshot = booleanWeighted(random, 0.1);
     base.agelessTunics = booleanWeighted(random, 0.1);
@@ -475,6 +477,7 @@ export async function applyRandomSettings(rnd: OptionRandomSettings, oldSettings
     base.sharedTunicGoron = true;
     base.sharedTunicZora = true;
     base.sharedHammer = true;
+    base.sharedGFS = true;
     base.sharedStoneAgony = true;
     base.sharedSpinUpgrade = true;
     break;
@@ -493,6 +496,7 @@ export async function applyRandomSettings(rnd: OptionRandomSettings, oldSettings
     base.sharedSkeletonKey = booleanWeighted(random, 0.5);
     base.sharedPlatinumToken = booleanWeighted(random, 0.5);
     base.sharedHammer = booleanWeighted(random, 0.5);
+    base.sharedGFS = booleanWeighted(random, 0.5);
     base.sharedStoneAgony = booleanWeighted(random, 0.5);
     base.sharedSpinUpgrade = booleanWeighted(random, 0.5);
 
@@ -608,6 +612,7 @@ export async function applyRandomSettings(rnd: OptionRandomSettings, oldSettings
   base.blastMaskOot = booleanWeighted(random, 0.25);
   base.stoneMaskOot = booleanWeighted(random, 0.25);
   base.kamaroMaskOot = booleanWeighted(random, 0.25);
+  base.gfsOot = booleanWeighted(random, 0.25);
   base.hammerMm = booleanWeighted(random, 0.25);
   base.sticksNutsUpgradesMm = booleanWeighted(random, 0.5);
   base.stoneAgonyMm = booleanWeighted(random, 0.5);

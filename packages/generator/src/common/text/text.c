@@ -578,6 +578,9 @@ static int isItemAmbiguous(s16 gi)
     case GI_OOT_HAMMER:
     case GI_MM_HAMMER:
         return Config_Flag(CFG_MM_HAMMER) && !Config_Flag(CFG_SHARED_HAMMER);
+    case GI_OOT_GREAT_FAIRY_SWORD:
+    case GI_MM_GREAT_FAIRY_SWORD:
+        return Config_Flag(CFG_OOT_GREAT_FAIRY_SWORD) && !Config_Flag(CFG_SHARED_GREAT_FAIRY_SWORD);
     case GI_OOT_BOTTLE_EMPTY:
     case GI_OOT_BOTTLE_MILK:
     case GI_OOT_MILK:
