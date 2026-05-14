@@ -271,6 +271,29 @@ export class CustomObjectsBuilder {
     return { name: 'EQ_HAMMER', ...editor.build() };
   }
 
+  private async makeEqGreatFairySword(): Promise<CustomObject> {
+    const editor = new ObjectEditor(0xa);
+
+    const object_gi_sword_4 = await this.getFile('mm', 'objects/object_gi_sword_4');
+    editor.loadSegment(0x06, object_gi_sword_4);
+
+    const blade = 0x06000ad8; // gGiGreatFairysSwordBladeDL
+    const hilt = 0x06000940;  // gGiGreatFairysSwordHiltEmblemDL
+
+    let ms = editor.listData(blade)!;
+    ms = editor.stripList(ms, ms.length - 8, ms.length);
+
+    const hiltList = editor.listData(hilt)!;
+
+    const out = new Uint8Array(ms.length + hiltList.length);
+    out.set(ms, 0);
+    out.set(hiltList, ms.length);
+
+    editor.submitList(out);
+
+    return { name: 'EQ_GREAT_FAIRY_SWORD', ...editor.build() };
+  }
+
   private async makeEqOcarinaFairy(): Promise<CustomObject> {
     const editor = new ObjectEditor(0xa);
     const obj = await this.getFile('oot', 'objects/object_link_child');
@@ -396,6 +419,7 @@ export class CustomObjectsBuilder {
       await this.makeEqBiggoronSword(),
       await this.makeEqBiggoronSwordBroken(),
       await this.makeEqHammer(),
+      await this.makeEqGreatFairySword(),
       await this.makeEqShieldDeku(),
       await this.makeEqShieldMirror(),
       await this.makeEqSheathShieldHylianChild(),

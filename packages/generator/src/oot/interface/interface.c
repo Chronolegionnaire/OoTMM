@@ -65,6 +65,9 @@ void comboItemIcon(void* dst, int itemId)
     case ITEM_OOT_MASK_STONE:
         LoadMmItemIcon(dst, ITEM_MM_MASK_STONE);
         break;
+    case ITEM_OOT_GREAT_FAIRY_SWORD:
+         LoadMmItemIcon(dst, ITEM_MM_GREAT_FAIRY_SWORD);
+         break;
     case ITEM_OOT_MAGIC_MUSHROOM:
         LoadMmItemIcon(dst, ITEM_MM_MAGIC_MUSHROOM);
         break;

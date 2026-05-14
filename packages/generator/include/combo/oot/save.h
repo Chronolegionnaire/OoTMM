@@ -429,6 +429,7 @@ typedef struct
     u8 ocarina;
     u8 bottleAdultSlot;
     u8 bottleChildSlot;
+    u8 gfsHammer:2;
 }
 OotExtraItems;
 

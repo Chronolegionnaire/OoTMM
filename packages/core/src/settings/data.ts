@@ -2027,6 +2027,14 @@ export const SETTINGS = [{
   default: false,
   cond: hasMM,
 }, {
+  key: 'gfsOot',
+  name: "Great Fairy's Sword (OoT)",
+  category: 'items.extensions',
+  type: 'boolean',
+  description: "Adds the Great Fairy's Sword in Ocarina of Time.",
+  default: false,
+  cond: hasOoT,
+}, {
   key: 'spinUpgradeOot',
   name: "Spin Attack Upgrade (OoT)",
   category: 'items.extensions',
@@ -2690,6 +2698,14 @@ export const SETTINGS = [{
   description: 'Combines the Megaton Hammers from OoT and MM into one item for both games',
   default: false,
   cond: (s: any) => hasOoTMM(s) && s.hammerMm,
+}, {
+  key: 'sharedGFS',
+  name: "Shared Great Fairy's Sword",
+  category: 'items.shared',
+  type: 'boolean',
+  description: "Combines the Great Fairy's Sword from OoT and MM into one item for both games",
+  default: false,
+    cond: (s: any) => hasOoTMM(s) && s.gfsOot,
 }, {
   key: 'sharedBottles',
   name: 'Shared Bottles',
