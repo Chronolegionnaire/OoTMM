@@ -274,22 +274,11 @@ export class CustomObjectsBuilder {
   private async makeEqGreatFairySword(): Promise<CustomObject> {
     const editor = new ObjectEditor(0xa);
 
-    const object_gi_sword_4 = await this.getFile('mm', 'objects/object_gi_sword_4');
-    editor.loadSegment(0x06, object_gi_sword_4);
+    const object_link_child = await this.getFile('mm', 'objects/object_link_child');
+    editor.loadSegment(0x06, object_link_child);
 
-    const blade = 0x06000ad8; // gGiGreatFairysSwordBladeDL
-    const hilt = 0x06000940;  // gGiGreatFairysSwordHiltEmblemDL
-
-    let ms = editor.listData(blade)!;
-    ms = editor.stripList(ms, ms.length - 8, ms.length);
-
-    const hiltList = editor.listData(hilt)!;
-
-    const out = new Uint8Array(ms.length + hiltList.length);
-    out.set(ms, 0);
-    out.set(hiltList, ms.length);
-
-    editor.submitList(out);
+    const gfs = editor.processListAddr(0x06016898); /* gLinkHumanGreatFairysSwordDL */
+    editor.submitOut(gfs);
 
     return { name: 'EQ_GREAT_FAIRY_SWORD', ...editor.build() };
   }

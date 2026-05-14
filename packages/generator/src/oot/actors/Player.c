@@ -680,6 +680,8 @@ static void Player_OverrideAdult(PlayState* play, Player* this, int limb, Gfx** 
 
     if (limb == PLAYER_LIMB_L_HAND)
     {
+        if (this->heldItemId == ITEM_OOT_GREAT_FAIRY_SWORD)
+            *dlist = Player_CustomHandEq(DLIST_ADULT_LHAND_CLOSED, comboGetObject(CUSTOM_OBJECT_ID_EQ_GREAT_FAIRY_SWORD), CUSTOM_OBJECT_EQ_GREAT_FAIRY_SWORD_0);
         if ((this->leftHandType == PLAYER_MODELTYPE_LH_SWORD || isPause) && gSave.info.equips.equipment.swords == 1)
         {
             if (gSharedCustomSave.extraSwordsOot == 0)
@@ -736,6 +738,8 @@ static void Player_OverrideChild(PlayState* play, Player* this, int limb, Gfx** 
                 *dlist = Player_CustomHandEq(DLIST_CHILD_LHAND_CLOSED, comboGetObject(CUSTOM_OBJECT_ID_EQ_MASTER_SWORD), CUSTOM_OBJECT_EQ_MASTER_SWORD_0);
             }
         }
+        if (this->heldItemId == ITEM_OOT_GREAT_FAIRY_SWORD)
+            *dlist = Player_CustomHandEq(DLIST_CHILD_LHAND_CLOSED, comboGetObject(CUSTOM_OBJECT_ID_EQ_GREAT_FAIRY_SWORD), CUSTOM_OBJECT_EQ_GREAT_FAIRY_SWORD_0);
         else if ((this->leftHandType == PLAYER_MODELTYPE_LH_BGS || isPause) && gSave.info.equips.equipment.swords == 3)
         {
             if (gSave.info.playerData.swordHealth)
@@ -1073,6 +1077,8 @@ static s32 sCustomItemActions[] =
     PLAYER_CUSTOM_IA_SPRING_WATER,      /* ITEM_OOT_SPRING_WATER */
     PLAYER_CUSTOM_IA_SPRING_WATER_HOT,  /* ITEM_OOT_SPRING_WATER_HOT */
     PLAYER_CUSTOM_IA_ZORA_EGG,          /* ITEM_OOT_ZORA_EGG */
+
+    0x05,                               /* ITEM_OOT_GREAT_FAIRY_SWORD: vanilla BGS item action */
 };
 
 s32 Player_CustomItemToItemAction(s32 item, s32 itemAction)
