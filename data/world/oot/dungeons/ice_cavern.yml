@@ -26,7 +26,7 @@
     "Ice Cavern First Fire Room": "(is_adult || climb_anywhere || hookshot_anywhere) && silver_rupees_ic_scythe"
   locations:
     "Ice Cavern GS Scythe Room": "gs && (can_collect_distance || (climb_anywhere && (can_use_sword || can_use_sticks || has_ranged_weapon || has_explosives || can_use_din)))"
-    "Ice Cavern SR Scythe Left": "true"
+    "Ice Cavern SR Scythe Left": "break_icicle_ice_cavern"
     "Ice Cavern SR Scythe Center Left": "true"
     "Ice Cavern SR Scythe Back": "true"
     "Ice Cavern SR Scythe Center Right": "true"
