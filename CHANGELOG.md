@@ -27,6 +27,8 @@ All notable changes to this project will be documented in this file.
 - Fix Haunted Wasteland Poe Guide being removed when Enemy Souls are on.
 - Fix some areas being dead silent when they should have some ambience noises.
 - Fixed a lot of broken logic for Woodfall Temple, mostly accounting for Bronze Scale.
+- Ensure the logic for vanilla Ice Cavern Silver Rupees in the Scythe room is sound.
+- Fix logic for Shared Kamaro's Mask.
 
 ## [30.1] - 2026-03-15
 
