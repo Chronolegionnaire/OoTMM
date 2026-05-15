@@ -388,8 +388,8 @@ export async function applyRandomSettings(rnd: OptionRandomSettings, oldSettings
   case 5:
     base.agelessBoomerang = true;
     base.agelessSticks = true;
-    base.agelessGFS = true;
     base.agelessHammer = true;
+    base.agelessGFS = true;
     base.agelessHookshot = true;
     base.agelessTunics = true;
     base.agelessSwords = true;
@@ -399,8 +399,8 @@ export async function applyRandomSettings(rnd: OptionRandomSettings, oldSettings
   default:
     base.agelessBoomerang = booleanWeighted(random, 0.1);
     base.agelessSticks = booleanWeighted(random, 0.1);
-    base.agelessGFS = booleanWeighted(random, 0.1);
     base.agelessHammer = booleanWeighted(random, 0.1);
+    base.agelessGFS = booleanWeighted(random, 0.1);
     base.agelessHookshot = booleanWeighted(random, 0.1);
     base.agelessTunics = booleanWeighted(random, 0.1);
     base.agelessSwords = booleanWeighted(random, 0.1);

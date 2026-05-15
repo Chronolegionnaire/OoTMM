@@ -2006,6 +2006,10 @@ void KaleidoScope_LoadItemName(void* dst, s16 id)
     {
         comboLoadMmIcon(dst, 0xa27660, ITEM_MM_ZORA_EGG);
     }
+    else if (itemId == ITEM_OOT_GREAT_FAIRY_SWORD)
+    {
+        comboLoadMmIcon(dst, 0xa27660, ITEM_MM_GREAT_FAIRY_SWORD);
+    }
     else
     {
         LoadFile(dst, 0x880000 + 0x400 * id, 0x400);

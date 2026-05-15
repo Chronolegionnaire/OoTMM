@@ -2827,6 +2827,14 @@ export const SETTINGS = [{
   default: false,
   cond: hasOoT,
 }, {
+  key: 'agelessGFS',
+  name: 'Ageless Great Fairy Sword',
+  category: 'items.ageless',
+  type: 'boolean',
+  description: "Allows Link to use the Great Fairy's Sword independently of his age",
+  default: false,
+  cond: (s: any) => hasOoT && s.gfsOot
+}, {
   key: 'erSelfLoops',
   name: 'Allow Self-Loops',
   category: 'entrances',

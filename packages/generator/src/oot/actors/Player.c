@@ -286,6 +286,21 @@ static void updateKokiriSwordLength(void)
     }
 }
 
+typedef int (*Player_HoldsBrokenKnifeFunc)(Player* player);
+
+static int Player_HoldsBrokenKnifeWrapper(Player* player)
+{
+    Player_HoldsBrokenKnifeFunc Player_HoldsBrokenKnifeImpl;
+
+    if (player->heldItemId == ITEM_OOT_GREAT_FAIRY_SWORD)
+        return 0;
+
+    Player_HoldsBrokenKnifeImpl = (Player_HoldsBrokenKnifeFunc)0x80079ca4;
+    return Player_HoldsBrokenKnifeImpl(player);
+}
+
+PATCH_CALL(0x8007b8f4, Player_HoldsBrokenKnifeWrapper);
+
 void Player_UpdateWrapper(Player* this, PlayState* play)
 {
     Input* input;
