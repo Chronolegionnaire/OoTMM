@@ -300,6 +300,7 @@ static int Player_HoldsBrokenKnifeWrapper(Player* player)
 }
 
 PATCH_CALL(0x8007b8f4, Player_HoldsBrokenKnifeWrapper);
+PATCH_CALL(0x80835b34, Player_HoldsBrokenKnifeWrapper);
 
 s32 Player_CanSpinAttackWrapper(Player* this) {
     typedef s32 (*Player_HoldsBrokenKnifeFunc)(Player* player);
