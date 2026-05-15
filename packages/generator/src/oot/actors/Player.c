@@ -301,6 +301,90 @@ static int Player_HoldsBrokenKnifeWrapper(Player* player)
 
 PATCH_CALL(0x8007b8f4, Player_HoldsBrokenKnifeWrapper);
 
+s32 Player_CanSpinAttackWrapper(Player* this) {
+    typedef s32 (*Player_HoldsBrokenKnifeFunc)(Player* player);
+    Player_HoldsBrokenKnifeFunc Player_HoldsBrokenKnife =
+        (Player_HoldsBrokenKnifeFunc)0x80079ca4;
+
+    s8 sp3C[4];
+    s8* iter;
+    s8* iter2;
+    s8 temp1;
+    s8 temp2;
+    s32 i;
+
+    if (this->heldItemAction == PLAYER_IA_DEKU_STICK) {
+        return false;
+    }
+
+    if (this->heldItemId != ITEM_OOT_GREAT_FAIRY_SWORD && Player_HoldsBrokenKnife(this)) {
+        return false;
+    }
+
+    iter = &this->controlStickSpinAngles[0];
+    iter2 = &sp3C[0];
+
+    for (i = 0; i < 4; i++, iter++, iter2++) {
+        if ((*iter2 = *iter) < 0) {
+            return false;
+        }
+
+        *iter2 *= 2;
+    }
+
+    temp1 = sp3C[0] - sp3C[1];
+
+    if (ABS(temp1) < 10) {
+        return false;
+    }
+
+    iter2 = &sp3C[1];
+
+    for (i = 1; i < 3; i++, iter2++) {
+        temp2 = *iter2 - *(iter2 + 1);
+
+        if ((ABS(temp2) < 10) || (temp2 * temp1 < 0)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+PATCH_FUNC(0x808356bc, Player_CanSpinAttackWrapper);
+
+s32 Player_BiggoronSwordHealthWrapper(PlayState* play, Player* this)
+{
+    typedef void (*func_800849EC_t)(PlayState*);
+    func_800849EC_t func_800849EC_addr;
+
+    func_800849EC_addr = (func_800849EC_t)0x8006fad0;
+
+    if (this->heldItemAction == PLAYER_IA_SWORD_BIGGORON)
+    {
+        if (this->heldItemId != ITEM_OOT_GREAT_FAIRY_SWORD)
+        {
+            if (!gSaveContext.save.info.isBiggoronSword &&
+                (gSaveContext.save.info.playerData.swordHealth > 0.0f))
+            {
+                if ((gSaveContext.save.info.playerData.swordHealth -= 1.0f) <= 0.0f)
+                {
+                    EffectSsStick_Spawn(play, &this->bodyPartsPos[PLAYER_BODYPART_R_HAND],
+                                        this->actor.shape.rot.y + 0x8000);
+                    func_800849EC_addr(play);
+                    Player_PlaySfx(this, NA_SE_IT_MAJIN_SWORD_BROKEN);
+                }
+            }
+        }
+
+        return 1;
+    }
+
+    return 0;
+}
+
+PATCH_FUNC(0x80840c3c, Player_BiggoronSwordHealthWrapper);
+
 void Player_UpdateWrapper(Player* this, PlayState* play)
 {
     Input* input;
