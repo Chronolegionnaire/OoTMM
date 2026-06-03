@@ -538,6 +538,112 @@ static int addItemBombchuMm(PlayState* play, u8 itemId, s16 gi, u16 param)
     return 0;
 }
 
+static void addSeedsRawOot(u8 count)
+{
+    u8 max;
+
+    if (gOotSave.info.inventory.upgrades.bulletBag == 0)
+        return;
+    max = kMaxSeeds[gOotSave.info.inventory.upgrades.bulletBag];
+    addAmmoOot(ITS_OOT_SLINGSHOT, ITEM_OOT_SLINGSHOT, max, count);
+    BITMAP16_SET(gOotSave.info.eventsItem, EV_OOT_ITEM_DEKU_SEEDS);
+}
+
+static void addSeedsRawMm(u8 count)
+{
+    u8 max;
+    s32 seeds;
+
+    if (gMmSave.info.inventory.upgrades.bulletBag == 0)
+        return;
+
+    max = kMaxSeeds[gMmSave.info.inventory.upgrades.bulletBag];
+
+    seeds = gMmExtraAmmo.slingshotSeeds + count;
+
+    if (seeds > max)
+        seeds = max;
+
+    gMmExtraAmmo.slingshotSeeds = seeds;
+}
+
+static void addSeedsOot(u8 count)
+{
+    addSeedsRawOot(count);
+    if (Config_Flag(CFG_SHARED_SLINGSHOT))
+        addSeedsRawMm(count);
+}
+
+static void addSeedsMm(u8 count)
+{
+    addSeedsRawMm(count);
+    if (Config_Flag(CFG_SHARED_SLINGSHOT))
+        addSeedsRawOot(count);
+}
+
+static int addItemSeedsOot(PlayState* play, u8 itemId, s16 gi, u16 param)
+{
+    addSeedsOot(param);
+    return 0;
+}
+
+static int addItemSeedsMm(PlayState* play, u8 itemId, s16 gi, u16 param)
+{
+    addSeedsMm(param);
+    return 0;
+}
+
+static void addBowSlingshotRawMm(PlayState* play, u8 index)
+{
+    u8 itemId;
+
+    itemId = kMmBowSlingshot[index];
+    if (gMmSave.info.inventory.items[ITS_MM_BOW] == ITEM_NONE)
+        gMmSave.info.inventory.items[ITS_MM_BOW] = itemId;
+
+    gMmExtraItems.bowSlingshot |= (1 << index);
+
+    reloadSlotMm(play, ITS_MM_BOW);
+}
+
+static void addSlingshotRawOot(u8 index)
+{
+    if (index > gOotSave.info.inventory.upgrades.bulletBag)
+        gOotSave.info.inventory.upgrades.bulletBag = index;
+    addSeedsRawOot(kMaxSeeds[index]);
+}
+
+static void addSlingshotRawMm(u8 index)
+{
+    if (index > gMmSave.info.inventory.upgrades.bulletBag)
+        gMmSave.info.inventory.upgrades.bulletBag = index;
+    addSeedsRawMm(kMaxSeeds[index]);
+}
+
+static int addItemSlingshotOot(PlayState* play, u8 itemId, s16 gi, u16 param)
+{
+    addSlingshotRawOot(param);
+
+    if (Config_Flag(CFG_SHARED_SLINGSHOT))
+    {
+        addBowSlingshotRawMm(play, 1);
+        addSlingshotRawMm(param);
+    }
+
+    return 0;
+}
+
+static int addItemSlingshotMm(PlayState* play, u8 itemId, s16 gi, u16 param)
+{
+    addBowSlingshotRawMm(play, 1);
+    addSlingshotRawMm(param);
+
+    if (Config_Flag(CFG_SHARED_SLINGSHOT))
+        addSlingshotRawOot(param);
+
+    return 0;
+}
+
 static void addArrowsRawOot(u8 count)
 {
     u8 max;
@@ -551,11 +657,23 @@ static void addArrowsRawOot(u8 count)
 static void addArrowsRawMm(u8 count)
 {
     u8 max;
+    s32 arrows;
 
     if (gMmSave.info.inventory.upgrades.quiver == 0)
         return;
+
     max = kMaxArrows[gMmSave.info.inventory.upgrades.quiver];
-    addAmmoMm(ITS_MM_BOW, ITEM_MM_BOW, max, count);
+
+    if (gMmSave.info.inventory.items[ITS_MM_BOW] == ITEM_NONE)
+        gMmSave.info.inventory.items[ITS_MM_BOW] = ITEM_MM_BOW;
+
+    gMmExtraItems.bowSlingshot |= (1 << 0);
+
+    arrows = gMmSave.info.inventory.ammo[ITS_MM_BOW] + count;
+    if (arrows > max)
+        arrows = max;
+
+    gMmSave.info.inventory.ammo[ITS_MM_BOW] = arrows;
 }
 
 static void addArrowsOot(u8 count)
@@ -591,51 +709,34 @@ static void addBowRawOot(u8 index)
     addArrowsRawOot(kMaxArrows[index]);
 }
 
-static void addBowRawMm(u8 index)
+static void addBowRawMm(PlayState* play, u8 index)
 {
+    if (index == 0)
+        index = 1;
+
     if (index > gMmSave.info.inventory.upgrades.quiver)
         gMmSave.info.inventory.upgrades.quiver = index;
+
+    addBowSlingshotRawMm(play, 0);
     addArrowsRawMm(kMaxArrows[index]);
 }
 
 static int addItemBowOot(PlayState* play, u8 itemId, s16 gi, u16 param)
 {
     addBowRawOot(param);
+
     if (Config_Flag(CFG_SHARED_BOWS))
-        addBowRawMm(param);
+        addBowRawMm(play, param);
+
     return 0;
 }
 
 static int addItemBowMm(PlayState* play, u8 itemId, s16 gi, u16 param)
 {
-    addBowRawMm(param);
+    addBowRawMm(play, param);
+
     if (Config_Flag(CFG_SHARED_BOWS))
         addBowRawOot(param);
-    return 0;
-}
-
-static void addSeeds(u8 count)
-{
-    u8 max;
-
-    if (gOotSave.info.inventory.upgrades.bulletBag == 0)
-        return;
-    max = kMaxSeeds[gOotSave.info.inventory.upgrades.bulletBag];
-    addAmmoOot(ITS_OOT_SLINGSHOT, ITEM_OOT_SLINGSHOT, max, count);
-    BITMAP16_SET(gOotSave.info.eventsItem, EV_OOT_ITEM_DEKU_SEEDS);
-}
-
-static int addItemSeeds(PlayState* play, u8 itemId, s16 gi, u16 param)
-{
-    addSeeds(param);
-    return 0;
-}
-
-static int addItemSlingshot(PlayState* play, u8 itemId, s16 gi, u16 param)
-{
-    if (gOotSave.info.inventory.upgrades.bulletBag < param)
-        gOotSave.info.inventory.upgrades.bulletBag = param;
-    addSeeds(kMaxSeeds[param]);
     return 0;
 }
 
@@ -2060,6 +2161,43 @@ static int addItemOotRustyKey(PlayState* play, u8 itemId, s16 gi, u16 param)
     return 0;
 }
 
+static int addItemBowSlingshot(PlayState* play, u8 itemId, s16 gi, u16 param)
+{
+    addBowSlingshotRawMm(play, param);
+
+    switch (param)
+    {
+    case 0: /* Bow */
+        if (gMmSave.info.inventory.upgrades.quiver < 1)
+            gMmSave.info.inventory.upgrades.quiver = 1;
+
+        addArrowsRawMm(kMaxArrows[gMmSave.info.inventory.upgrades.quiver]);
+
+        if (Config_Flag(CFG_SHARED_BOWS))
+        {
+            addBowRawOot(1);
+            reloadSlotOot(play, ITS_OOT_BOW);
+        }
+        break;
+
+    case 1: /* Slingshot */
+        if (gMmSave.info.inventory.upgrades.bulletBag < 1)
+            gMmSave.info.inventory.upgrades.bulletBag = 1;
+
+        addSeedsRawMm(kMaxSeeds[gMmSave.info.inventory.upgrades.bulletBag]);
+
+        if (Config_Flag(CFG_SHARED_SLINGSHOT))
+        {
+            addSlingshotRawOot(1);
+            reloadSlotOot(play, ITS_OOT_SLINGSHOT);
+        }
+        break;
+    }
+
+    reloadSlotMm(play, ITS_MM_BOW);
+    return 0;
+}
+
 static int addItemStoneAgonyMm(PlayState* play, u8 itemId, s16 gi, u16 param)
 {
     gMmExtraFlags3.stoneAgony = 1;
@@ -2142,8 +2280,8 @@ static const AddItemFunc kAddItemHandlers[] = {
     addItemArrowsMm,
     addItemBowOot,
     addItemBowMm,
-    addItemSeeds,
-    addItemSlingshot,
+    addItemSeedsOot,
+    addItemSlingshotOot,
     addItemNormalOot,
     addItemNormalMm,
     addItemSticksOot,
@@ -2248,6 +2386,9 @@ static const AddItemFunc kAddItemHandlers[] = {
     addItemKegOot,
     addItemHammerGFS,
     addItemOotRustyKey,
+    addItemBowSlingshot,
+    addItemSlingshotMm,
+    addItemSeedsMm,
 };
 
 _Static_assert(ARRAY_COUNT(kAddItemHandlers) == IA_MAX, "kAddItemHandlers length is wrong");
