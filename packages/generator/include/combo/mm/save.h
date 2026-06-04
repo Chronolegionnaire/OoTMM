@@ -616,4 +616,26 @@ MmCustomSave;
 #define GET_CUR_FORM_BTN_ITEM(btn) ((u8)((btn) == EQUIP_SLOT_B ? BUTTON_ITEM_EQUIP(CUR_FORM, btn) : BUTTON_ITEM_EQUIP(0, btn)))
 #define GET_CUR_FORM_BTN_SLOT(btn) ((u8)((btn) == EQUIP_SLOT_B ? C_SLOT_EQUIP(CUR_FORM, btn) : C_SLOT_EQUIP(0, btn)))
 
+#define MM_EQUIP_VALUE(equip)                                      \
+((equip) == EQUIP_TYPE_SWORD  ? gSaveContext.save.info.itemEquips.sword  : \
+(equip) == EQUIP_TYPE_SHIELD ? gSaveContext.save.info.itemEquips.shield : \
+(equip) == EQUIP_TYPE_TUNIC  ? gSaveContext.save.info.itemEquips.tunic  : \
+(equip) == EQUIP_TYPE_BOOTS  ? gSaveContext.save.info.itemEquips.boots  : \
+0)
+
+#define ALL_EQUIP_VALUE(equip) ((s32)MM_EQUIP_VALUE(equip))
+#define CUR_EQUIP_VALUE(equip) ((s32)MM_EQUIP_VALUE(equip))
+
+typedef enum LinkAge {
+    /* 0 */ LINK_AGE_ADULT,
+    /* 1 */ LINK_AGE_CHILD
+} LinkAge;
+
+#define LINK_IS_ADULT (gSaveContext.save.linkAge == LINK_AGE_ADULT)
+#define LINK_IS_CHILD (gSaveContext.save.linkAge == LINK_AGE_CHILD)
+
+#define YEARS_CHILD 5
+#define YEARS_ADULT 17
+#define LINK_AGE_IN_YEARS (!LINK_IS_ADULT ? YEARS_CHILD : YEARS_ADULT)
+
 #endif /* MM_SAVE_H */

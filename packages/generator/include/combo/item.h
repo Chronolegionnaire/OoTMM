@@ -374,4 +374,80 @@ typedef enum ExchangeItemID {
 #define FANFARE_SONG_DOUBLE_TIME    FANFARE_MM(NA_BGM_MM_SONG_OF_DOUBLE_TIME)
 #define FANFARE_KAMARO              FANFARE_MM(NA_BGM_MM_KAMARO_DANCE)
 
+typedef enum EquipmentType {
+    /* 0 */ EQUIP_TYPE_SWORD,
+    /* 1 */ EQUIP_TYPE_SHIELD,
+    /* 2 */ EQUIP_TYPE_TUNIC,
+    /* 3 */ EQUIP_TYPE_BOOTS,
+    /* 4 */ EQUIP_TYPE_MAX
+} EquipmentType;
+
+typedef enum EquipInvSword {
+    /* 0 */ EQUIP_INV_SWORD_KOKIRI,
+    /* 1 */ EQUIP_INV_SWORD_RAZOR,
+    /* 2 */ EQUIP_INV_SWORD_GILDED,
+} EquipInvSword;
+
+typedef enum EquipInvShield {
+    /* 0 */ EQUIP_INV_SHIELD_DEKU,
+    /* 1 */ EQUIP_INV_SHIELD_HERO,
+    /* 2 */ EQUIP_INV_SHIELD_MIRROR
+} EquipInvShield;
+
+typedef enum EquipInvTunic {
+    /* 0 */ EQUIP_INV_TUNIC_KOKIRI,
+    /* 1 */ EQUIP_INV_TUNIC_GORON,
+    /* 2 */ EQUIP_INV_TUNIC_ZORA
+} EquipInvTunic;
+
+typedef enum EquipInvBoots {
+    /* 0 */ EQUIP_INV_BOOTS_KOKIRI,
+    /* 1 */ EQUIP_INV_BOOTS_IRON,
+    /* 2 */ EQUIP_INV_BOOTS_HOVER
+} EquipInvBoots;
+
+typedef enum EquipValueSword {
+    /* 0 */ EQUIP_VALUE_SWORD_NONE,
+    /* 1 */ EQUIP_VALUE_SWORD_KOKIRI,
+    /* 2 */ EQUIP_VALUE_SWORD_RAZOR,
+    /* 3 */ EQUIP_VALUE_SWORD_GILDED,
+    /* 4 */ EQUIP_VALUE_SWORD_MAX
+} EquipValueSword;
+
+typedef enum EquipValueShield {
+    /* 0 */ EQUIP_VALUE_SHIELD_NONE,
+    /* 1 */ EQUIP_VALUE_SHIELD_DEKU,
+    /* 2 */ EQUIP_VALUE_SHIELD_HERO,
+    /* 3 */ EQUIP_VALUE_SHIELD_MIRROR,
+    /* 4 */ EQUIP_VALUE_SHIELD_MAX
+} EquipValueShield;
+
+typedef enum EquipValueTunic {
+    /* 0 */ EQUIP_VALUE_TUNIC_NONE,
+    /* 1 */ EQUIP_VALUE_TUNIC_KOKIRI,
+    /* 2 */ EQUIP_VALUE_TUNIC_GORON,
+    /* 3 */ EQUIP_VALUE_TUNIC_ZORA,
+    /* 4 */ EQUIP_VALUE_TUNIC_MAX
+} EquipValueTunic;
+
+typedef enum EquipValueBoots {
+    /* 0 */ EQUIP_VALUE_BOOTS_NONE,
+    /* 1 */ EQUIP_VALUE_BOOTS_KOKIRI,
+    /* 2 */ EQUIP_VALUE_BOOTS_IRON,
+    /* 3 */ EQUIP_VALUE_BOOTS_HOVER,
+    /* 4 */ EQUIP_VALUE_BOOTS_MAX
+} EquipValueBoots;
+
+typedef enum UpgradeType {
+    /* 0x00 */ UPG_QUIVER,
+    /* 0x01 */ UPG_BOMB_BAG,
+    /* 0x02 */ UPG_STRENGTH,
+    /* 0x03 */ UPG_SCALE,
+    /* 0x04 */ UPG_WALLET,
+    /* 0x05 */ UPG_BULLET_BAG,
+    /* 0x06 */ UPG_DEKU_STICKS,
+    /* 0x07 */ UPG_DEKU_NUTS,
+    /* 0x08 */ UPG_MAX
+} UpgradeType;
+
 #endif

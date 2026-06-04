@@ -471,20 +471,28 @@
 #define ITEM_MM_SPELL_WIND                  0xae
 #define ITEM_MM_SPELL_LOVE                  0xaf
 #define ITEM_MM_SPELL_FIRE                  0xb0
-#define ITEM_MM_BOOTS_IRON                  0xb1
-#define ITEM_MM_BOOTS_HOVER                 0xb2
-#define ITEM_MM_TUNIC_GORON                 0xb3
-#define ITEM_MM_TUNIC_ZORA                  0xb4
-#define ITEM_MM_HAMMER                      0xb5
-#define ITEM_MM_BOOMERANG                   0xb6
-#define ITEM_MM_SLINGSHOT                   0xb7
-#define ITEM_MM_RUTO_LETTER                 0xb8
-#define ITEM_MM_SEEDS_5                     0xb9
-#define ITEM_MM_SEEDS_30                    0xba
-#define ITEM_MM_BULLET_BAG                  0xbb
-#define ITEM_MM_BULLET_BAG2                 0xbc
-#define ITEM_MM_BULLET_BAG3                 0xbd
-#define ITEM_MM_CUSTOM_MAX                  0xbe
+#define ITEM_MM_BOOTS_KOKIRI                0xb1
+#define ITEM_MM_BOOTS_IRON                  0xb2
+#define ITEM_MM_BOOTS_HOVER                 0xb3
+#define ITEM_MM_TUNIC_KOKIRI                0xb4
+#define ITEM_MM_TUNIC_GORON                 0xb5
+#define ITEM_MM_TUNIC_ZORA                  0xb6
+#define ITEM_MM_HAMMER                      0xb7
+#define ITEM_MM_BOOMERANG                   0xb8
+#define ITEM_MM_SLINGSHOT                   0xb9
+#define ITEM_MM_RUTO_LETTER                 0xba
+#define ITEM_MM_SEEDS_5                     0xbb
+#define ITEM_MM_SEEDS_30                    0xbc
+#define ITEM_MM_BULLET_BAG                  0xbd
+#define ITEM_MM_BULLET_BAG2                 0xbe
+#define ITEM_MM_BULLET_BAG3                 0xbf
+#define ITEM_MM_GORON_BRACELET              0xc0
+#define ITEM_MM_SILVER_GAUNTLETS            0xc1
+#define ITEM_MM_GOLDEN_GAUNTLETS            0xc2
+#define ITEM_MM_SILVER_SCALE                0xc3
+#define ITEM_MM_GOLDEN_SCALE                0xc4
+#define ITEM_MM_SHIELD_DEKU                 0xc5
+#define ITEM_MM_CUSTOM_MAX                  0xc6
 
 /* Setting values above ITEM_MM_CUSTOM_MAX without updating this will cause magic arrow issues */
 

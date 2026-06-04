@@ -221,6 +221,22 @@ export const extractedAssets = async (roms: DecompressedRoms): Promise<{[k: stri
   GAUNTLET1_TEXTURE: await extractRaw(roms, 'oot', 'objects/object_link_boy', 0x9980, 16 * 32 * 2),
   GAUNTLET2_TEXTURE: await extractRaw(roms, 'oot', 'objects/object_link_boy', 0x9d80, 32 * 32 * 2),
   DROP_DEKU_SEEDS_TEXTURE: await extractRaw(roms, 'oot', 'objects/gameplay_keep', 0x43650, 32 * 32 * 2,),
+  
+  OOT_EQUIP_BG_00_TEXTURE: await extractRaw(roms, 'oot', 'textures/icon_item_static', 0x5C3C0, 80 * 32),
+  OOT_EQUIP_BG_01_TEXTURE: await extractRaw(roms, 'oot', 'textures/icon_item_static', 0x5FFC0, 80 * 32),
+  OOT_EQUIP_BG_02_TEXTURE: await extractRaw(roms, 'oot', 'textures/icon_item_static', 0x695C0, 80 * 32),
+  OOT_EQUIP_BG_03_TEXTURE: await extractRaw(roms, 'oot', 'textures/icon_item_static', 0x72BC0, 80 * 32),
+  OOT_EQUIP_BG_04_TEXTURE: await extractRaw(roms, 'oot', 'textures/icon_item_static', 0x7C1C0, 80 * 32),
+  OOT_EQUIP_BG_10_TEXTURE: await extractRaw(roms, 'oot', 'textures/icon_item_nes_static', 0x8280, 80 * 32),
+  OOT_EQUIP_BG_11_TEXTURE: await extractRaw(roms, 'oot', 'textures/icon_item_static', 0x609C0, 80 * 32),
+  OOT_EQUIP_BG_12_TEXTURE: await extractRaw(roms, 'oot', 'textures/icon_item_static', 0x69FC0, 80 * 32),
+  OOT_EQUIP_BG_13_TEXTURE: await extractRaw(roms, 'oot', 'textures/icon_item_static', 0x735C0, 80 * 32),
+  OOT_EQUIP_BG_14_TEXTURE: await extractRaw(roms, 'oot', 'textures/icon_item_static', 0x7CBC0, 80 * 32),
+  OOT_EQUIP_BG_20_TEXTURE: await extractRaw(roms, 'oot', 'textures/icon_item_static', 0x5CDC0, 80 * 32),
+  OOT_EQUIP_BG_21_TEXTURE: await extractRaw(roms, 'oot', 'textures/icon_item_static', 0x613C0, 80 * 32),
+  OOT_EQUIP_BG_22_TEXTURE: await extractRaw(roms, 'oot', 'textures/icon_item_static', 0x6A9C0, 80 * 32),
+  OOT_EQUIP_BG_23_TEXTURE: await extractRaw(roms, 'oot', 'textures/icon_item_static', 0x73FC0, 80 * 32),
+  OOT_EQUIP_BG_24_TEXTURE: await extractRaw(roms, 'oot', 'textures/icon_item_static', 0x7D5C0, 80 * 32),
 });
 
 type ObjectRef = {

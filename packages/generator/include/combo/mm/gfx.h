@@ -43,4 +43,18 @@ GraphicsContext;
 
 _Static_assert(sizeof(GraphicsContext) == 0x2f0, "MM GraphicsContext is not the correct size");
 
+#define gDPSetTileCustom(pkt, fmt, siz, width, height, pal, cms, cmt, masks, maskt, shifts, shiftt)                    \
+{                                                                                                                  \
+gDPPipeSync(pkt);                                                                                              \
+gDPTileSync(pkt);                                                                                              \
+gDPSetTile(pkt, fmt, siz, (((width)*siz##_TILE_BYTES) + 7) >> 3, 0, G_TX_LOADTILE, 0, cmt, maskt, shiftt, cms, \
+masks, shifts);                                                                                     \
+gDPTileSync(pkt);                                                                                              \
+gDPSetTile(pkt, fmt, siz, (((width)*siz##_TILE_BYTES) + 7) >> 3, 0, G_TX_RENDERTILE, pal, cmt, maskt, shiftt,  \
+cms, masks, shifts);                                                                                \
+gDPSetTileSize(pkt, G_TX_RENDERTILE, 0, 0, ((width)-1) << G_TEXTURE_IMAGE_FRAC,                                \
+((height)-1) << G_TEXTURE_IMAGE_FRAC);                                                          \
+}                                                                                                                  \
+(void)0
+
 #endif

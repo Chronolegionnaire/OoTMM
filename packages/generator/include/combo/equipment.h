@@ -18,4 +18,20 @@
 #define EQ_OOT_BOOTS_IRON           0x02
 #define EQ_OOT_BOOTS_HOVER          0x04
 
+#define EQ_MM_SWORD_KOKIRI         0x01
+#define EQ_MM_SWORD_RAZOR          0x02
+#define EQ_MM_SWORD_GILDED         0x04
+
+#define EQ_MM_SHIELD_DEKU          0x01
+#define EQ_MM_SHIELD_HERO          0x02
+#define EQ_MM_SHIELD_MIRROR        0x04
+
+#define EQ_MM_TUNIC_KOKIRI         0x01
+#define EQ_MM_TUNIC_GORON          0x02
+#define EQ_MM_TUNIC_ZORA           0x04
+
+#define EQ_MM_BOOTS_KOKIRI         0x01
+#define EQ_MM_BOOTS_IRON           0x02
+#define EQ_MM_BOOTS_HOVER          0x04
+
 #endif
