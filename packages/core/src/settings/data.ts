@@ -2145,6 +2145,14 @@ export const SETTINGS = [{
   default: false,
   cond: hasMM,
 }, {
+  key: 'adultMaskMm',
+  name: "Adult Mask",
+  category: 'items.extensions',
+  type: 'boolean',
+  description: "Add the Adult Mask in Majora's Mask. The Adult mask allows you to change age in Majora's Mask.",
+  default: false,
+  cond: hasMM,
+}, {
   key: 'elegyOot',
   name: "Elegy of Emptiness (OoT)",
   category: 'items.extensions',

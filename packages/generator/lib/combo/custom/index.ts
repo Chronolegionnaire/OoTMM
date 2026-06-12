@@ -161,6 +161,8 @@ export const customFiles = async (): Promise<{[k: string]: Uint8Array}> => ({
   POT_SOUL_SIDE: await png('pots/soul_side', 'rgba16'),
   POT_SOUL_TOP: await png('pots/soul_top', 'rgba16'),
   POT_MAP_SIDE: await png('pots/map_side', 'rgba16'),
+  ADULT_MASK_ICON: await png('adult_mask_icon', 'rgba32'),
+  ADULT_MASK_TEXT: await png('adult_mask_text', 'ia4'),
   GLITTER: await png('glitter', 'i4'),
   SONG_TAG_LULLABY: await png('song_tags/lullaby', 'ia8'),
   SONG_TAG_EPONA: await png('song_tags/epona', 'ia8'),
@@ -487,6 +489,14 @@ class CustomAssetsBuilder {
     await this.addObjectFile('MM_ADULT_LINK_SPIN_ATTACK_VTX_2', 'mm_adult_link_spin_attack_vtx_2.bin', []);
     await this.addObjectFile('MM_ADULT_LINK_SPIN_ATTACK_VTX_3', 'mm_adult_link_spin_attack_vtx_3.bin', []);
     await this.addObjectFile('MM_ADULT_LINK_MASK_MTX', 'mm_adult_link_mask_mtx.bin', []);
+    await this.addObjectFile('MASK_ADULT_TRANSFORM', 'object_mask_adult.zobj', [
+      0x06000900,
+    ]);
+
+    await this.addObjectFile('MASK_ADULT', 'object_gi_maskadult.zobj', [
+      0x060009B0,
+      0x06000B90,
+    ]);
 
     /* Add the object table */
     const objectTableBuffer = toU32Buffer(this.objectVroms.map(o => [o.vstart, o.vend]).flat());
