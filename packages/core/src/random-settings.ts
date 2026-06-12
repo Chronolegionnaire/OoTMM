@@ -685,6 +685,7 @@ export async function applyRandomSettings(rnd: OptionRandomSettings, oldSettings
   base.gerudoMaskMm = booleanWeighted(random, 0.25);
   base.skullMaskMm = booleanWeighted(random, 0.25);
   base.spookyMaskMm = booleanWeighted(random, 0.25);
+  base.adultMaskMm = booleanWeighted(random, 0.25);
   base.sticksNutsUpgradesMm = booleanWeighted(random, 0.5);
   base.stoneAgonyMm = booleanWeighted(random, 0.5);
   base.spinUpgradeOot = booleanWeighted(random, 0.33);

@@ -466,7 +466,8 @@ typedef struct
     u32 bowSlingshot:2;
     u32 stoneGerudoSkull:3;
     u32 gibdoSpooky:2;
-    u32 unused:16;
+    u32 fierceDeityAdult:2;
+    u32 unused:14;
 }
 MmExtraItems;
 

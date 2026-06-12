@@ -271,6 +271,7 @@ export function worldConfig(world: LogicResultWorld, settings: Settings): Set<Co
     MM_MASK_GERUDO: settings.gerudoMaskMm,
     MM_MASK_SKULL: settings.skullMaskMm,
     MM_MASK_SPOOKY: settings.spookyMaskMm,
+    MM_MASK_ADULT: settings.adultMaskMm,
     MM_UPGRADES_STICKS_NUTS: settings.sticksNutsUpgradesMm,
     OOT_SHUFFLE_EGGS: settings.eggShuffle,
     MM_STONE_OF_AGONY: settings.stoneAgonyMm,
