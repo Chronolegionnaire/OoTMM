@@ -13,6 +13,7 @@
 #include <combo/effect.h>
 #include "../actors.h"
 #include <combo/mm/boomerang.h>
+#include <combo/common/animation.h>
 
 void ArrowCycle_Handle(Player* link, PlayState* play);
 
@@ -175,6 +176,7 @@ static s32 sCustomItemActions[] =
     PLAYER_CUSTOM_IA_MASK_GERUDO,
     PLAYER_CUSTOM_IA_MASK_SKULL,
     PLAYER_CUSTOM_IA_MASK_SPOOKY,
+    PLAYER_CUSTOM_IA_MASK_ADULT,
 };
 
 static u8 sMagicSpellCosts[] =
@@ -550,6 +552,14 @@ typedef void (*Player_func_8082DAD4)(Player*);
 typedef PlayerAnimationHeader* (*Player_GetWaitAnimation)(Player*);
 typedef void (*Player_SetAction)(PlayState*, Player*, PlayerActionFunc, s32);
 
+s32 AdultMask_TryUse(Player* player, PlayState* play, s32 itemAction);
+s32 AdultMask_IsCsItem(Player* player);
+void AdultMask_StartCsItem(Player* player, PlayState* play);
+void AdultMask_AfterStart(Player* player);
+s32 AdultMask_IsPuttingOn(void);
+s32 AdultMask_IsActive(void);
+s32 AdultMask_ShouldDrawAdultModel(void);
+
 s32 Player_CustomCsItem(Player* this, PlayState* play)
 {
     Player_func_8082DAD4 func_8082DAD4;
@@ -576,6 +586,12 @@ s32 Player_CustomCsItem(Player* this, PlayState* play)
         }
         func_8082DAD4 = OverlayAddr(0x8082DAD4);
         func_8082DAD4(this);
+        return 1;
+    }
+    if (AdultMask_IsCsItem(this))
+    {
+        AdultMask_StartCsItem(this, play);
+        AdultMask_AfterStart(this);
         return 1;
     }
     else if (this->itemAction >= 0x3a && this->itemAction <= 0x51) /* PLAYER_IA_MASK_MIN // PLAYER_IA_MASK_MAX */
@@ -748,6 +764,11 @@ s32 Player_CustomUseItem(Player* this, PlayState* play, s32 itemAction)
         /* Handled */
         return 1;
     }
+    if (AdultMask_TryUse(this, play, itemAction))
+    {
+        return 1;
+    }
+
     s32 customMask = Player_ActionToCustomMask(this, itemAction);
     if (customMask != PLAYER_CUSTOM_MASK_NONE)
     {
@@ -2254,6 +2275,7 @@ s32 Player_CustomActionToModelGroup(Player* player, s32 itemAction) {
     case PLAYER_CUSTOM_IA_MASK_GERUDO:
     case PLAYER_CUSTOM_IA_MASK_SKULL:
     case PLAYER_CUSTOM_IA_MASK_SPOOKY:
+    case PLAYER_CUSTOM_IA_MASK_ADULT:
         return 3;  /* PLAYER_MODELGROUP_DEFAULT */
     }
 
@@ -2297,6 +2319,7 @@ void Player_SetCustomItemActionUpperFunc(PlayState* play, Player* player) {
     case PLAYER_CUSTOM_IA_MASK_GERUDO:
     case PLAYER_CUSTOM_IA_MASK_SKULL:
     case PLAYER_CUSTOM_IA_MASK_SPOOKY:
+    case PLAYER_CUSTOM_IA_MASK_ADULT:
         return;
     }
     /* If more custom items were to be added that go to this extent I would suggest a sPlayerCustomUpperActionUpdateFuncs array */
@@ -2320,6 +2343,7 @@ void Player_RunCustomItemActionInitFunc(PlayState* play, Player* player, s32 ite
     case PLAYER_CUSTOM_IA_MASK_GERUDO:
     case PLAYER_CUSTOM_IA_MASK_SKULL:
     case PLAYER_CUSTOM_IA_MASK_SPOOKY:
+    case PLAYER_CUSTOM_IA_MASK_ADULT:
         return;
     }
     /* If more custom items were to be added that go to this extent I would suggest a sPlayerItemActionInitFuncs array */

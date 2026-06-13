@@ -18,6 +18,25 @@ import { CustomObjectsBuilder } from './custom-objects-builder';
 import { bufReadU32BE, bufWriteU32BE } from '../util/buffer';
 import { ObjectEditor } from './object-editor';
 import { patchAnimationPorts } from './custom-animation-builder';
+import {concatUint8Arrays} from "uint8array-extras";
+
+function f32BitsBE(value: number): number {
+  const tmp = new ArrayBuffer(4);
+  const view = new DataView(tmp);
+
+  view.setFloat32(0, value, false);
+  return view.getUint32(0, false);
+}
+
+const AGE_MODEL_CMD_END     = 0x00000000;
+const AGE_MODEL_CMD_WRITE16 = 0x00000001;
+const AGE_MODEL_CMD_WRITE32 = 0x00000002;
+const AGE_MODEL_CMD_COPY32  = 0x00000003;
+
+type AddedCustomObject = {
+  objectId: number;
+  defines: number[];
+};
 
 const FILES_TO_INDEX = {
   oot: arrayToIndexMap(FILES.oot),
@@ -271,18 +290,270 @@ class CustomAssetsBuilder {
     return vrom;
   }
 
-  async addCustomObject(name: string, data: Uint8Array, defines: number[]) {
+  async addCustomObject(name: string, data: Uint8Array, defines: number[]): Promise<AddedCustomObject> {
     const vrom = this.addRawData(`custom/${name.toLowerCase()}`, data, true);
     const objectId = this.addObjectEntry(vrom, data.length);
     this.cg.define('CUSTOM_OBJECT_ID_' + name, objectId);
     for (let i = 0; i < defines.length; ++i) {
       this.cg.define('CUSTOM_OBJECT_' + name + '_' + i, defines[i]);
     }
+    return { objectId, defines };
   }
 
-  async addObjectFile(name: string, filename: string, defines: number[]) {
+  async addObjectFile(name: string, filename: string, defines: number[]): Promise<AddedCustomObject> {
     const file = await raw(filename);
-    await this.addCustomObject(name, file, defines);
+    return await this.addCustomObject(name, file, defines);
+  }
+
+  private extractMmCodeRamRange(ramStart: number, size: number): Uint8Array {
+    const MM_CODE_RAM_START = 0x800a5ac0;
+    const MM_CODE_ROM_START = 0x00b3c000;
+
+    const off = MM_CODE_ROM_START + (ramStart - MM_CODE_RAM_START);
+    return this.roms.mm.rom.slice(off, off + size);
+  }
+
+  async addChildAgeModelTables() {
+    const parts: Uint8Array[] = [];
+
+    const ranges = [
+      { ramStart: 0x801bfe00, size: 0x4f8 },
+      { ramStart: 0x801c0d78, size: 0x20 },
+      { ramStart: 0x801c2730, size: 0x10 },
+      { ramStart: 0x801dca58, size: 0x14 },
+    ];
+
+    for (const range of ranges) {
+      const header = new Uint8Array(8);
+      bufWriteU32BE(header, 0x00, range.ramStart);
+      bufWriteU32BE(header, 0x04, range.size);
+
+      parts.push(header);
+      parts.push(this.extractMmCodeRamRange(range.ramStart, range.size));
+    }
+
+    const end = new Uint8Array(8);
+    bufWriteU32BE(end, 0x00, 0);
+    bufWriteU32BE(end, 0x04, 0);
+    parts.push(end);
+
+    const data = concatUint8Arrays(parts);
+    const vrom = this.addRawData('custom/mm_age_model_child_tables', data, false);
+
+    this.cg.define('CUSTOM_MM_AGE_MODEL_CHILD_TABLES_VROM', vrom);
+    this.cg.define('CUSTOM_MM_AGE_MODEL_CHILD_TABLES_SIZE', data.length);
+  }
+
+  async addAdultAgeModelTables(adultLink: AddedCustomObject) {
+    const writes: { op: number; addr: number; value: number }[] = [];
+
+    const id = adultLink.objectId;
+    const d = adultLink.defines;
+
+    const w16 = (addr: number, value: number) => {
+      writes.push({ op: AGE_MODEL_CMD_WRITE16, addr, value });
+    };
+
+    const w32 = (addr: number, value: number) => {
+      writes.push({ op: AGE_MODEL_CMD_WRITE32, addr, value });
+    };
+
+    const copy32 = (dst: number, src: number) => {
+      writes.push({ op: AGE_MODEL_CMD_COPY32, addr: dst, value: src });
+    };
+
+    const wf32 = (addr: number, value: number) => {
+      writes.push({ op: AGE_MODEL_CMD_WRITE32, addr, value: f32BitsBE(value) });
+    };
+    
+    /*
+     * playerFormObjectIds[MM_PLAYER_FORM_HUMAN]
+     * 0x801c2730 + 4 * 2
+     */
+    w16(0x801c2738, id);
+
+    /*
+     * playerSkeletons[MM_PLAYER_FORM_HUMAN]
+     * 0x801bfe00 + 4 * 4
+     */
+    w32(0x801bfe10, d[0]);
+
+    /*
+     * playerWaistDLs[MM_PLAYER_FORM_HUMAN * 2 + 0/1]
+     * base + (4 * 2 + n) * 4
+     */
+    w32(0x801c001c, d[1]);
+    w32(0x801c0020, d[1]);
+
+    /*
+     * playerHandHoldingShieldDLs[0..3]
+     * This table is equipment-indexed, not form-indexed.
+     */
+    w32(0x801c0024, d[2]);
+    w32(0x801c0028, d[2]);
+    w32(0x801c002c, d[3]);
+    w32(0x801c0030, d[3]);
+
+    /*
+     * playerSheath12DLs[MM_PLAYER_FORM_HUMAN * 2 + 0/1]
+     */
+    w32(0x801c0054, d[4]);
+    w32(0x801c0058, d[4]);
+
+    /*
+     * playerSheath13DLs[MM_PLAYER_FORM_HUMAN * 2 + 0/1]
+     */
+    w32(0x801c007c, d[4]);
+    w32(0x801c0080, d[4]);
+
+    /*
+     * playerSheath14DLs[MM_PLAYER_FORM_HUMAN * 2 + 0/1]
+     */
+    w32(0x801c00a4, d[4]);
+    w32(0x801c00a8, d[4]);
+
+    /*
+     * playerShieldDLs[0..3]
+     * Equipment-indexed.
+     */
+    w32(0x801c00ac, d[5]);
+    w32(0x801c00b0, d[5]);
+    w32(0x801c00b4, d[6]);
+    w32(0x801c00b8, d[6]);
+
+    /*
+     * playerSheathedSwordDLs[0..5]
+     * Equipment-indexed.
+     */
+    w32(0x801c00bc, d[7]);
+    w32(0x801c00c0, d[7]);
+    w32(0x801c00c4, d[8]);
+    w32(0x801c00c8, d[8]);
+    w32(0x801c00cc, d[9]);
+    w32(0x801c00d0, d[9]);
+
+    /*
+     * playerSwordSheathsDLs[0..5]
+     * Equipment-indexed.
+     */
+    w32(0x801c00d4, d[10]);
+    w32(0x801c00d8, d[10]);
+    w32(0x801c00dc, d[11]);
+    w32(0x801c00e0, d[11]);
+    w32(0x801c00e4, d[12]);
+    w32(0x801c00e8, d[12]);
+
+    /*
+     * playerLeftHandTwoHandSwordDLs[MM_PLAYER_FORM_HUMAN * 2 + 0/1]
+     */
+    w32(0x801c010c, d[13]);
+    w32(0x801c0110, d[13]);
+
+    /*
+     * playerLeftHandOpenDLs[MM_PLAYER_FORM_HUMAN * 2 + 0/1]
+     */
+    w32(0x801c0134, d[14]);
+    w32(0x801c0138, d[14]);
+
+    /*
+     * playerLeftHandClosedDLs[MM_PLAYER_FORM_HUMAN * 2 + 0/1]
+     */
+    w32(0x801c015c, d[15]);
+    w32(0x801c0160, d[15]);
+
+    /*
+     * playerLeftHandOneHandSwordDLs[MM_PLAYER_FORM_HUMAN * 2 + 0/1]
+     */
+    w32(0x801c0184, d[16]);
+    w32(0x801c0188, d[16]);
+
+    /*
+     * playerEquipValueDLs[0..5]
+     * Equipment-indexed.
+     */
+    w32(0x801c018c, d[17]);
+    w32(0x801c0190, d[17]);
+    w32(0x801c0194, d[18]);
+    w32(0x801c0198, d[18]);
+    w32(0x801c019c, d[19]);
+    w32(0x801c01a0, d[19]);
+
+    /*
+     * playerRightHandOpenDLs[MM_PLAYER_FORM_HUMAN * 2 + 0/1]
+     */
+    w32(0x801c01c4, d[20]);
+    w32(0x801c01c8, d[20]);
+
+    /*
+     * playerRightHandClosedDLs[MM_PLAYER_FORM_HUMAN * 2 + 0/1]
+     */
+    w32(0x801c01ec, d[21]);
+    w32(0x801c01f0, d[21]);
+
+    /*
+     * playerRightHandBowDLs[MM_PLAYER_FORM_HUMAN * 2 + 0/1]
+     */
+    w32(0x801c0214, d[22]);
+    w32(0x801c0218, d[22]);
+
+    /*
+     * playerRightHandInstrumentDLs[MM_PLAYER_FORM_HUMAN * 2 + 0/1]
+     */
+    w32(0x801c023c, d[23]);
+    w32(0x801c0240, d[23]);
+
+    /*
+     * playerRightHandHookshotDLs[MM_PLAYER_FORM_HUMAN * 2 + 0/1]
+     */
+    w32(0x801c0264, d[24]);
+    w32(0x801c0268, d[24]);
+
+    /*
+     * playerLeftHandBottleDLs[MM_PLAYER_FORM_HUMAN * 2 + 0/1]
+     */
+    w32(0x801c028c, d[25]);
+    w32(0x801c0290, d[25]);
+
+    /*
+     * First-person form-indexed DL tables:
+     * base + MM_PLAYER_FORM_HUMAN * 4
+     */
+    w32(0x801c02a4, d[4]);
+    w32(0x801c02b8, d[15]);
+    w32(0x801c02cc, d[26]);
+    w32(0x801c02e0, d[27]);
+    w32(0x801c02f4, d[28]);
+
+    /*
+     * Extra bow hand DL pointer.
+     */
+    w32(0x801c0d94, d[29]);
+
+    /*
+     * playerHeightJtbl[HUMAN] = playerHeightJtbl[ZORA]
+     *
+     * Human = 4, Zora = 2
+     */
+    copy32(0x801dca68, 0x801dca60);
+
+    const data = new Uint8Array((writes.length + 1) * 0x0c);
+
+    for (let i = 0; i < writes.length; ++i) {
+      const off = i * 0x0c;
+      bufWriteU32BE(data, off + 0x00, writes[i].op);
+      bufWriteU32BE(data, off + 0x04, writes[i].addr);
+      bufWriteU32BE(data, off + 0x08, writes[i].value);
+    }
+
+    const endOff = writes.length * 0x0c;
+    bufWriteU32BE(data, endOff + 0x00, AGE_MODEL_CMD_END);
+    bufWriteU32BE(data, endOff + 0x04, 0);
+    bufWriteU32BE(data, endOff + 0x08, 0);
+
+    const vrom = this.addRawData('custom/mm_age_model_tables', data, false);
+
+    this.cg.define('CUSTOM_MM_AGE_MODEL_TABLES_VROM', vrom);
+    this.cg.define('CUSTOM_MM_AGE_MODEL_TABLES_SIZE', data.length);
   }
 
   async addCustomExtractedObject(entry: CustomEntry) {
@@ -478,12 +749,14 @@ class CustomAssetsBuilder {
     await this.addObjectFile('BTN_C_VERTICAL', 'btn_c_vertical.zobj', [0x06000960]);
     await this.addObjectFile('GI_POND_FISH', 'gi_pond_fish.zobj', [0x06001160]);
     await this.addObjectFile('BOMBCHU_BAG', 'bombchu_bag.zobj', [0x060006A0, 0x060008E0, 0x06001280]);
-    await this.addObjectFile('MM_ADULT_LINK', 'mm_adult_link.zobj', [
+    const mmAdultLink = await this.addObjectFile('MM_ADULT_LINK', 'mm_adult_link.zobj', [
       0x060122C4, 0x0600bb00, 0x0601c0c0, 0x0601c0d0, 0x0601c130, 0x0601BFE8, 0x0601BFF8, 0x0601C008,
       0x0601C028, 0x0601C048, 0x0601BFC8, 0x0601BFA8, 0x0601BEC8, 0x0601C0B0, 0x06010000, 0x0600AE40,
       0x0601DC68, 0x0601C068, 0x0601C080, 0x0601C098, 0x06010D50, 0x0600B3F0, 0x0601C0F0, 0x0601C100,
       0x0601C0E0, 0x0600A8E8, 0x060103D8, 0x0601C120, 0x0601C110, 0x0601be60
     ]);
+    await this.addChildAgeModelTables();
+    await this.addAdultAgeModelTables(mmAdultLink);
     await this.addObjectFile('MM_ADULT_EPONA', 'mm_adult_epona.zobj', []);
     await this.addObjectFile('MM_ADULT_LINK_SPIN_ATTACK_VTX_1', 'mm_adult_link_spin_attack_vtx_1.bin', []);
     await this.addObjectFile('MM_ADULT_LINK_SPIN_ATTACK_VTX_2', 'mm_adult_link_spin_attack_vtx_2.bin', []);

@@ -74,7 +74,7 @@ int comboIsChateauActive(void)
 int comboIsLinkAdult(void)
 {
 #if defined(GAME_MM)
-    if (!Config_Flag(CFG_MM_CROSS_AGE))
+    if (!Config_Flag(CFG_MM_CROSS_AGE) && !Config_Flag(CFG_MM_MASK_ADULT))
         return 0;
 #endif
     return gOotSave.age == 0;
