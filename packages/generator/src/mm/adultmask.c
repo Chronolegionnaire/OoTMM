@@ -148,7 +148,7 @@ static void AdultMask_ReloadCurrentSceneForAge(PlayState* play)
 
     play->nextEntrance = gSave.entrance;
     play->transitionTrigger = TRANS_TRIGGER_START;
-    play->transitionType = TRANS_TYPE_FADE_BLACK;
+    play->transitionType = TRANS_TYPE_FADE_WHITE_FAST;
 }
 
 static void AdultMask_CommitAge(Player* player, PlayState* play)
