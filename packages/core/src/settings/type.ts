@@ -12,9 +12,11 @@ type SettingDataEnumValue = {
   readonly cond?: (settings: any) => boolean;
 };
 
+type SettingName = string | ((settings: any) => string);
+
 type SettingDataCommon = {
   readonly key: string;
-  readonly name: string;
+  readonly name: SettingName;
   readonly category: string;
   readonly description?: string;
   readonly cond?: (settings: any) => boolean;

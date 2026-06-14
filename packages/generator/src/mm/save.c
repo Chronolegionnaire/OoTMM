@@ -4,6 +4,25 @@
 #include <combo/inventory.h>
 #include <combo/entrance.h>
 
+static void Save_InitMmLinkAge(void)
+{
+    if (!Config_Flag(CFG_MM_MASK_ADULT))
+    {
+        gMmSave.linkAge = 1;
+        return;
+    }
+
+    if (Config_Flag(CFG_MM_CROSS_AGE))
+    {
+        gMmSave.linkAge = gOotSave.age;
+        return;
+    }
+
+    gMmSave.linkAge = Config_Flag(CFG_MM_START_ADULT)
+        ? 0
+        : 1;
+}
+
 void Sram_AfterOpenSave(void)
 {
     /* Load options */
@@ -11,6 +30,9 @@ void Sram_AfterOpenSave(void)
 
     /* Read the foreign save */
     Save_ReadForeign();
+
+    /* Init MM-specific adult-mask age */
+    Save_InitMmLinkAge();
 
     /* Handle common settings */
     Save_OnLoad();

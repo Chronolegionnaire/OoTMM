@@ -57,7 +57,7 @@ export function isEntranceShuffle(settings: Settings) {
 
 export function mustStartWithMasterSword(settings: Settings) {
   /* Child start - doesn't matter */
-  if (settings.startingAge === 'child')
+  if (settings.startingAgeOot === 'child')
     return false;
 
   /* Swordless disallowed - must start with MS */

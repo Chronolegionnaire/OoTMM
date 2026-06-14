@@ -614,7 +614,7 @@ void hookPlay_Init(PlayState* play)
                 }
             }
         }
-        gCustomSave.fw[gOotSave.age].pos = *pos;
+        gCustomSave.fw[gMmSave.linkAge].pos = *pos;
     }
 
     ComboPlayer_ApplyAgeModelTables();
@@ -868,10 +868,10 @@ void Play_FastInit(GameState* gs)
         gComboCtx.isFwSpawn = 0;
 
         /* Restore Game Over / Soar to Entrance respawn data. */
-        memcpy(&gSaveContext.respawn[RESPAWN_MODE_TOP], &gCustomSave.fwRespawnTop[gOotSave.age], sizeof(RespawnData));
-        memcpy(&gSharedCustomSave.respawn[CUSTOM_RESPAWN_MODE_DUNGEON_ENTRANCE], &gCustomSave.fwRespawnDungeonEntrance[gOotSave.age], sizeof(RespawnData));
+        memcpy(&gSaveContext.respawn[RESPAWN_MODE_TOP], &gCustomSave.fwRespawnTop[gMmSave.linkAge], sizeof(RespawnData));
+        memcpy(&gSharedCustomSave.respawn[CUSTOM_RESPAWN_MODE_DUNGEON_ENTRANCE], &gCustomSave.fwRespawnDungeonEntrance[gMmSave.linkAge], sizeof(RespawnData));
 
-        RespawnData* fw = &gCustomSave.fw[gOotSave.age];
+        RespawnData* fw = &gCustomSave.fw[gMmSave.linkAge];
 
         if (fw->data)
         {

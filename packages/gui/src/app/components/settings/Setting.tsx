@@ -12,6 +12,12 @@ const SET_OPTIONS = [
   { value: 'random-mixed', label: 'Mixed Random' },
 ];
 
+function getSettingName(data: any, settings: any): string {
+  return typeof data.name === 'function'
+      ? data.name(settings)
+      : data.name;
+}
+
 function SettingTooltip({ setting }: { setting: string }) {
   const settings = useStore(state => state.settings);
   const data = SETTINGS.find(x => x.key === setting)!;
@@ -72,6 +78,7 @@ function SettingSet({ setting }: { setting: string }) {
   const settings = useStore(state => state.settings);
   const patchSettings = useStore(state => state.patchSettings);
   const data = SETTINGS.find(x => x.key === setting)!;
+  const label = getSettingName(data, settings);
   const s = settings[data.key] as any;
 
   let valuesSet: string[];
@@ -146,7 +153,7 @@ function SettingSet({ setting }: { setting: string }) {
     <span>
       <SelectField
         value={(settings[data.key] as any).type as string}
-        label={data.name}
+        label={label}
         options={SET_OPTIONS}
         tooltip={(data as any).description && <SettingTooltip setting={data.key}/>}
         onSelect={onTypeChange as any}
@@ -192,7 +199,7 @@ export function Setting({ setting }: { setting: string }) {
   const data = SETTINGS.find(x => x.key === setting)!;
   const cond = (data as any).cond;
   const isDisabled = cond && !cond(settings);
-
+  const label = getSettingName(data, settings);
   if (isDisabled) {
     return null;
   }
@@ -202,7 +209,7 @@ export function Setting({ setting }: { setting: string }) {
     return (
       <SelectField
         value={settings[data.key] as string}
-        label={data.name}
+        label={label}
         options={(data as any).values.filter((x: any) => x.cond === undefined || x.cond(settings)).map((x: any) => ({ label: x.name, value: x.value }))}
         tooltip={data.description && <SettingTooltip setting={data.key}/>}
         onSelect={(v) => patchSettings({ [data.key]: v })}
@@ -212,7 +219,7 @@ export function Setting({ setting }: { setting: string }) {
   case 'boolean':
     return (
       <CheckboxField
-        label={data.name}
+        label={label}
         tooltip={(data as any).description && <SettingTooltip setting={data.key}/>}
         checked={settings[data.key] as boolean}
         onChange={(v) => patchSettings({ [data.key]: v })}
@@ -234,7 +241,7 @@ export function Setting({ setting }: { setting: string }) {
     return (
       <InputField
         type="number"
-        label={data.name}
+        label={label}
         tooltip={(data as any).description && <SettingTooltip setting={data.key}/>}
         value={settings[data.key].toString()}
         onChange={(v) => patchSettings({ [data.key]: Number(v) })}

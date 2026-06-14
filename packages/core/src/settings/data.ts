@@ -1101,8 +1101,8 @@ export const SETTINGS = [{
   cond: hasMM,
   default: 'reset'
 }, {
-  key: 'startingAge',
-  name: 'Starting Age',
+  key: 'startingAgeOot',
+  name: (s: any) => s.crossAge ? 'Starting Age' : 'Starting Age (OoT)',
   category: 'main.events',
   type: 'enum',
   description: 'Choose the starting age',
@@ -1112,6 +1112,19 @@ export const SETTINGS = [{
     { value: 'random', name: 'Random', description: 'Link will start off as either Adult or Child, with a 50/50 probability' },
   ],
   cond: hasOoT,
+  default: 'child'
+}, {
+  key: 'startingAgeMm',
+    name: (s: any) => hasOoT(s) ? 'Starting Age (MM)' : 'Starting Age',
+  category: 'main.events',
+  type: 'enum',
+  description: 'Choose the starting age',
+  values: [
+    { value: 'child', name: 'Child', description: 'Link will start off as Child' },
+    { value: 'adult', name: 'Adult', description: 'Link will start off as Adult' },
+    { value: 'random', name: 'Random', description: 'Link will start off as either Adult or Child, with a 50/50 probability' },
+  ],
+  cond: (s: any) => hasMM(s) && s.adultMaskMm && !s.crossAge,
   default: 'child'
 }, {
   key: 'swordlessAdult',
@@ -1151,7 +1164,7 @@ export const SETTINGS = [{
     { value: 'oot', name: 'Ocarina of Time', description: 'Can change age by playing Song of Time with the Ocarina of Time specifically.' },
     { value: 'always', name: 'Always', description: 'Can change age by playing Song of Time using any means.' },
   ],
-  description: 'Allows you to switch ages by playing Song of Time after you\'ve switched ages once in Temple of Time.<br>Preserves your current position on the scene, which logic can expect you to take advantage of.',
+  description: 'Allows you to switch ages by playing Song of Time in OoT after you\'ve switched ages once in Temple of Time.<br>Preserves your current position on the scene, which logic can expect you to take advantage of.',
   default: 'none',
   cond: hasOoT,
 }, {

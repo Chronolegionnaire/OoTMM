@@ -316,11 +316,14 @@ static void AdultMask_CommitAge(Player* player, PlayState* play)
         return;
 
     sAdultMaskCommitted = 1;
-
-    if (sAdultMaskTargetAdult)
-        gOotSave.age = OOT_AGE_ADULT;
+    if (!Config_Flag(CFG_MM_CROSS_AGE))
+    {
+        gMmSave.linkAge = sAdultMaskTargetAdult ? OOT_AGE_ADULT : OOT_AGE_CHILD;
+    }
     else
-        gOotSave.age = OOT_AGE_CHILD;
+    {
+        gMmSave.linkAge = sAdultMaskTargetAdult ? OOT_AGE_ADULT : OOT_AGE_CHILD;
+    }
 
     /*
      * Adult Mask changes OoT age only.

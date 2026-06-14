@@ -418,7 +418,7 @@ void Player_Action_CastingSpell(Player* this, PlayState* play)
 
             if (this->av2.actionVar2 == 0)
             {
-                RespawnData* fw = &gCustomSave.fw[gOotSave.age];
+                RespawnData* fw = &gCustomSave.fw[gMmSave.linkAge];
                 gSaveContext.respawn[RESPAWN_MODE_HUMAN].data = 1;
                 Play_SetupRespawnPoint(play, RESPAWN_MODE_HUMAN, 0x6ff);
                 *fw = gSaveContext.respawn[RESPAWN_MODE_DOWN];
@@ -426,8 +426,8 @@ void Player_Action_CastingSpell(Player* this, PlayState* play)
                 fw->data = 40;
 
                 /* Copy Game Over / Soar to Entrance respawn data. */
-                memcpy(&gCustomSave.fwRespawnTop[gOotSave.age], &gSaveContext.respawn[RESPAWN_MODE_TOP], sizeof(RespawnData));
-                memcpy(&gCustomSave.fwRespawnDungeonEntrance[gOotSave.age], &gSharedCustomSave.respawn[CUSTOM_RESPAWN_MODE_DUNGEON_ENTRANCE], sizeof(RespawnData));
+                memcpy(&gCustomSave.fwRespawnTop[gMmSave.linkAge], &gSaveContext.respawn[RESPAWN_MODE_TOP], sizeof(RespawnData));
+                memcpy(&gCustomSave.fwRespawnDungeonEntrance[gMmSave.linkAge], &gSharedCustomSave.respawn[CUSTOM_RESPAWN_MODE_DUNGEON_ENTRANCE], sizeof(RespawnData));
 
                 this->av2.actionVar2 = 2;
             }
@@ -535,8 +535,8 @@ void Player_Action_FaroresWindText(Player* this, PlayState* play)
             play->transitionType = TRANS_TYPE_FADE_WHITE_FAST;
 
             /* Restore Game Over / Soar to Entrance respawn data. */
-            memcpy(&gSaveContext.respawn[RESPAWN_MODE_TOP], &gCustomSave.fwRespawnTop[gOotSave.age], sizeof(RespawnData));
-            memcpy(&gSharedCustomSave.respawn[CUSTOM_RESPAWN_MODE_DUNGEON_ENTRANCE], &gCustomSave.fwRespawnDungeonEntrance[gOotSave.age], sizeof(RespawnData));
+            memcpy(&gSaveContext.respawn[RESPAWN_MODE_TOP], &gCustomSave.fwRespawnTop[gMmSave.linkAge], sizeof(RespawnData));
+            memcpy(&gSharedCustomSave.respawn[CUSTOM_RESPAWN_MODE_DUNGEON_ENTRANCE], &gCustomSave.fwRespawnDungeonEntrance[gMmSave.linkAge], sizeof(RespawnData));
 
             /* TODO cancel timers? */
 
@@ -547,7 +547,7 @@ void Player_Action_FaroresWindText(Player* this, PlayState* play)
         {
             gSaveContext.respawn[RESPAWN_MODE_HUMAN].data = -gSaveContext.respawn[RESPAWN_MODE_HUMAN].data;
             gCustomSave.fw[gOotSave.age].data = 0;
-            Audio_PlaySfx_AtPos(&gCustomSave.fw[gOotSave.age].pos, 0x8C8); /* NA_SE_PL_MAGIC_WIND_VANISH */
+            Audio_PlaySfx_AtPos(&gCustomSave.fw[gMmSave.linkAge].pos, 0x8C8); /* NA_SE_PL_MAGIC_WIND_VANISH */
         }
 
         Player_func_8085B384 = OverlayAddr(0x8085B384);
@@ -859,7 +859,7 @@ void Player_Action_FaroresWindSpawning(Player* this, PlayState* play)
     if (this->av2.actionVar2++ == 20)
     {
         gSaveContext.respawn[RESPAWN_MODE_HUMAN].data++;
-        Audio_PlaySfx_AtPos(&gCustomSave.fw[gOotSave.age].pos, 0x87B); /* NA_SE_PL_MAGIC_WIND_WARP */
+        Audio_PlaySfx_AtPos(&gCustomSave.fw[gMmSave.linkAge].pos, 0x87B); /* NA_SE_PL_MAGIC_WIND_WARP */
     }
 }
 
