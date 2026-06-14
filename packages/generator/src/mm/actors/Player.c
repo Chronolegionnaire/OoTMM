@@ -1514,31 +1514,31 @@ static int prepareMask(PlayState* play, u16 objectId, int needsMatrix)
 
 static void DrawExtendedMaskGerudo(PlayState* play, Player* link)
 {
-    if (!prepareMask(play, 0x2037 | MASK_FOREIGN_OBJECT, 1))
+    if (!prepareMask(play, CUSTOM_OBJECT_ID_MASK_OOT_GERUDO | MASK_FOREIGN_OBJECT, 1))
         return;
 
     OPEN_DISPS(play->state.gfxCtx);
-    gSPDisplayList(POLY_OPA_DISP++, 0x0a0014c0);
+    gSPDisplayList(POLY_OPA_DISP++, CUSTOM_OBJECT_MASK_OOT_GERUDO_0);
     CLOSE_DISPS();
 }
 
 static void DrawExtendedMaskSkull(PlayState* play, Player* link)
 {
-    if (!prepareMask(play, 0x2031 | MASK_FOREIGN_OBJECT, 1))
+    if (!prepareMask(play, CUSTOM_OBJECT_ID_MASK_OOT_SKULL | MASK_FOREIGN_OBJECT, 1))
         return;
 
     OPEN_DISPS(play->state.gfxCtx);
-    gSPDisplayList(POLY_OPA_DISP++, 0x0a000750);
+    gSPDisplayList(POLY_OPA_DISP++, CUSTOM_OBJECT_MASK_OOT_SKULL_0);
     CLOSE_DISPS();
 }
 
 static void DrawExtendedMaskSpooky(PlayState* play, Player* link)
 {
-    if (!prepareMask(play, 0x2032 | MASK_FOREIGN_OBJECT, 1))
+    if (!prepareMask(play, CUSTOM_OBJECT_ID_MASK_OOT_SPOOKY | MASK_FOREIGN_OBJECT, 1))
         return;
 
     OPEN_DISPS(play->state.gfxCtx);
-    gSPDisplayList(POLY_OPA_DISP++, 0x0a0011c0);
+    gSPDisplayList(POLY_OPA_DISP++, CUSTOM_OBJECT_MASK_OOT_SPOOKY_0);
     CLOSE_DISPS();
 }
 
