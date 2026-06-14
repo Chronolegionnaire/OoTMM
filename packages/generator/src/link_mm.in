@@ -767,3 +767,7 @@ func_800B715C = 0x800B715C;
 BgCheck_AnyLineTest1 = 0x800C57F8;
 SurfaceType_GetSceneExitIndex = 0x800C99AC;
 SubS_SetOfferMode = 0x8013AED4;
+
+Actor_DeactivateLens = 0x800BAC14;
+Play_EnableMotionBlurPriority = 0x80165DCC;
+Play_DisableMotionBlurPriority = 0x80165DF0;
