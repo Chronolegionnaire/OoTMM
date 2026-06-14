@@ -1441,6 +1441,10 @@ void Player_PostLimbDrawGameplayWrapper(PlayState* play, s32 limbIndex, Gfx** dL
             DrawAdultMaskCurrentLimb(play);
         }
     }
+    if (player->transformation == MM_PLAYER_FORM_HUMAN && player->itemAction == PLAYER_CUSTOM_IA_SLINGSHOT && limbIndex == PLAYER_LIMB_RIGHT_HAND)
+    {
+        DrawSlingshotString(play, player);
+    }
 }
 
 static int Player_IsUsingCustomSlingshot(Player* player)
