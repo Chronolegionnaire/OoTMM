@@ -762,10 +762,6 @@ class CustomAssetsBuilder {
     await this.addObjectFile('MM_ADULT_LINK_SPIN_ATTACK_VTX_2', 'mm_adult_link_spin_attack_vtx_2.bin', []);
     await this.addObjectFile('MM_ADULT_LINK_SPIN_ATTACK_VTX_3', 'mm_adult_link_spin_attack_vtx_3.bin', []);
     await this.addObjectFile('MM_ADULT_LINK_MASK_MTX', 'mm_adult_link_mask_mtx.bin', []);
-    await this.addObjectFile('MASK_ADULT_TRANSFORM', 'object_mask_adult.zobj', [
-      0x06000900,
-    ]);
-
     await this.addObjectFile('MASK_ADULT', 'object_gi_maskadult.zobj', [
       0x060009B0,
       0x06000B90,

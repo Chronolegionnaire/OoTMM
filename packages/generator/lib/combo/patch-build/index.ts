@@ -121,7 +121,8 @@ export async function buildPatchfiles(args: BuildPatchfileIn): Promise<Patchfile
       }
       /* Pack the payload */
       const payload = await fileResolver.fetch(`${game}_payload.bin`);
-      if (payload.length > (game === 'mm' ? 0x50000 : 0x80000)) {
+      const payloadLimit = game === 'mm' ? 0x58000 : 0x80000;
+      if (payload.length > payloadLimit) {
         throw new Error(`Payload too large ${game}`);
       }
       const payloadVrom = game === 'oot' ? 0xf0000000 : 0xf0100000;

@@ -16,6 +16,14 @@
 #include <combo/common/animation.h>
 
 void ArrowCycle_Handle(Player* link, PlayState* play);
+s32 AdultMask_TryUse(Player* player, PlayState* play, s32 itemAction);
+s32 AdultMask_IsCsItem(Player* player);
+void AdultMask_StartCsItem(Player* player, PlayState* play);
+void AdultMask_AfterStart(Player* player);
+s32 AdultMask_IsPuttingOn(void);
+s32 AdultMask_IsActive(void);
+s32 AdultMask_ShouldDrawAdultModel(void);
+void AdultMask_DrawTransformationModels(PlayState* play, Player* player);
 
 static void Player_TryBurnDekuShield(Player* this, PlayState* play)
 {
@@ -330,6 +338,8 @@ static s32 Player_ActionToCustomMask(Player* this, s32 itemAction)
             return PLAYER_CUSTOM_MASK_SKULL;
         case PLAYER_CUSTOM_IA_MASK_SPOOKY:
             return PLAYER_CUSTOM_MASK_SPOOKY;
+        case PLAYER_CUSTOM_IA_MASK_ADULT:
+            return PLAYER_CUSTOM_MASK_ADULT;
         default:
             return PLAYER_CUSTOM_MASK_NONE;
     }
@@ -552,13 +562,6 @@ typedef void (*Player_func_8082DAD4)(Player*);
 typedef PlayerAnimationHeader* (*Player_GetWaitAnimation)(Player*);
 typedef void (*Player_SetAction)(PlayState*, Player*, PlayerActionFunc, s32);
 
-s32 AdultMask_TryUse(Player* player, PlayState* play, s32 itemAction);
-s32 AdultMask_IsCsItem(Player* player);
-void AdultMask_StartCsItem(Player* player, PlayState* play);
-void AdultMask_AfterStart(Player* player);
-s32 AdultMask_IsPuttingOn(void);
-s32 AdultMask_IsActive(void);
-s32 AdultMask_ShouldDrawAdultModel(void);
 
 s32 Player_CustomCsItem(Player* this, PlayState* play)
 {
@@ -1383,6 +1386,39 @@ static void DrawSlingshotString(PlayState* play, Player* player)
     CLOSE_DISPS();
 }
 
+static int prepareAdultMaskObject(PlayState* play)
+{
+    void* obj;
+
+    obj = comboGetObject(CUSTOM_OBJECT_ID_MASK_ADULT_PLAYER);
+    if (!obj)
+        return 0;
+
+    OPEN_DISPS(play->state.gfxCtx);
+    gSPSegment(POLY_OPA_DISP++, 0x0a, obj);
+    CLOSE_DISPS();
+
+    return 1;
+}
+
+static void DrawAdultMaskCurrentLimb(PlayState* play)
+{
+    if (!prepareAdultMaskObject(play))
+        return;
+
+    OPEN_DISPS(play->state.gfxCtx);
+
+    gSPMatrix(
+        POLY_OPA_DISP++,
+        Matrix_Finalize(play->state.gfxCtx),
+        G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW
+    );
+
+    gSPDisplayList(POLY_OPA_DISP++, CUSTOM_OBJECT_MASK_ADULT_PLAYER_0);
+    gSPDisplayList(POLY_OPA_DISP++, CUSTOM_OBJECT_MASK_ADULT_PLAYER_1);
+    CLOSE_DISPS();
+}
+
 void Player_PostLimbDrawGameplayWrapper(PlayState* play, s32 limbIndex, Gfx** dList1, Gfx** dList2, Vec3s* rot, Actor* actor)
 {
     Player* player = (Player*)actor;
@@ -1394,10 +1430,16 @@ void Player_PostLimbDrawGameplayWrapper(PlayState* play, s32 limbIndex, Gfx** dL
             Player_DrawShield(play, player);
         }
     }
-
-    if (player->transformation == MM_PLAYER_FORM_HUMAN && player->itemAction == PLAYER_CUSTOM_IA_SLINGSHOT && limbIndex == PLAYER_LIMB_RIGHT_HAND)
+    if (AdultMask_IsPuttingOn())
     {
-        DrawSlingshotString(play, player);
+        if (limbIndex == PLAYER_LIMB_RIGHT_HAND)
+        {
+            DrawAdultMaskCurrentLimb(play);
+        }
+        if (limbIndex == PLAYER_LIMB_HEAD)
+        {
+            DrawAdultMaskCurrentLimb(play);
+        }
     }
 }
 
@@ -1608,7 +1650,6 @@ void Player_SkelAnime_DrawFlexLod(PlayState* play, void** skeleton, Vec3s* joint
             DrawBootsHover(play, player);
             break;
         }
-
         if (player->transformation == MM_PLAYER_FORM_HUMAN)
         {
             switch (gCustomSave.customMask)
