@@ -344,6 +344,116 @@ class CustomAssetsBuilder {
     this.cg.define('CUSTOM_MM_AGE_MODEL_CHILD_TABLES_SIZE', data.length);
   }
 
+  async addHumanAgeProperties() {
+    const PLAYER_AGE_PROPERTIES_BASE = 0x8085BA38;
+    const PLAYER_AGE_PROPERTIES_SIZE = 0xDC;
+
+    const PLAYER_AGE_PROPERTIES_FIERCE_DEITY =
+        PLAYER_AGE_PROPERTIES_BASE + PLAYER_AGE_PROPERTIES_SIZE * 0; // 0x8085BA38
+    const PLAYER_AGE_PROPERTIES_ZORA =
+        PLAYER_AGE_PROPERTIES_BASE + PLAYER_AGE_PROPERTIES_SIZE * 2; // 0x8085BBF0
+    const PLAYER_AGE_PROPERTIES_HUMAN =
+        PLAYER_AGE_PROPERTIES_BASE + PLAYER_AGE_PROPERTIES_SIZE * 4; // 0x8085BDA8
+
+    const PLAYER_ACTOR_VRAM_START = 0x8082DA90;
+    const PLAYER_ACTOR_ROM_START = 0x00CA7F00;
+
+    const readFromPlayerActorRom = (vram: number, size: number): Uint8Array => {
+      const off = vram - PLAYER_ACTOR_VRAM_START;
+      const rom = PLAYER_ACTOR_ROM_START + off;
+
+      if (off < 0 || rom < 0 || rom + size > this.roms.mm.rom.length) {
+        throw new Error(
+            `Player actor ROM read out of range: ` +
+            `vram=0x${vram.toString(16)}, off=0x${off.toString(16)}, ` +
+            `rom=0x${rom.toString(16)}, size=0x${size.toString(16)}`
+        );
+      }
+
+      const data = this.roms.mm.rom.slice(rom, rom + size);
+
+      if (data.length !== size) {
+        throw new Error(
+            `Player actor ROM read failed: ` +
+            `vram=0x${vram.toString(16)}, rom=0x${rom.toString(16)}, ` +
+            `size=0x${size.toString(16)}, got=0x${data.length.toString(16)}`
+        );
+      }
+
+      return data;
+    };
+
+    const childHuman = readFromPlayerActorRom(
+        PLAYER_AGE_PROPERTIES_HUMAN,
+        PLAYER_AGE_PROPERTIES_SIZE
+    );
+
+    const zora = readFromPlayerActorRom(
+        PLAYER_AGE_PROPERTIES_ZORA,
+        PLAYER_AGE_PROPERTIES_SIZE
+    );
+
+    const fierceDeity = readFromPlayerActorRom(
+        PLAYER_AGE_PROPERTIES_FIERCE_DEITY,
+        PLAYER_AGE_PROPERTIES_SIZE
+    );
+    const adultHuman = new Uint8Array(childHuman);
+
+    const copyRange = (
+        dst: Uint8Array,
+        dstOff: number,
+        src: Uint8Array,
+        srcOff: number,
+        size: number
+    ) => {
+      dst.set(src.subarray(srcOff, srcOff + size), dstOff);
+    };
+    const OFF_VOICE_SFX_ID_OFFSET = 0x92;
+    const OFF_SURFACE_SFX_ID_OFFSET = 0x94;
+    const SIZE_SFX_ID_OFFSET = 0x02;
+
+    const childSurfaceSfx = childHuman.slice(
+        OFF_SURFACE_SFX_ID_OFFSET,
+        OFF_SURFACE_SFX_ID_OFFSET + SIZE_SFX_ID_OFFSET
+    );
+
+    copyRange(adultHuman, 0x00, zora, 0x00, 0x44);
+
+    copyRange(
+        adultHuman,
+        OFF_VOICE_SFX_ID_OFFSET,
+        fierceDeity,
+        OFF_VOICE_SFX_ID_OFFSET,
+        SIZE_SFX_ID_OFFSET
+    );
+
+    copyRange(
+        adultHuman,
+        OFF_SURFACE_SFX_ID_OFFSET,
+        childSurfaceSfx,
+        0x00,
+        SIZE_SFX_ID_OFFSET
+    );
+
+    const childVrom = this.addRawData(
+        'custom/mm_child_human_age_properties',
+        childHuman,
+        false
+    );
+
+    const adultVrom = this.addRawData(
+        'custom/mm_adult_human_age_properties',
+        adultHuman,
+        false
+    );
+
+    this.cg.define('CUSTOM_MM_CHILD_HUMAN_AGE_PROPERTIES_VROM', childVrom);
+    this.cg.define('CUSTOM_MM_CHILD_HUMAN_AGE_PROPERTIES_SIZE', childHuman.length);
+
+    this.cg.define('CUSTOM_MM_ADULT_HUMAN_AGE_PROPERTIES_VROM', adultVrom);
+    this.cg.define('CUSTOM_MM_ADULT_HUMAN_AGE_PROPERTIES_SIZE', adultHuman.length);
+  }
+
   async addAdultAgeModelTables(adultLink: AddedCustomObject) {
     const writes: { op: number; addr: number; value: number }[] = [];
 
@@ -757,6 +867,7 @@ class CustomAssetsBuilder {
     ]);
     await this.addChildAgeModelTables();
     await this.addAdultAgeModelTables(mmAdultLink);
+    await this.addHumanAgeProperties();
     await this.addObjectFile('MM_ADULT_EPONA', 'mm_adult_epona.zobj', []);
     await this.addObjectFile('MM_ADULT_LINK_SPIN_ATTACK_VTX_1', 'mm_adult_link_spin_attack_vtx_1.bin', []);
     await this.addObjectFile('MM_ADULT_LINK_SPIN_ATTACK_VTX_2', 'mm_adult_link_spin_attack_vtx_2.bin', []);

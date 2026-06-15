@@ -726,4 +726,59 @@ int Player_IsHoldingHookshot(Player*);
 
 bool func_800B715C(struct PlayState* play);
 
+#define PLAYER_AGE_PROPERTIES_BASE 0x8085BA38
+#define PLAYER_AGE_PROPERTIES_SIZE 0xDC
+
+#define PLAYER_AGE_PROPERTIES_FIERCE_DEITY \
+((PlayerAgeProperties*)OverlayAddr(PLAYER_AGE_PROPERTIES_BASE + PLAYER_AGE_PROPERTIES_SIZE * 0))
+
+#define PLAYER_AGE_PROPERTIES_ZORA \
+((PlayerAgeProperties*)OverlayAddr(PLAYER_AGE_PROPERTIES_BASE + PLAYER_AGE_PROPERTIES_SIZE * 2))
+
+#define PLAYER_AGE_PROPERTIES_HUMAN \
+((PlayerAgeProperties*)OverlayAddr(PLAYER_AGE_PROPERTIES_BASE + PLAYER_AGE_PROPERTIES_SIZE * 4))
+
+#define ADULT_MASK_PLAYER_LOCK_FLAGS_1 0x30000000
+#define ADULT_MASK_PLAYER_LOCK_FLAGS_3 0x80
+
+#define ADULT_MASK_WHITE_COVER_FRAME 0x54
+
+#define ADULT_MASK_TRANSFORM_EFFECT_CONFIG_INDEX 0
+#define ADULT_MASK_NATIVE_EFFECT_START_FRAME 0x10
+
+#define ADULT_MASK_GI_HAND_START_TIMER 0
+#define ADULT_MASK_GI_HAND_END_TIMER   11
+#define ADULT_MASK_GI_FACE_START_TIMER 12
+
+#define ADULT_MASK_TRANSFORM_FACE_START_TIMER 51
+#define ADULT_MASK_RING_START_TIMER 54
+
+#define ADULT_MASK_TAKE_OFF_TRANSFORM_WHITE_COVER_FRAME 0x45
+#define ADULT_MASK_TAKE_OFF_RING_START_TIMER 0x10
+#define ADULT_MASK_TAKE_OFF_RING_FULL_FRAMES 0x28
+#define ADULT_MASK_TAKE_OFF_RING_FADE_FRAMES 0x0C
+
+#define ADULT_MASK_TAKE_OFF_LOWER_HAND_MIN_FRAMES 10
+
+#define ADULT_MASK_TAKE_OFF_LOWER_HAND_START_TIMER 0
+#define ADULT_MASK_TAKE_OFF_LOWER_HAND_END_TIMER   0x7FFF
+
+s32 AdultMask_TryUse(Player* player, PlayState* play, s32 itemAction);
+s32 AdultMask_IsCsItem(Player* player);
+void AdultMask_StartCsItem(Player* player, PlayState* play);
+void AdultMask_AfterStart(Player* player);
+s32 AdultMask_IsPuttingOn(void);
+s32 AdultMask_IsTakingOff(void);
+s32 AdultMask_IsTakeOffTransform(void);
+s32 AdultMask_IsTakeOffLowerHand(void);
+s32 AdultMask_IsActive(void);
+s32 AdultMask_ShouldDrawAdultModel(void);
+void AdultMask_DrawTransformationModels(PlayState* play, Player* player);
+s32 AdultMask_ShouldDrawTransformFace(void);
+s32 AdultMask_GetTimer(void);
+void AdultMask_DrawTransformationMaskOnFace(PlayState* play, Player* player);
+void AdultMask_DrawMaskOnFaceNativeLike(PlayState* play, Player* player);
+void AdultMask_DrawMaskInHand(PlayState* play, Player* player);
+void AdultMask_DrawTransformRing(PlayState* play, Player* player);
+
 #endif

@@ -16,14 +16,8 @@
 #include <combo/common/animation.h>
 
 void ArrowCycle_Handle(Player* link, PlayState* play);
-s32 AdultMask_TryUse(Player* player, PlayState* play, s32 itemAction);
-s32 AdultMask_IsCsItem(Player* player);
-void AdultMask_StartCsItem(Player* player, PlayState* play);
-void AdultMask_AfterStart(Player* player);
-s32 AdultMask_IsPuttingOn(void);
-s32 AdultMask_IsActive(void);
-s32 AdultMask_ShouldDrawAdultModel(void);
-void AdultMask_DrawTransformationModels(PlayState* play, Player* player);
+u8 gGerudoTunic;
+EXPORT_SYMBOL(GERUDO_TUNIC, gGerudoTunic);
 
 static void Player_TryBurnDekuShield(Player* this, PlayState* play)
 {
@@ -1303,13 +1297,47 @@ static int (*sPlayerOverrideLimb)(PlayState*, s32, Gfx**, Vec3f*, Vec3s*, void*)
 
 extern void* kLinkHumanShieldsDLs[];
 
+static void Player_SetTunicEnvColorOpa(PlayState* play, Player* player)
+{
+    Color_RGB8* tunicColor;
+    u16 tunic;
+
+    if (player->transformation != MM_PLAYER_FORM_HUMAN)
+        return;
+
+    tunic = CLAMP(gSaveContext.save.info.itemEquips.tunic, 0, 3);
+
+    if (tunic == 0 &&
+        gCustomSave.customMask == PLAYER_CUSTOM_MASK_GERUDO &&
+        gGerudoTunic != 0)
+    {
+        tunicColor = &sGerudoMaskTunicColor;
+    }
+    else
+    {
+        tunicColor = &sTunicColors[tunic];
+    }
+
+    OPEN_DISPS(play->state.gfxCtx);
+
+    gDPPipeSync(POLY_OPA_DISP++);
+    gDPSetEnvColor(
+        POLY_OPA_DISP++,
+        tunicColor->r,
+        tunicColor->g,
+        tunicColor->b,
+        0xFF
+    );
+
+    CLOSE_DISPS();
+}
+
 void Player_DrawShield(PlayState* play, Player* player)
 {
     void* obj;
 
     if (player->currentShield == 0)
         return;
-
     OPEN_DISPS(play->state.gfxCtx);
     if (gSharedCustomSave.mmShieldIsDeku)
     {
@@ -1386,120 +1414,10 @@ static void DrawSlingshotString(PlayState* play, Player* player)
     CLOSE_DISPS();
 }
 
-#define ADULT_MASK_GI_HAND_START_TIMER 0
-#define ADULT_MASK_GI_HAND_END_TIMER   11
-#define ADULT_MASK_GI_FACE_START_TIMER        12
-#define ADULT_MASK_GI_LIMB_SCALE 20.0f
-
-static void AdultMask_DrawMaskInHand(PlayState* play, Player* player)
-{
-    void* obj;
-
-    obj = comboGetObject(CUSTOM_OBJECT_ID_ADULT_MASK_EQUIPMENT | MASK_CUSTOM_OBJECT);
-    if (!obj)
-        return;
-
-    OPEN_DISPS(play->state.gfxCtx);
-
-    Gfx_SetupDL25_Opa(play->state.gfxCtx);
-    gSPSegment(POLY_OPA_DISP++, 0x0a, obj);
-
-    Matrix_Push();
-
-
-    Matrix_Translate(-323.67f, 412.15f, -969.96f, MTXMODE_APPLY);
-    Matrix_RotateZYX(-0x32BE, -0x50DE, -0x7717, MTXMODE_APPLY);
-
-    gSPMatrix(
-        POLY_OPA_DISP++,
-        Matrix_Finalize(play->state.gfxCtx),
-        G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW
-    );
-
-    gSPDisplayList(POLY_OPA_DISP++, CUSTOM_OBJECT_ADULT_MASK_EQUIPMENT_0);
-
-    Matrix_Pop();
-
-    CLOSE_DISPS();
-
-    (void)player;
-}
-
-static void AdultMask_DrawMaskOnFaceNativeLike(PlayState* play, Player* player)
-{
-    void* obj;
-
-    obj = comboGetObject(CUSTOM_OBJECT_ID_ADULT_MASK_EQUIPMENT | MASK_CUSTOM_OBJECT);
-    if (!obj)
-        return;
-
-    OPEN_DISPS(play->state.gfxCtx);
-
-    Gfx_SetupDL25_Opa(play->state.gfxCtx);
-    gSPSegment(POLY_OPA_DISP++, 0x0a, obj);
-
-    Matrix_Push();
-
-    /*
-     * Native human face offset is { 0, 0 }.
-     * Do not scale the equipment mask by 20.
-     */
-    Matrix_Scale(
-        1.0f,
-        1.0f - player->unk_B10[3],
-        1.0f - player->unk_B10[2],
-        MTXMODE_APPLY
-    );
-
-    gSPMatrix(
-        POLY_OPA_DISP++,
-        Matrix_Finalize(play->state.gfxCtx),
-        G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW
-    );
-
-    gSPDisplayList(POLY_OPA_DISP++, CUSTOM_OBJECT_ADULT_MASK_EQUIPMENT_0);
-
-    Matrix_Pop();
-
-    CLOSE_DISPS();
-}
-
-static void AdultMask_DrawTransformationMaskOnFace(PlayState* play, Player* player)
-{
-    void* obj;
-
-    obj = comboGetObject(CUSTOM_OBJECT_ID_MASK_ADULT_TRANSFORM_PLAYER);
-    if (!obj)
-        return;
-
-    OPEN_DISPS(play->state.gfxCtx);
-
-    Gfx_SetupDL25_Opa(play->state.gfxCtx);
-    gSPSegment(POLY_OPA_DISP++, 0x0a, obj);
-
-    Matrix_Push();
-
-    /*
-     * Native still has the current HEAD limb matrix here.
-     * object_mask_boy / your object_mask_adult-equivalent is drawn on that matrix.
-     */
-    gSPMatrix(
-        POLY_OPA_DISP++,
-        Matrix_Finalize(play->state.gfxCtx),
-        G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW
-    );
-
-    gSPDisplayList(POLY_OPA_DISP++, CUSTOM_OBJECT_MASK_ADULT_TRANSFORM_PLAYER_0);
-
-    Matrix_Pop();
-
-    CLOSE_DISPS();
-}
-s32 AdultMask_GetTimer(void);
-s32 AdultMask_ShouldDrawTransformFace(void);
 void Player_PostLimbDrawGameplayWrapper(PlayState* play, s32 limbIndex, Gfx** dList1, Gfx** dList2, Vec3s* rot, Actor* actor)
 {
     Player* player = (Player*)actor;
+    Player_SetTunicEnvColorOpa(play, player);
     Player_PostLimbDrawGameplay(play, limbIndex, dList1, dList2, rot, actor);
     if (sPlayerOverrideLimb != Player_OverrideLimbDrawGameplayFirstPerson)
     {
@@ -1516,9 +1434,7 @@ void Player_PostLimbDrawGameplayWrapper(PlayState* play, s32 limbIndex, Gfx** dL
             timer < ADULT_MASK_GI_HAND_END_TIMER)
         {
             if (limbIndex == PLAYER_LIMB_LEFT_HAND)
-            {
                 AdultMask_DrawMaskInHand(play, player);
-            }
         }
 
         if (limbIndex == PLAYER_LIMB_HEAD)
@@ -1526,11 +1442,28 @@ void Player_PostLimbDrawGameplayWrapper(PlayState* play, s32 limbIndex, Gfx** dL
             if (AdultMask_ShouldDrawTransformFace())
             {
                 AdultMask_DrawTransformationMaskOnFace(play, player);
+                AdultMask_DrawTransformRing(play, player);
             }
             else if (timer >= ADULT_MASK_GI_FACE_START_TIMER)
             {
                 AdultMask_DrawMaskOnFaceNativeLike(play, player);
             }
+        }
+    }
+    else if (AdultMask_IsTakeOffTransform())
+    {
+        if (limbIndex == PLAYER_LIMB_HEAD)
+            AdultMask_DrawTransformRing(play, player);
+    }
+    else if (AdultMask_IsTakeOffLowerHand())
+    {
+        s32 timer = AdultMask_GetTimer();
+
+        if (timer >= ADULT_MASK_TAKE_OFF_LOWER_HAND_START_TIMER &&
+            timer < ADULT_MASK_TAKE_OFF_LOWER_HAND_END_TIMER)
+        {
+            if (limbIndex == PLAYER_LIMB_LEFT_HAND)
+                AdultMask_DrawMaskInHand(play, player);
         }
     }
 
@@ -1593,6 +1526,23 @@ static int Player_IsCustomSlingshotZTargetAiming(PlayState* play, Player* player
 int Player_OverrideLimbWrapper(PlayState* play, s32 limbIndex, Gfx** dList, Vec3f* pos, Vec3s* rot, void* unk)
 {
     Player* player = GET_PLAYER(play);
+
+    switch (limbIndex)
+    {
+        case PLAYER_LIMB_ROOT:
+        case PLAYER_LIMB_WAIST:
+        case PLAYER_LIMB_LOWER_ROOT:
+        case PLAYER_LIMB_UPPER_ROOT:
+        case PLAYER_LIMB_HEAD:
+        case PLAYER_LIMB_LEFT_SHOULDER:
+        case PLAYER_LIMB_LEFT_FOREARM:
+        case PLAYER_LIMB_LEFT_HAND:
+        case PLAYER_LIMB_RIGHT_SHOULDER:
+        case PLAYER_LIMB_RIGHT_FOREARM:
+        case PLAYER_LIMB_RIGHT_HAND:
+            Player_SetTunicEnvColorOpa(play, player);
+            break;
+    }
     if (Player_IsUsingCustomSlingshot(player) &&
             sPlayerOverrideLimb == Player_OverrideLimbDrawGameplayFirstPerson)
     {
@@ -1701,9 +1651,6 @@ static void DrawExtendedMaskSpooky(PlayState* play, Player* link)
     gSPDisplayList(POLY_OPA_DISP++, CUSTOM_OBJECT_MASK_OOT_SPOOKY_0);
     CLOSE_DISPS();
 }
-
-u8 gGerudoTunic;
-EXPORT_SYMBOL(GERUDO_TUNIC, gGerudoTunic);
 
 void Player_SkelAnime_DrawFlexLod(PlayState* play, void** skeleton, Vec3s* jointTable, s32 dListCount, OverrideLimbDrawOpa overrideLimbDraw, PostLimbDrawFlex postLimbDraw, Player* player, s32 lod)
 {
