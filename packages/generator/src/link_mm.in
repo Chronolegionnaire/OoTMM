@@ -772,3 +772,6 @@ Actor_DeactivateLens = 0x800BAC14;
 Play_EnableMotionBlurPriority = 0x80165DCC;
 Play_DisableMotionBlurPriority = 0x80165DF0;
 Play_FillScreen = 0x8016A268;
+func_80123140 = 0x80123140;
+PlayerCall_Update = 0x80160B80;
+PlayerCall_Draw = 0x80160BC0;
