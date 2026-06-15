@@ -771,3 +771,4 @@ SubS_SetOfferMode = 0x8013AED4;
 Actor_DeactivateLens = 0x800BAC14;
 Play_EnableMotionBlurPriority = 0x80165DCC;
 Play_DisableMotionBlurPriority = 0x80165DF0;
+Play_FillScreen = 0x8016A268;

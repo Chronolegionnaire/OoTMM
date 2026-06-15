@@ -133,8 +133,10 @@ static s32 sAdultMaskPlayedFlashSfx = 0;
 #define ADULT_MASK_VISUAL_END_FRAME 0x60
 
 #define ADULT_MASK_DRAW_HAND_END        0x10
-#define ADULT_MASK_DRAW_TRANSFORM_START ADULT_MASK_COMMIT_FRAME
-
+#define ADULT_MASK_TRANSFORM_FACE_START_TIMER 51
+static s32 sAdultMaskDrawTransformFace = 0;
+#define ADULT_MASK_WHITE_COVER_FRAME 0x5A
+static s32 sAdultMaskStartedWhiteCover = 0;
 
 static s32 AdultMask_CanUse(Player* player, PlayState* play)
 {
@@ -202,91 +204,24 @@ s32 AdultMask_GetTimer(void)
     return sAdultMaskTimer;
 }
 
-static int AdultMask_PrepareObject(PlayState* play, u16 objectId)
+static void AdultMask_StartWhiteCover(PlayState* play)
 {
-    void* obj;
-
-    obj = comboGetObject(objectId);
-    if (!obj)
-        return 0;
-
-    OPEN_DISPS(play->state.gfxCtx);
-    gSPSegment(POLY_OPA_DISP++, 0x0a, obj);
-    CLOSE_DISPS();
-
-    return 1;
-}
-
-static void AdultMask_DrawDLsAtMatrix(
-    PlayState* play,
-    u16 objectId,
-    Gfx* dl0,
-    Gfx* dl1,
-    u32 baseMatrix,
-    f32 scale,
-    f32 yOffset,
-    f32 zOffset
-)
-{
-
-    if (!AdultMask_PrepareObject(play, objectId))
+    if (sAdultMaskStartedWhiteCover)
         return;
 
-    OPEN_DISPS(play->state.gfxCtx);
+    sAdultMaskStartedWhiteCover = 1;
+    Play_FillScreen(play, 45, 255, 255, 255, 255);
 
-    Gfx_SetupDL25_Opa(play->state.gfxCtx);
-
-    /*
-     * The caller supplies the player matrix slot.
-     *
-     * 0x0D000300 = right-hand style matrix
-     * 0x0D0001C0 = face/head style matrix used by your other custom masks
-     */
-    gSPMatrix(
-        POLY_OPA_DISP++,
-        baseMatrix,
-        G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW
-    );
-
-    if ((scale != 1.0f) || (yOffset != 0.0f) || (zOffset != 0.0f))
-    {
-        Matrix_Push();
-
-        /*
-         * Clean local delta matrix.
-         * Do not inherit whatever the CPU matrix stack currently contains.
-         */
-        Matrix_Translate(0.0f, 0.0f, 0.0f, MTXMODE_NEW);
-        Matrix_Translate(0.0f, yOffset, zOffset, MTXMODE_APPLY);
-        Matrix_Scale(scale, scale, scale, MTXMODE_APPLY);
-
-        gSPMatrix(
-            POLY_OPA_DISP++,
-            Matrix_Finalize(play->state.gfxCtx),
-            G_MTX_NOPUSH | G_MTX_MUL | G_MTX_MODELVIEW
-        );
-
-        Matrix_Pop();
-    }
-
-    if (dl0 != NULL)
-        gSPDisplayList(POLY_OPA_DISP++, dl0);
-
-    if (dl1 != NULL)
-        gSPDisplayList(POLY_OPA_DISP++, dl1);
-
-    CLOSE_DISPS();
+    Audio_PlaySfx(NA_SE_SY_WHITE_OUT_T);
 }
 
 static void AdultMask_ResetVisualState(Player* player)
 {
     sAdultMaskTimer = 0;
     sAdultMaskPlayedFlashSfx = 0;
+    sAdultMaskDrawTransformFace = 0;
+    sAdultMaskStartedWhiteCover = 0;
 
-    /*
-     * Adult Mask does not use vanilla's R_PLAY_FILL_SCREEN_ON tail.
-     * Your fast white fade transition handles the final white-out.
-     */
     R_PLAY_FILL_SCREEN_ON = 0;
     R_PLAY_FILL_SCREEN_ALPHA = 0;
 
@@ -420,11 +355,6 @@ static void AdultMask_UpdateTransformCameraAndEffects(Player* player, PlayState*
             Math_StepToF(&player->unk_B10[5], 3.0f, 0.55f);
         }
     }
-
-    /*
-     * Native transform effect draw/update hook.
-     * Human putting on a transformation mask passes 0 here.
-     */
     Player_DrawMaskTransformEffects(
         play,
         player,
@@ -436,8 +366,20 @@ static void AdultMask_UpdateTransformCameraAndEffects(Player* player, PlayState*
 
 static void AdultMask_UpdatePutOn(Player* player, PlayState* play)
 {
+    if (sAdultMaskTimer >= ADULT_MASK_TRANSFORM_FACE_START_TIMER)
+    {
+        sAdultMaskDrawTransformFace = 1;
+    }
+
     if (!sAdultMaskCommitted && sAdultMaskTimer >= ADULT_MASK_COMMIT_FRAME)
+    {
         AdultMask_CommitAge(player, play);
+    }
+}
+
+s32 AdultMask_ShouldDrawTransformFace(void)
+{
+    return sAdultMaskDrawTransformFace;
 }
 
 static void AdultMask_UpdateTakeOff(Player* player, PlayState* play)
@@ -456,11 +398,6 @@ static void AdultMask_End(Player* player, PlayState* play)
 
     Play_DisableMotionBlurPriority();
 
-    sAdultMaskCutsceneMode = ADULT_MASK_CS_NONE;
-    sAdultMaskTargetAdult = 0;
-    sAdultMaskCommitted = 0;
-    sAdultMaskTimer = 0;
-    sAdultMaskPlayedFlashSfx = 0;
 
     Player_ReturnToDefaultAction(player, play);
     Player_StopCutscene(player);
@@ -469,6 +406,13 @@ static void AdultMask_End(Player* player, PlayState* play)
     player->stateFlags3 &= ~ADULT_MASK_PLAYER_LOCK_FLAGS_3;
 
     AdultMask_ReloadCurrentSceneForAge(play);
+
+    sAdultMaskCutsceneMode = ADULT_MASK_CS_NONE;
+    sAdultMaskTargetAdult = 0;
+    sAdultMaskCommitted = 0;
+    sAdultMaskTimer = 0;
+    sAdultMaskPlayedFlashSfx = 0;
+    sAdultMaskDrawTransformFace = 0;
 }
 
 void AdultMask_Action(Player* player, PlayState* play)
@@ -489,6 +433,11 @@ void AdultMask_Action(Player* player, PlayState* play)
             sAdultMaskPlayedFlashSfx = 1;
             Player_PlaySfx(player, NA_SE_SY_TRANSFORM_MASK_FLASH);
         }
+        if (sAdultMaskTimer >= ADULT_MASK_WHITE_COVER_FRAME)
+        {
+            AdultMask_StartWhiteCover(play);
+        }
+
         if (sAdultMaskTimer >= ADULT_MASK_VISUAL_END_FRAME)
         {
             AdultMask_End(player, play);

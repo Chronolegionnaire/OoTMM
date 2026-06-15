@@ -365,7 +365,7 @@ class CustomAssetsBuilder {
     const wf32 = (addr: number, value: number) => {
       writes.push({ op: AGE_MODEL_CMD_WRITE32, addr, value: f32BitsBE(value) });
     };
-    
+
     /*
      * playerFormObjectIds[MM_PLAYER_FORM_HUMAN]
      * 0x801c2730 + 4 * 2
@@ -762,10 +762,9 @@ class CustomAssetsBuilder {
     await this.addObjectFile('MM_ADULT_LINK_SPIN_ATTACK_VTX_2', 'mm_adult_link_spin_attack_vtx_2.bin', []);
     await this.addObjectFile('MM_ADULT_LINK_SPIN_ATTACK_VTX_3', 'mm_adult_link_spin_attack_vtx_3.bin', []);
     await this.addObjectFile('MM_ADULT_LINK_MASK_MTX', 'mm_adult_link_mask_mtx.bin', []);
-    await this.addObjectFile('MASK_ADULT', 'object_gi_maskadult.zobj', [
-      0x060009B0,
-      0x06000B90,
-    ]);
+    await this.addObjectFile('MASK_ADULT', 'object_gi_maskadult.zobj', [0x060009B0, 0x06000B90,]);
+    await this.addObjectFile('MASK_ADULT_TRANSFORM_PLAYER', 'object_mask_adult.zobj', [0x0a000900,]);
+    await this.addObjectFile('ADULT_MASK_EQUIPMENT', 'adult_mask_equipment_standalone.zobj', [0x0a000920,]);
 
     /* Add the object table */
     const objectTableBuffer = toU32Buffer(this.objectVroms.map(o => [o.vstart, o.vend]).flat());

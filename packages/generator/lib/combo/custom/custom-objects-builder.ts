@@ -503,17 +503,6 @@ export class CustomObjectsBuilder {
     return { name: 'DOOR_LOCK', ...editor.build() }
   }
 
-  private async makeMaskAdultPlayer(): Promise<CustomObject> {
-    const editor = new ObjectEditor(0x0a);
-    const obj = await raw('object_gi_maskadult.zobj');
-
-    editor.loadSegment(0x06, obj);
-    editor.submitList(editor.listData(0x060009b0)!);
-    editor.submitList(editor.listData(0x06000b90)!);
-
-    return { name: 'MASK_ADULT_PLAYER', ...editor.build() };
-  }
-
   async build(): Promise<CustomObject[]> {
     return [
       await this.makeEqKokiriSword(),
@@ -549,7 +538,6 @@ export class CustomObjectsBuilder {
       await this.makePowderKeg(),
       await this.makeClearTag(),
       await this.makeDoorLock(),
-      await this.makeMaskAdultPlayer(),
       //await this.simpleExtract('LIMB_OOT_CHILD_LHAND_CLOSED', 'oot', 'objects/object_link_child', [], 0x06, 0x0a),
     ];
   }

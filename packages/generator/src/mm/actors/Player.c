@@ -1386,27 +1386,29 @@ static void DrawSlingshotString(PlayState* play, Player* player)
     CLOSE_DISPS();
 }
 
-static int prepareAdultMaskObject(PlayState* play)
+#define ADULT_MASK_GI_HAND_START_TIMER 0
+#define ADULT_MASK_GI_HAND_END_TIMER   11
+#define ADULT_MASK_GI_FACE_START_TIMER        12
+#define ADULT_MASK_GI_LIMB_SCALE 20.0f
+
+static void AdultMask_DrawMaskInHand(PlayState* play, Player* player)
 {
     void* obj;
 
-    obj = comboGetObject(CUSTOM_OBJECT_ID_MASK_ADULT_PLAYER);
+    obj = comboGetObject(CUSTOM_OBJECT_ID_ADULT_MASK_EQUIPMENT | MASK_CUSTOM_OBJECT);
     if (!obj)
-        return 0;
-
-    OPEN_DISPS(play->state.gfxCtx);
-    gSPSegment(POLY_OPA_DISP++, 0x0a, obj);
-    CLOSE_DISPS();
-
-    return 1;
-}
-
-static void DrawAdultMaskCurrentLimb(PlayState* play)
-{
-    if (!prepareAdultMaskObject(play))
         return;
 
     OPEN_DISPS(play->state.gfxCtx);
+
+    Gfx_SetupDL25_Opa(play->state.gfxCtx);
+    gSPSegment(POLY_OPA_DISP++, 0x0a, obj);
+
+    Matrix_Push();
+
+
+    Matrix_Translate(-323.67f, 412.15f, -969.96f, MTXMODE_APPLY);
+    Matrix_RotateZYX(-0x32BE, -0x50DE, -0x7717, MTXMODE_APPLY);
 
     gSPMatrix(
         POLY_OPA_DISP++,
@@ -1414,11 +1416,87 @@ static void DrawAdultMaskCurrentLimb(PlayState* play)
         G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW
     );
 
-    gSPDisplayList(POLY_OPA_DISP++, CUSTOM_OBJECT_MASK_ADULT_PLAYER_0);
-    gSPDisplayList(POLY_OPA_DISP++, CUSTOM_OBJECT_MASK_ADULT_PLAYER_1);
+    gSPDisplayList(POLY_OPA_DISP++, CUSTOM_OBJECT_ADULT_MASK_EQUIPMENT_0);
+
+    Matrix_Pop();
+
+    CLOSE_DISPS();
+
+    (void)player;
+}
+
+static void AdultMask_DrawMaskOnFaceNativeLike(PlayState* play, Player* player)
+{
+    void* obj;
+
+    obj = comboGetObject(CUSTOM_OBJECT_ID_ADULT_MASK_EQUIPMENT | MASK_CUSTOM_OBJECT);
+    if (!obj)
+        return;
+
+    OPEN_DISPS(play->state.gfxCtx);
+
+    Gfx_SetupDL25_Opa(play->state.gfxCtx);
+    gSPSegment(POLY_OPA_DISP++, 0x0a, obj);
+
+    Matrix_Push();
+
+    /*
+     * Native human face offset is { 0, 0 }.
+     * Do not scale the equipment mask by 20.
+     */
+    Matrix_Scale(
+        1.0f,
+        1.0f - player->unk_B10[3],
+        1.0f - player->unk_B10[2],
+        MTXMODE_APPLY
+    );
+
+    gSPMatrix(
+        POLY_OPA_DISP++,
+        Matrix_Finalize(play->state.gfxCtx),
+        G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW
+    );
+
+    gSPDisplayList(POLY_OPA_DISP++, CUSTOM_OBJECT_ADULT_MASK_EQUIPMENT_0);
+
+    Matrix_Pop();
+
     CLOSE_DISPS();
 }
 
+static void AdultMask_DrawTransformationMaskOnFace(PlayState* play, Player* player)
+{
+    void* obj;
+
+    obj = comboGetObject(CUSTOM_OBJECT_ID_MASK_ADULT_TRANSFORM_PLAYER);
+    if (!obj)
+        return;
+
+    OPEN_DISPS(play->state.gfxCtx);
+
+    Gfx_SetupDL25_Opa(play->state.gfxCtx);
+    gSPSegment(POLY_OPA_DISP++, 0x0a, obj);
+
+    Matrix_Push();
+
+    /*
+     * Native still has the current HEAD limb matrix here.
+     * object_mask_boy / your object_mask_adult-equivalent is drawn on that matrix.
+     */
+    gSPMatrix(
+        POLY_OPA_DISP++,
+        Matrix_Finalize(play->state.gfxCtx),
+        G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW
+    );
+
+    gSPDisplayList(POLY_OPA_DISP++, CUSTOM_OBJECT_MASK_ADULT_TRANSFORM_PLAYER_0);
+
+    Matrix_Pop();
+
+    CLOSE_DISPS();
+}
+s32 AdultMask_GetTimer(void);
+s32 AdultMask_ShouldDrawTransformFace(void);
 void Player_PostLimbDrawGameplayWrapper(PlayState* play, s32 limbIndex, Gfx** dList1, Gfx** dList2, Vec3s* rot, Actor* actor)
 {
     Player* player = (Player*)actor;
@@ -1432,15 +1510,30 @@ void Player_PostLimbDrawGameplayWrapper(PlayState* play, s32 limbIndex, Gfx** dL
     }
     if (AdultMask_IsPuttingOn())
     {
-        if (limbIndex == PLAYER_LIMB_RIGHT_HAND)
+        s32 timer = AdultMask_GetTimer();
+
+        if (timer >= ADULT_MASK_GI_HAND_START_TIMER &&
+            timer < ADULT_MASK_GI_HAND_END_TIMER)
         {
-            DrawAdultMaskCurrentLimb(play);
+            if (limbIndex == PLAYER_LIMB_LEFT_HAND)
+            {
+                AdultMask_DrawMaskInHand(play, player);
+            }
         }
+
         if (limbIndex == PLAYER_LIMB_HEAD)
         {
-            DrawAdultMaskCurrentLimb(play);
+            if (AdultMask_ShouldDrawTransformFace())
+            {
+                AdultMask_DrawTransformationMaskOnFace(play, player);
+            }
+            else if (timer >= ADULT_MASK_GI_FACE_START_TIMER)
+            {
+                AdultMask_DrawMaskOnFaceNativeLike(play, player);
+            }
         }
     }
+
     if (player->transformation == MM_PLAYER_FORM_HUMAN && player->itemAction == PLAYER_CUSTOM_IA_SLINGSHOT && limbIndex == PLAYER_LIMB_RIGHT_HAND)
     {
         DrawSlingshotString(play, player);
