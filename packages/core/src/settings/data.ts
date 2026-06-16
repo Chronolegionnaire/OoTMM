@@ -1118,13 +1118,13 @@ export const SETTINGS = [{
     name: (s: any) => hasOoT(s) ? 'Starting Age (MM)' : 'Starting Age',
   category: 'main.events',
   type: 'enum',
-  description: 'Choose the starting age',
+  description: 'Choose the starting age in Majora\'s Mask. If Adult Mask or Shared Age is off, you will be unable to change age in this seed.',
   values: [
     { value: 'child', name: 'Child', description: 'Link will start off as Child' },
     { value: 'adult', name: 'Adult', description: 'Link will start off as Adult' },
     { value: 'random', name: 'Random', description: 'Link will start off as either Adult or Child, with a 50/50 probability' },
   ],
-  cond: (s: any) => hasMM(s) && s.adultMaskMm && !s.crossAge,
+  cond: (s: any) => hasMM(s) && !s.crossAge,
   default: 'child'
 }, {
   key: 'swordlessAdult',

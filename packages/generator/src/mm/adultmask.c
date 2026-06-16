@@ -73,6 +73,9 @@ typedef void (*Player_DrawMaskTransformEffectsFunc)(PlayState*, Player*, f32, f3
 #define NA_SE_SY_WHITE_OUT_T 0x4807
 #endif
 
+#define ADULT_MASK_SKIP_BUTTONS \
+(BTN_A | BTN_B | BTN_CUP | BTN_CLEFT | BTN_CDOWN | BTN_CRIGHT)
+
 #define Camera_ChangeMode \
     ((Camera_ChangeModeFunc)(0x800DF840))
 
@@ -153,18 +156,7 @@ extern Gfx gameplay_keep_DL_054C90[];
 typedef enum {
     ADULT_MASK_CS_NONE = 0,
     ADULT_MASK_CS_PUT_ON,
-
-    /*
-     * Full transformed-form mask-off-start stage:
-     * plays gPlayerAnim_pz_maskoffstart, CAM_MODE_JUMP, purple ring,
-     * native transform effects, then white fade/reload.
-     */
     ADULT_MASK_CS_TAKE_OFF_TRANSFORM,
-
-    /*
-     * After reload into child human, play short lower-hand cleanup:
-     * gPlayerAnim_cl_maskoff, draw mask in hand.
-     */
     ADULT_MASK_CS_TAKE_OFF_LOWER_HAND,
 } AdultMaskCutsceneMode;
 
@@ -532,11 +524,6 @@ static void AdultMask_CommitAgeApplyTablesAndReloadPlayer(Player* player, PlaySt
     player->av1.actionVar1 = 0;
     player->actor.update = AdultMask_PlayerReloadUpdateWrapper;
     player->actor.draw = NULL;
-
-    /*
-     * Preserve TAKE_OFF_TRANSFORM so post-reload can continue into
-     * TAKE_OFF_LOWER_HAND.
-     */
     if (sAdultMaskCutsceneMode != ADULT_MASK_CS_TAKE_OFF_TRANSFORM)
         sAdultMaskCutsceneMode = ADULT_MASK_CS_NONE;
 }
@@ -739,13 +726,30 @@ static void AdultMask_UpdateTransformCameraAndEffects(Player* player, PlayState*
     );
 }
 
+static s32 AdultMask_ShouldSkipTransformLoop(PlayState* play)
+{
+    return CHECK_BTN_ANY(play->state.input[0].press.button, ADULT_MASK_SKIP_BUTTONS);
+}
+
+static void AdultMask_SkipTransformLoopToFlash(Player* player, s32 flashFrame)
+{
+    if (player->av1.actionVar1 < flashFrame)
+    {
+        player->av1.actionVar1 = flashFrame;
+        sAdultMaskTimer = flashFrame;
+    }
+}
+
 static void AdultMask_UpdatePutOn(Player* player, PlayState* play)
 {
+    if (AdultMask_ShouldSkipTransformLoop(play))
+    {
+        sAdultMaskDrawTransformFace = 1;
+        AdultMask_SkipTransformLoopToFlash(player, ADULT_MASK_WHITE_COVER_FRAME);
+    }
+
     if (sAdultMaskTimer >= ADULT_MASK_TRANSFORM_FACE_START_TIMER)
         sAdultMaskDrawTransformFace = 1;
-
-    (void)player;
-    (void)play;
 }
 
 static void AdultMask_UpdateTakeOffTransformCameraAndEffects(Player* player, PlayState* play)
@@ -759,11 +763,6 @@ static void AdultMask_UpdateTakeOffTransformCameraAndEffects(Player* player, Pla
         return;
 
     effectConfig = &D_8085D910[ADULT_MASK_TRANSFORM_EFFECT_CONFIG_INDEX];
-
-    /*
-     * Native non-human maskoffstart path keeps the mask transformation
-     * cutscene alive and uses CAM_MODE_JUMP.
-     */
     Player_StartMaskTransformCs(player, play->playerActorCsIds[PLAYER_CS_ID_MASK_TRANSFORMATION]);
 
     cam = Play_GetCamera(play, play->activeCamId);
@@ -771,11 +770,6 @@ static void AdultMask_UpdateTakeOffTransformCameraAndEffects(Player* player, Pla
 
     player->stateFlags2 |= PLAYER_STATE2_MM_40;
     player->actor.shape.rot.y = Camera_GetCamDirYaw(cam) + 0x8000;
-
-    /*
-     * Spoof Zora only while updating native transform effects so the
-     * effect path matches gPlayerAnim_pz_maskoffstart.
-     */
     prevPlayerForm = player->transformation;
     prevSaveForm = gSaveContext.save.playerForm;
 
@@ -801,11 +795,6 @@ static void AdultMask_UpdateTakeOffTransformCameraAndEffects(Player* player, Pla
         }
         else if (player->av1.actionVar1 < effectConfig->unk_3)
         {
-            /*
-             * Do not play NA_SE_EV_LIGHTNING_HARD here.
-             * That thunder is correct for the human put-on path, but wrong
-             * for the pz_maskoffstart take-off path.
-             */
             Math_StepToF(&player->unk_B10[4], 2.0f, 0.5f);
         }
         else
@@ -829,10 +818,6 @@ static void AdultMask_UpdateTakeOffTransformCameraAndEffects(Player* player, Pla
             Math_StepToF(&player->unk_B10[5], 3.0f, 0.55f);
         }
     }
-
-    /*
-     * Native non-human transform path uses draw config 1.
-     */
     Player_DrawMaskTransformEffects(
         play,
         player,
@@ -846,13 +831,14 @@ static void AdultMask_UpdateTakeOffTransform(Player* player, PlayState* play)
 {
     AdultMask_UpdateTakeOffTransformCameraAndEffects(player, play);
 
-    /*
-     * Do not use PlayerAnimation_Update/endFrame here.
-     *
-     * Native transformed mask-off is driven by actionVar1/effect timing, not
-     * by ending gPlayerAnim_pz_maskoffstart. Ending on skelAnime endFrame makes
-     * the stage collapse early and causes cl_maskoff/reload ordering bugs.
-     */
+    if (AdultMask_ShouldSkipTransformLoop(play))
+    {
+        AdultMask_SkipTransformLoopToFlash(
+            player,
+            ADULT_MASK_TAKE_OFF_TRANSFORM_WHITE_COVER_FRAME
+        );
+    }
+
     if (sAdultMaskTimer >= ADULT_MASK_TAKE_OFF_TRANSFORM_WHITE_COVER_FRAME)
     {
         if (!sAdultMaskPlayedFlashSfx)
@@ -932,10 +918,6 @@ static void AdultMask_StartTakeOffLowerHand(Player* player, PlayState* play)
 
     Player_BeforeCsAction(play, player);
     Player_SetAction_PreserveItemAction(play, player, AdultMask_Action, 0);
-
-    /*
-     * Short child lower-hand cleanup after the actual take-off transform.
-     */
     Player_Anim_PlayOnceAdjusted_Ovl(play, player, &gPlayerAnim_cl_maskoff);
 
     player->stateFlags1 |= ADULT_MASK_PLAYER_LOCK_FLAGS_1;
@@ -1035,10 +1017,6 @@ void AdultMask_StartCsItem(Player* player, PlayState* play)
     }
     else
     {
-        /*
-         * Correct take-off-start animation:
-         * transformed-form maskoffstart, CAM_MODE_JUMP.
-         */
         player->csId = play->playerActorCsIds[PLAYER_CS_ID_MASK_TRANSFORMATION];
 
         Player_StartMaskTransformCs(player, player->csId);
@@ -1054,12 +1032,6 @@ void AdultMask_StartCsItem(Player* player, PlayState* play)
 
         Player_Anim_PlayOnceMorphAdjusted_Ovl(play, player, &gPlayerAnim_pz_maskoffstart);
     }
-
-    /*
-     * For put-on, this primes the normal hand/mask state.
-     * For take-off, this is only the initial setup frame; the action update
-     * manually advances pz_maskoffstart after this.
-     */
     Player_UpdateUpperBodyOrHeldItem(player);
 
     player->stateFlags1 |= ADULT_MASK_PLAYER_LOCK_FLAGS_1;
@@ -1068,9 +1040,5 @@ void AdultMask_StartCsItem(Player* player, PlayState* play)
 
 void AdultMask_AfterStart(Player* player)
 {
-    /*
-     * Adult Mask owns its cutscene camera now.
-     * Do not clear camera immediately after starting.
-     */
     (void)player;
 }

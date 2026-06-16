@@ -27,7 +27,7 @@ void func_800F8F88(void);
 u8 Audio_IsSfxPlaying(u32 sfxId);
 void Audio_ResetSfx(void);
 void Audio_PlaySfx_SwordCharge(Vec3f* pos, u8 chargeLevel);
-
+void (*AudioSfx_StopByIdFunc)(u16 sfxId);
 #if defined(GAME_OOT)
 void Sfx_PlaySfxCentered(u16 sfxId);
 # define Sfx_PlaySfxCentered2 Sfx_PlaySfxCentered

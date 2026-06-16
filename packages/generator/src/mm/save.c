@@ -6,12 +6,6 @@
 
 static void Save_InitMmLinkAge(void)
 {
-    if (!Config_Flag(CFG_MM_MASK_ADULT))
-    {
-        gMmSave.linkAge = 1;
-        return;
-    }
-
     if (Config_Flag(CFG_MM_CROSS_AGE))
     {
         gMmSave.linkAge = gOotSave.age;

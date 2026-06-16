@@ -777,3 +777,4 @@ PlayerCall_Update = 0x80160B80;
 PlayerCall_Draw = 0x80160BC0;
 AnimatedMat_DrawXlu = 0x801317C0;
 gameplay_keep_Matanimheader_054F18 = 0x04054f18;
+AudioSfx_StopById = 0x801A75E8;
