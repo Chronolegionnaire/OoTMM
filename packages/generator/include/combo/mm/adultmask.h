@@ -36,5 +36,4 @@ typedef struct struct_8085D910 { u8 unk_0, unk_1, unk_2, unk_3; } struct_8085D91
 typedef void (*Player_UpdateMaskTransformEffectsFunc)(PlayState*, Player*, struct_8085D910**);
 typedef void (*Player_DrawMaskTransformEffectsFunc)(PlayState*, Player*, f32, f32, s32);
 
-
 #endif

@@ -781,3 +781,4 @@ AudioSfx_StopById = 0x801A75E8;
 Lib_PlaySfx_2 = 0x801000CC;
 Camera_ChangeMode = 0x800DF840;
 func_8012301C = 0x8012301C;
+func_800E0348 = 0x800E0348;

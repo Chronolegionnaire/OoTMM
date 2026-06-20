@@ -20,6 +20,7 @@
 #define Player_DrawMaskTransformEffects ((Player_DrawMaskTransformEffectsFunc)OverlayAddr(0x808550D0))
 #define D_8085D910 ((struct_8085D910*)OverlayAddr(0x8085D910))
 #define PLAYER_AGE_PROPERTIES_HUMAN ((PlayerAgeProperties*)OverlayAddr(0x8085BA38 + 0xDC * 4))
+#define Camera_StopTransformCs ((Camera_StopTransformCsFunc)(0x800E0348))
 #define AdultMask_DrawObject(play, obj, dl) do { OPEN_DISPS((play)->state.gfxCtx); Gfx_SetupDL25_Opa((play)->state.gfxCtx); gSPSegment(POLY_OPA_DISP++, 0x0a, (obj)); gSPMatrix(POLY_OPA_DISP++, Matrix_Finalize((play)->state.gfxCtx), G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW); gSPDisplayList(POLY_OPA_DISP++, (Gfx*)(dl)); CLOSE_DISPS(); } while (0)
 
 extern PlayerAnimationHeader gPlayerAnim_cl_setmask;
@@ -515,13 +516,24 @@ static s32 AdultMask_ShouldSkipTransformLoop(PlayState* play)
     return CHECK_BTN_ANY(play->state.input[0].press.button, ADULT_MASK_SKIP_BUTTONS);
 }
 
-static void AdultMask_SkipTransformLoopToFlash(Player* player, s32 flashFrame)
+static void AdultMask_SkipTransformLoopToFlash(Player* player, PlayState* play, s32 flashFrame)
 {
+    s16 currentCsId;
+    s16 subCamId;
     if (player->av1.actionVar1 >= flashFrame)
         return;
-
     sAdultMaskInterrupted = 1;
     AdultMask_StopTransformLoopSfx();
+    currentCsId = CutsceneManager_GetCurrentCsId();
+    if (currentCsId == player->csId)
+    {
+        subCamId = CutsceneManager_GetCurrentSubCamId(player->csId);
+        if (subCamId != SUB_CAM_ID_DONE && subCamId != CS_ID_NONE)
+        {
+            func_800E0348(Play_GetCamera(play, subCamId));
+        }
+    }
+    AdultMask_RestoreEnvVisualState(play);
     AdultMask_SetB10(player, 0.0f);
     player->av1.actionVar1 = flashFrame;
     sAdultMaskTimer = flashFrame;
@@ -544,7 +556,7 @@ static s32 AdultMask_TryStartReloadFlash(Player* player, PlayState* play)
 static void AdultMask_UpdatePutOn(Player* player, PlayState* play)
 {
     if (AdultMask_ShouldSkipTransformLoop(play))
-        AdultMask_SkipTransformLoopToFlash(player, 0x54);
+        AdultMask_SkipTransformLoopToFlash(player, play, 0x54);
 
     if (player->skelAnime.animation == &gPlayerAnim_cl_setmask && player->skelAnime.curFrame >= 51)
         sAdultMaskDrawTransformFace = 1;
@@ -559,7 +571,7 @@ static void AdultMask_UpdatePutOn(Player* player, PlayState* play)
 static s32 AdultMask_UpdateTakeOffTransform(Player* player, PlayState* play)
 {
     if (AdultMask_ShouldSkipTransformLoop(play))
-        AdultMask_SkipTransformLoopToFlash(player, 0x45);
+        AdultMask_SkipTransformLoopToFlash(player, play, 0x45);
 
     if (sAdultMaskTimer < 0x45 && sAdultMaskWhiteFillMode == ADULT_MASK_WHITE_FILL_NONE)
         AdultMask_UpdateTransformCameraAndEffects(player, play, MM_PLAYER_FORM_ZORA, CAM_MODE_JUMP, 1, 0);
