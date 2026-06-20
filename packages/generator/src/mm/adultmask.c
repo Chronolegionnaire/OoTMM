@@ -334,8 +334,8 @@ static void AdultMask_EndCutsceneCamera(Player* player)
     Player_ClearAttentionAndCameraMode(player);
     player->csMode = 0;
     player->prevCsAction = 0;
-    player->csId = -1;
-    player->subCamId = 0;
+    player->csId = CS_ID_NONE;
+    player->subCamId = SUB_CAM_ID_DONE;
 }
 
 static void AdultMask_ClearHeldMaskAndUnlock(Player* player)
@@ -464,7 +464,7 @@ static void AdultMask_UpdateEffectSteps(Player* player, struct_8085D910* cfg, s3
             Math_StepToF(&player->unk_B10[4], 1.0f, cfg->unk_1 / 100.0f);
         } else if (player->av1.actionVar1 < cfg->unk_3) {
             if (playLightningSfx && player->av1.actionVar1 == cfg->unk_2)
-                PlaySound(0x4800);
+                PlaySound(NA_SE_EV_LIGHTNING_HARD);
             Math_StepToF(&player->unk_B10[4], 2.0f, 0.5f);
         } else {
             Math_StepToF(&player->unk_B10[4], 3.0f, 0.2f);
@@ -532,7 +532,7 @@ static s32 AdultMask_TryStartReloadFlash(Player* player, PlayState* play)
     if (!sAdultMaskPlayedFlashSfx) {
         sAdultMaskPlayedFlashSfx = 1;
         AdultMask_StopTransformLoopSfx();
-        Player_PlaySfx(player, 0x2847);
+        Player_PlaySfx(player, NA_SE_SY_TRANSFORM_MASK_FLASH);
     }
 
     AdultMask_StartWhiteFillIn();
@@ -550,7 +550,7 @@ static void AdultMask_UpdatePutOn(Player* player, PlayState* play)
         sAdultMaskDrawTransformFace = 1;
 
     if (sAdultMaskTimer < 0x54 && sAdultMaskWhiteFillMode == ADULT_MASK_WHITE_FILL_NONE)
-        AdultMask_UpdateTransformCameraAndEffects(player, play, MM_PLAYER_FORM_FIERCE_DEITY, 0, 0, 1);
+        AdultMask_UpdateTransformCameraAndEffects(player, play, MM_PLAYER_FORM_FIERCE_DEITY, CAM_MODE_NORMAL, 0, 1);
 
     if (sAdultMaskTimer >= 0x54)
         AdultMask_TryStartReloadFlash(player, play);
@@ -562,7 +562,7 @@ static s32 AdultMask_UpdateTakeOffTransform(Player* player, PlayState* play)
         AdultMask_SkipTransformLoopToFlash(player, 0x45);
 
     if (sAdultMaskTimer < 0x45 && sAdultMaskWhiteFillMode == ADULT_MASK_WHITE_FILL_NONE)
-        AdultMask_UpdateTransformCameraAndEffects(player, play, MM_PLAYER_FORM_ZORA, 1, 1, 0);
+        AdultMask_UpdateTransformCameraAndEffects(player, play, MM_PLAYER_FORM_ZORA, CAM_MODE_JUMP, 1, 0);
 
     return sAdultMaskTimer >= 0x45 && AdultMask_TryStartReloadFlash(player, play);
 }
@@ -707,7 +707,7 @@ void AdultMask_StartCsItem(Player* player, PlayState* play)
     AdultMask_ResetVisualState(player);
 
     if (sAdultMaskCutsceneMode == ADULT_MASK_CS_PUT_ON) {
-        AdultMask_SetStartCamera(player, play, 0);
+        AdultMask_SetStartCamera(player, play, CAM_MODE_NORMAL);
         Player_Anim_PlayOnceMorphAdjusted_Ovl(play, player, &gPlayerAnim_cl_setmask);
     } else {
         AdultMask_SetStartCamera(player, play, CAM_MODE_JUMP);

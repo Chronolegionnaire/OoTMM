@@ -20,14 +20,6 @@ import { ObjectEditor } from './object-editor';
 import { patchAnimationPorts } from './custom-animation-builder';
 import {concatUint8Arrays} from "uint8array-extras";
 
-function f32BitsBE(value: number): number {
-  const tmp = new ArrayBuffer(4);
-  const view = new DataView(tmp);
-
-  view.setFloat32(0, value, false);
-  return view.getUint32(0, false);
-}
-
 const AGE_MODEL_CMD_END     = 0x00000000;
 const AGE_MODEL_CMD_WRITE16 = 0x00000001;
 const AGE_MODEL_CMD_WRITE32 = 0x00000002;
@@ -301,41 +293,64 @@ class CustomAssetsBuilder {
   }
 
   async addObjectFile(name: string, filename: string, defines: number[]): Promise<AddedCustomObject> {
-    const file = await raw(filename);
-    return await this.addCustomObject(name, file, defines);
+    return this.addCustomObject(name, await raw(filename), defines);
   }
 
   private extractMmCodeRamRange(ramStart: number, size: number): Uint8Array {
-    const MM_CODE_RAM_START = 0x800a5ac0;
-    const MM_CODE_ROM_START = 0x00b3c000;
-
-    const off = MM_CODE_ROM_START + (ramStart - MM_CODE_RAM_START);
+    const off = 0x00b3c000 + ramStart - 0x800a5ac0;
     return this.roms.mm.rom.slice(off, off + size);
   }
 
-  async addChildAgeModelTables() {
-    const parts: Uint8Array[] = [];
+  private u32pair(a: number, b: number): Uint8Array {
+    const data = new Uint8Array(8);
+    bufWriteU32BE(data, 0, a);
+    bufWriteU32BE(data, 4, b);
+    return data;
+  }
 
+  async addHumanAgeProperties() {
+    const AGE_BASE = 0x8085BA38;
+    const AGE_SIZE = 0xDC;
+    const PLAYER_ACTOR_VRAM = 0x8082DA90;
+    const PLAYER_ACTOR_ROM = 0x00CA7F00;
+
+    const read = (vram: number) => {
+      const rom = PLAYER_ACTOR_ROM + vram - PLAYER_ACTOR_VRAM;
+      const data = this.roms.mm.rom.slice(rom, rom + AGE_SIZE);
+
+      if (rom < 0 || data.length !== AGE_SIZE) {
+        throw new Error(`Player actor ROM read failed: vram=0x${vram.toString(16)}, rom=0x${rom.toString(16)}, size=0x${AGE_SIZE.toString(16)}, got=0x${data.length.toString(16)}`);
+      }
+
+      return data;
+    };
+
+    const childHuman = read(AGE_BASE + AGE_SIZE * 4);
+    const zora = read(AGE_BASE + AGE_SIZE * 2);
+    const fierceDeity = read(AGE_BASE);
+    const adultHuman = new Uint8Array(childHuman);
+
+    adultHuman.set(zora.subarray(0, 0x44), 0);
+    adultHuman.set(fierceDeity.subarray(0x92, 0x94), 0x92);
+    adultHuman.set(childHuman.subarray(0x94, 0x96), 0x94);
+
+    this.cg.define('CUSTOM_MM_CHILD_HUMAN_AGE_PROPERTIES_VROM', this.addRawData('custom/mm_child_human_age_properties', childHuman, false));
+    this.cg.define('CUSTOM_MM_ADULT_HUMAN_AGE_PROPERTIES_VROM', this.addRawData('custom/mm_adult_human_age_properties', adultHuman, false));
+  }
+
+  async addChildAgeModelTables() {
     const ranges = [
-      { ramStart: 0x801bfe00, size: 0x4f8 },
-      { ramStart: 0x801c0d78, size: 0x20 },
-      { ramStart: 0x801c2730, size: 0x10 },
-      { ramStart: 0x801dca58, size: 0x14 },
+      [0x801bfe00, 0x4f8],
+      [0x801c0d78, 0x20],
+      [0x801c2730, 0x10],
+      [0x801dca58, 0x14],
     ];
 
-    for (const range of ranges) {
-      const header = new Uint8Array(8);
-      bufWriteU32BE(header, 0x00, range.ramStart);
-      bufWriteU32BE(header, 0x04, range.size);
-
-      parts.push(header);
-      parts.push(this.extractMmCodeRamRange(range.ramStart, range.size));
-    }
-
-    const end = new Uint8Array(8);
-    bufWriteU32BE(end, 0x00, 0);
-    bufWriteU32BE(end, 0x04, 0);
-    parts.push(end);
+    const parts = ranges.flatMap(([addr, size]) => [
+      this.u32pair(addr, size),
+      this.extractMmCodeRamRange(addr, size),
+    ]);
+    parts.push(this.u32pair(0, 0));
 
     const data = concatUint8Arrays(parts);
     const vrom = this.addRawData('custom/mm_age_model_child_tables', data, false);
@@ -344,324 +359,50 @@ class CustomAssetsBuilder {
     this.cg.define('CUSTOM_MM_AGE_MODEL_CHILD_TABLES_SIZE', data.length);
   }
 
-  async addHumanAgeProperties() {
-    const PLAYER_AGE_PROPERTIES_BASE = 0x8085BA38;
-    const PLAYER_AGE_PROPERTIES_SIZE = 0xDC;
-
-    const PLAYER_AGE_PROPERTIES_FIERCE_DEITY =
-        PLAYER_AGE_PROPERTIES_BASE + PLAYER_AGE_PROPERTIES_SIZE * 0; // 0x8085BA38
-    const PLAYER_AGE_PROPERTIES_ZORA =
-        PLAYER_AGE_PROPERTIES_BASE + PLAYER_AGE_PROPERTIES_SIZE * 2; // 0x8085BBF0
-    const PLAYER_AGE_PROPERTIES_HUMAN =
-        PLAYER_AGE_PROPERTIES_BASE + PLAYER_AGE_PROPERTIES_SIZE * 4; // 0x8085BDA8
-
-    const PLAYER_ACTOR_VRAM_START = 0x8082DA90;
-    const PLAYER_ACTOR_ROM_START = 0x00CA7F00;
-
-    const readFromPlayerActorRom = (vram: number, size: number): Uint8Array => {
-      const off = vram - PLAYER_ACTOR_VRAM_START;
-      const rom = PLAYER_ACTOR_ROM_START + off;
-
-      if (off < 0 || rom < 0 || rom + size > this.roms.mm.rom.length) {
-        throw new Error(
-            `Player actor ROM read out of range: ` +
-            `vram=0x${vram.toString(16)}, off=0x${off.toString(16)}, ` +
-            `rom=0x${rom.toString(16)}, size=0x${size.toString(16)}`
-        );
-      }
-
-      const data = this.roms.mm.rom.slice(rom, rom + size);
-
-      if (data.length !== size) {
-        throw new Error(
-            `Player actor ROM read failed: ` +
-            `vram=0x${vram.toString(16)}, rom=0x${rom.toString(16)}, ` +
-            `size=0x${size.toString(16)}, got=0x${data.length.toString(16)}`
-        );
-      }
-
-      return data;
-    };
-
-    const childHuman = readFromPlayerActorRom(
-        PLAYER_AGE_PROPERTIES_HUMAN,
-        PLAYER_AGE_PROPERTIES_SIZE
-    );
-
-    const zora = readFromPlayerActorRom(
-        PLAYER_AGE_PROPERTIES_ZORA,
-        PLAYER_AGE_PROPERTIES_SIZE
-    );
-
-    const fierceDeity = readFromPlayerActorRom(
-        PLAYER_AGE_PROPERTIES_FIERCE_DEITY,
-        PLAYER_AGE_PROPERTIES_SIZE
-    );
-    const adultHuman = new Uint8Array(childHuman);
-
-    const copyRange = (
-        dst: Uint8Array,
-        dstOff: number,
-        src: Uint8Array,
-        srcOff: number,
-        size: number
-    ) => {
-      dst.set(src.subarray(srcOff, srcOff + size), dstOff);
-    };
-    const OFF_VOICE_SFX_ID_OFFSET = 0x92;
-    const OFF_SURFACE_SFX_ID_OFFSET = 0x94;
-    const SIZE_SFX_ID_OFFSET = 0x02;
-
-    const childSurfaceSfx = childHuman.slice(
-        OFF_SURFACE_SFX_ID_OFFSET,
-        OFF_SURFACE_SFX_ID_OFFSET + SIZE_SFX_ID_OFFSET
-    );
-
-    copyRange(adultHuman, 0x00, zora, 0x00, 0x44);
-
-    copyRange(
-        adultHuman,
-        OFF_VOICE_SFX_ID_OFFSET,
-        fierceDeity,
-        OFF_VOICE_SFX_ID_OFFSET,
-        SIZE_SFX_ID_OFFSET
-    );
-
-    copyRange(
-        adultHuman,
-        OFF_SURFACE_SFX_ID_OFFSET,
-        childSurfaceSfx,
-        0x00,
-        SIZE_SFX_ID_OFFSET
-    );
-
-    const childVrom = this.addRawData(
-        'custom/mm_child_human_age_properties',
-        childHuman,
-        false
-    );
-
-    const adultVrom = this.addRawData(
-        'custom/mm_adult_human_age_properties',
-        adultHuman,
-        false
-    );
-
-    this.cg.define('CUSTOM_MM_CHILD_HUMAN_AGE_PROPERTIES_VROM', childVrom);
-    this.cg.define('CUSTOM_MM_CHILD_HUMAN_AGE_PROPERTIES_SIZE', childHuman.length);
-
-    this.cg.define('CUSTOM_MM_ADULT_HUMAN_AGE_PROPERTIES_VROM', adultVrom);
-    this.cg.define('CUSTOM_MM_ADULT_HUMAN_AGE_PROPERTIES_SIZE', adultHuman.length);
-  }
-
   async addAdultAgeModelTables(adultLink: AddedCustomObject) {
     const writes: { op: number; addr: number; value: number }[] = [];
+    const { objectId: id, defines: d } = adultLink;
 
-    const id = adultLink.objectId;
-    const d = adultLink.defines;
+    const w = (op: number, addr: number, value: number) => writes.push({ op, addr, value });
+    const w16 = (addr: number, value: number) => w(AGE_MODEL_CMD_WRITE16, addr, value);
+    const w32 = (addr: number, value: number) => w(AGE_MODEL_CMD_WRITE32, addr, value);
+    const copy32 = (addr: number, value: number) => w(AGE_MODEL_CMD_COPY32, addr, value);
+    const w32a = (base: number, ids: number[]) => ids.forEach((i, n) => w32(base + n * 4, d[i]));
 
-    const w16 = (addr: number, value: number) => {
-      writes.push({ op: AGE_MODEL_CMD_WRITE16, addr, value });
-    };
-
-    const w32 = (addr: number, value: number) => {
-      writes.push({ op: AGE_MODEL_CMD_WRITE32, addr, value });
-    };
-
-    const copy32 = (dst: number, src: number) => {
-      writes.push({ op: AGE_MODEL_CMD_COPY32, addr: dst, value: src });
-    };
-
-    const wf32 = (addr: number, value: number) => {
-      writes.push({ op: AGE_MODEL_CMD_WRITE32, addr, value: f32BitsBE(value) });
-    };
-
-    /*
-     * playerFormObjectIds[MM_PLAYER_FORM_HUMAN]
-     * 0x801c2730 + 4 * 2
-     */
-    w16(0x801c2738, id);
-
-    /*
-     * playerSkeletons[MM_PLAYER_FORM_HUMAN]
-     * 0x801bfe00 + 4 * 4
-     */
-    w32(0x801bfe10, d[0]);
-
-    /*
-     * playerWaistDLs[MM_PLAYER_FORM_HUMAN * 2 + 0/1]
-     * base + (4 * 2 + n) * 4
-     */
-    w32(0x801c001c, d[1]);
-    w32(0x801c0020, d[1]);
-
-    /*
-     * playerHandHoldingShieldDLs[0..3]
-     * This table is equipment-indexed, not form-indexed.
-     */
-    w32(0x801c0024, d[2]);
-    w32(0x801c0028, d[2]);
-    w32(0x801c002c, d[3]);
-    w32(0x801c0030, d[3]);
-
-    /*
-     * playerSheath12DLs[MM_PLAYER_FORM_HUMAN * 2 + 0/1]
-     */
-    w32(0x801c0054, d[4]);
-    w32(0x801c0058, d[4]);
-
-    /*
-     * playerSheath13DLs[MM_PLAYER_FORM_HUMAN * 2 + 0/1]
-     */
-    w32(0x801c007c, d[4]);
-    w32(0x801c0080, d[4]);
-
-    /*
-     * playerSheath14DLs[MM_PLAYER_FORM_HUMAN * 2 + 0/1]
-     */
-    w32(0x801c00a4, d[4]);
-    w32(0x801c00a8, d[4]);
-
-    /*
-     * playerShieldDLs[0..3]
-     * Equipment-indexed.
-     */
-    w32(0x801c00ac, d[5]);
-    w32(0x801c00b0, d[5]);
-    w32(0x801c00b4, d[6]);
-    w32(0x801c00b8, d[6]);
-
-    /*
-     * playerSheathedSwordDLs[0..5]
-     * Equipment-indexed.
-     */
-    w32(0x801c00bc, d[7]);
-    w32(0x801c00c0, d[7]);
-    w32(0x801c00c4, d[8]);
-    w32(0x801c00c8, d[8]);
-    w32(0x801c00cc, d[9]);
-    w32(0x801c00d0, d[9]);
-
-    /*
-     * playerSwordSheathsDLs[0..5]
-     * Equipment-indexed.
-     */
-    w32(0x801c00d4, d[10]);
-    w32(0x801c00d8, d[10]);
-    w32(0x801c00dc, d[11]);
-    w32(0x801c00e0, d[11]);
-    w32(0x801c00e4, d[12]);
-    w32(0x801c00e8, d[12]);
-
-    /*
-     * playerLeftHandTwoHandSwordDLs[MM_PLAYER_FORM_HUMAN * 2 + 0/1]
-     */
-    w32(0x801c010c, d[13]);
-    w32(0x801c0110, d[13]);
-
-    /*
-     * playerLeftHandOpenDLs[MM_PLAYER_FORM_HUMAN * 2 + 0/1]
-     */
-    w32(0x801c0134, d[14]);
-    w32(0x801c0138, d[14]);
-
-    /*
-     * playerLeftHandClosedDLs[MM_PLAYER_FORM_HUMAN * 2 + 0/1]
-     */
-    w32(0x801c015c, d[15]);
-    w32(0x801c0160, d[15]);
-
-    /*
-     * playerLeftHandOneHandSwordDLs[MM_PLAYER_FORM_HUMAN * 2 + 0/1]
-     */
-    w32(0x801c0184, d[16]);
-    w32(0x801c0188, d[16]);
-
-    /*
-     * playerEquipValueDLs[0..5]
-     * Equipment-indexed.
-     */
-    w32(0x801c018c, d[17]);
-    w32(0x801c0190, d[17]);
-    w32(0x801c0194, d[18]);
-    w32(0x801c0198, d[18]);
-    w32(0x801c019c, d[19]);
-    w32(0x801c01a0, d[19]);
-
-    /*
-     * playerRightHandOpenDLs[MM_PLAYER_FORM_HUMAN * 2 + 0/1]
-     */
-    w32(0x801c01c4, d[20]);
-    w32(0x801c01c8, d[20]);
-
-    /*
-     * playerRightHandClosedDLs[MM_PLAYER_FORM_HUMAN * 2 + 0/1]
-     */
-    w32(0x801c01ec, d[21]);
-    w32(0x801c01f0, d[21]);
-
-    /*
-     * playerRightHandBowDLs[MM_PLAYER_FORM_HUMAN * 2 + 0/1]
-     */
-    w32(0x801c0214, d[22]);
-    w32(0x801c0218, d[22]);
-
-    /*
-     * playerRightHandInstrumentDLs[MM_PLAYER_FORM_HUMAN * 2 + 0/1]
-     */
-    w32(0x801c023c, d[23]);
-    w32(0x801c0240, d[23]);
-
-    /*
-     * playerRightHandHookshotDLs[MM_PLAYER_FORM_HUMAN * 2 + 0/1]
-     */
-    w32(0x801c0264, d[24]);
-    w32(0x801c0268, d[24]);
-
-    /*
-     * playerLeftHandBottleDLs[MM_PLAYER_FORM_HUMAN * 2 + 0/1]
-     */
-    w32(0x801c028c, d[25]);
-    w32(0x801c0290, d[25]);
-
-    /*
-     * First-person form-indexed DL tables:
-     * base + MM_PLAYER_FORM_HUMAN * 4
-     */
-    w32(0x801c02a4, d[4]);
-    w32(0x801c02b8, d[15]);
-    w32(0x801c02cc, d[26]);
-    w32(0x801c02e0, d[27]);
-    w32(0x801c02f4, d[28]);
-
-    /*
-     * Extra bow hand DL pointer.
-     */
-    w32(0x801c0d94, d[29]);
-
-    /*
-     * playerHeightJtbl[HUMAN] = playerHeightJtbl[ZORA]
-     *
-     * Human = 4, Zora = 2
-     */
-    copy32(0x801dca68, 0x801dca60);
+    w16(0x801c2738, id);      // playerFormObjectIds[HUMAN]
+    w32(0x801bfe10, d[0]);   // playerSkeletons[HUMAN]
+    w32a(0x801c001c, [1, 1]); // playerWaistDLs
+    w32a(0x801c0024, [2, 2, 3, 3]); // playerHandHoldingShieldDLs
+    w32a(0x801c0054, [4, 4]); // playerSheath12DLs
+    w32a(0x801c007c, [4, 4]); // playerSheath13DLs
+    w32a(0x801c00a4, [4, 4]); // playerSheath14DLs
+    w32a(0x801c00ac, [5, 5, 6, 6]); // playerShieldDLs
+    w32a(0x801c00bc, [7, 7, 8, 8, 9, 9]); // playerSheathedSwordDLs
+    w32a(0x801c00d4, [10, 10, 11, 11, 12, 12]); // playerSwordSheathsDLs
+    w32a(0x801c010c, [13, 13]); // playerLeftHandTwoHandSwordDLs
+    w32a(0x801c0134, [14, 14]); // playerLeftHandOpenDLs
+    w32a(0x801c015c, [15, 15]); // playerLeftHandClosedDLs
+    w32a(0x801c0184, [16, 16]); // playerLeftHandOneHandSwordDLs
+    w32a(0x801c018c, [17, 17, 18, 18, 19, 19]); // playerEquipValueDLs
+    w32a(0x801c01c4, [20, 20]); // playerRightHandOpenDLs
+    w32a(0x801c01ec, [21, 21]); // playerRightHandClosedDLs
+    w32a(0x801c0214, [22, 22]); // playerRightHandBowDLs
+    w32a(0x801c023c, [23, 23]); // playerRightHandInstrumentDLs
+    w32a(0x801c0264, [24, 24]); // playerRightHandHookshotDLs
+    w32a(0x801c028c, [25, 25]); // playerLeftHandBottleDLs
+    w32a(0x801c02a4, [4, 15, 26, 27, 28]); // First-person DL tables
+    w32(0x801c0d94, d[29]); // Extra bow hand DL pointer
+    copy32(0x801dca68, 0x801dca60); // playerHeightJtbl[HUMAN] = playerHeightJtbl[ZORA]
 
     const data = new Uint8Array((writes.length + 1) * 0x0c);
-
-    for (let i = 0; i < writes.length; ++i) {
+    [...writes, { op: AGE_MODEL_CMD_END, addr: 0, value: 0 }].forEach(({ op, addr, value }, i) => {
       const off = i * 0x0c;
-      bufWriteU32BE(data, off + 0x00, writes[i].op);
-      bufWriteU32BE(data, off + 0x04, writes[i].addr);
-      bufWriteU32BE(data, off + 0x08, writes[i].value);
-    }
-
-    const endOff = writes.length * 0x0c;
-    bufWriteU32BE(data, endOff + 0x00, AGE_MODEL_CMD_END);
-    bufWriteU32BE(data, endOff + 0x04, 0);
-    bufWriteU32BE(data, endOff + 0x08, 0);
+      bufWriteU32BE(data, off + 0x00, op);
+      bufWriteU32BE(data, off + 0x04, addr);
+      bufWriteU32BE(data, off + 0x08, value);
+    });
 
     const vrom = this.addRawData('custom/mm_age_model_tables', data, false);
-
     this.cg.define('CUSTOM_MM_AGE_MODEL_TABLES_VROM', vrom);
     this.cg.define('CUSTOM_MM_AGE_MODEL_TABLES_SIZE', data.length);
   }

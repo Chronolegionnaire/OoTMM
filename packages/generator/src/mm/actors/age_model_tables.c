@@ -9,8 +9,6 @@
 #define AGE_MODEL_CMD_WRITE32 0x00000002
 #define AGE_MODEL_CMD_COPY32  0x00000003
 
-#define MM_CODE_VROM_START 0x00b3c000
-
 typedef struct
 {
     u32 op;
