@@ -172,5 +172,6 @@ typedef enum {
 
 s32 Camera_RequestSetting(Camera* camera, s16 setting);
 int Camera_CheckValidMode(Camera* camera, s16 mode);
+s32 Camera_ChangeMode(Camera* camera, s16 mode);
 
 #endif

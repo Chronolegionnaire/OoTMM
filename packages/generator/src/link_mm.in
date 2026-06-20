@@ -778,3 +778,6 @@ PlayerCall_Draw = 0x80160BC0;
 AnimatedMat_DrawXlu = 0x801317C0;
 gameplay_keep_Matanimheader_054F18 = 0x04054f18;
 AudioSfx_StopById = 0x801A75E8;
+Lib_PlaySfx_2 = 0x801000CC;
+Camera_ChangeMode = 0x800DF840;
+func_8012301C = 0x8012301C;

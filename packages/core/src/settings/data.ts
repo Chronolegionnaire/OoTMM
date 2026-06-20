@@ -1118,7 +1118,7 @@ export const SETTINGS = [{
     name: (s: any) => hasOoT(s) ? 'Starting Age (MM)' : 'Starting Age',
   category: 'main.events',
   type: 'enum',
-  description: 'Choose the starting age in Majora\'s Mask. If Adult Mask or Shared Age is off, you will be unable to change age in this seed.',
+  description: 'Choose the starting age in Majora\'s Mask. If Adult Mask or Shared Age is off, you will be unable to change age in MM.',
   values: [
     { value: 'child', name: 'Child', description: 'Link will start off as Child' },
     { value: 'adult', name: 'Adult', description: 'Link will start off as Adult' },

@@ -1,4 +1,5 @@
 #include <combo.h>
+#include <assets/mm/objects/gameplay_keep.h>
 #include <combo/custom_animations.h>
 #include <combo/custom.h>
 #include <combo/entrance.h>
@@ -13,7 +14,7 @@
 #include <combo/effect.h>
 #include "../actors.h"
 #include <combo/mm/boomerang.h>
-#include <combo/common/animation.h>
+#include <combo/mm/adultmask.h>
 
 void ArrowCycle_Handle(Player* link, PlayState* play);
 u8 gGerudoTunic;
@@ -1268,6 +1269,46 @@ static Color_RGB8 sTunicColors[4] = {
 
 static Color_RGB8 sGerudoMaskTunicColor = { 120, 0, 180 };
 
+static Color_RGB8* Player_GetCurrentTunicColor(void)
+{
+    u16 tunic;
+
+    tunic = CLAMP(gSaveContext.save.info.itemEquips.tunic, 0, 3);
+
+    if (tunic == 0 &&
+        gCustomSave.customMask == PLAYER_CUSTOM_MASK_GERUDO &&
+        gGerudoTunic != 0)
+    {
+        return &sGerudoMaskTunicColor;
+    }
+
+    return &sTunicColors[tunic];
+}
+
+static void Player_RestoreHumanTunicDrawState(PlayState* play, Player* player)
+{
+    Color_RGB8* tunicColor;
+
+    if (player->transformation != MM_PLAYER_FORM_HUMAN)
+        return;
+
+    tunicColor = Player_GetCurrentTunicColor();
+
+    OPEN_DISPS(play->state.gfxCtx);
+
+    gDPPipeSync(POLY_OPA_DISP++);
+    gSPSegment(POLY_OPA_DISP++, 0x08, g.customKeep);
+    gDPSetEnvColor(
+        POLY_OPA_DISP++,
+        tunicColor->r,
+        tunicColor->g,
+        tunicColor->b,
+        0xFF
+    );
+
+    CLOSE_DISPS();
+}
+
 EXPORT_SYMBOL(MM_COLOR_TUNIC_KOKIRI, sTunicColors[0]);
 EXPORT_SYMBOL(MM_COLOR_TUNIC_GORON, sTunicColors[2]);
 EXPORT_SYMBOL(MM_COLOR_TUNIC_ZORA, sTunicColors[3]);
@@ -1296,41 +1337,6 @@ static void* Player_CustomHandEq(u32 handDlist, void* eqData, u32 eqDlist)
 static int (*sPlayerOverrideLimb)(PlayState*, s32, Gfx**, Vec3f*, Vec3s*, void*);
 
 extern void* kLinkHumanShieldsDLs[];
-
-static void Player_SetTunicEnvColorOpa(PlayState* play, Player* player)
-{
-    Color_RGB8* tunicColor;
-    u16 tunic;
-
-    if (player->transformation != MM_PLAYER_FORM_HUMAN)
-        return;
-
-    tunic = CLAMP(gSaveContext.save.info.itemEquips.tunic, 0, 3);
-
-    if (tunic == 0 &&
-        gCustomSave.customMask == PLAYER_CUSTOM_MASK_GERUDO &&
-        gGerudoTunic != 0)
-    {
-        tunicColor = &sGerudoMaskTunicColor;
-    }
-    else
-    {
-        tunicColor = &sTunicColors[tunic];
-    }
-
-    OPEN_DISPS(play->state.gfxCtx);
-
-    gDPPipeSync(POLY_OPA_DISP++);
-    gDPSetEnvColor(
-        POLY_OPA_DISP++,
-        tunicColor->r,
-        tunicColor->g,
-        tunicColor->b,
-        0xFF
-    );
-
-    CLOSE_DISPS();
-}
 
 void Player_DrawShield(PlayState* play, Player* player)
 {
@@ -1417,7 +1423,7 @@ static void DrawSlingshotString(PlayState* play, Player* player)
 void Player_PostLimbDrawGameplayWrapper(PlayState* play, s32 limbIndex, Gfx** dList1, Gfx** dList2, Vec3s* rot, Actor* actor)
 {
     Player* player = (Player*)actor;
-    Player_SetTunicEnvColorOpa(play, player);
+
     Player_PostLimbDrawGameplay(play, limbIndex, dList1, dList2, rot, actor);
     if (sPlayerOverrideLimb != Player_OverrideLimbDrawGameplayFirstPerson)
     {
@@ -1429,12 +1435,17 @@ void Player_PostLimbDrawGameplayWrapper(PlayState* play, s32 limbIndex, Gfx** dL
     if (AdultMask_IsPuttingOn())
     {
         s32 timer = AdultMask_GetTimer();
+        s32 isSetMaskEndAnim = player->skelAnime.animation == &gPlayerAnim_cl_setmaskend;
 
-        if (timer >= ADULT_MASK_GI_HAND_START_TIMER &&
-            timer < ADULT_MASK_GI_HAND_END_TIMER)
+        if (timer >= 0 &&
+            timer < 11 &&
+            !isSetMaskEndAnim)
         {
             if (limbIndex == PLAYER_LIMB_LEFT_HAND)
+            {
                 AdultMask_DrawMaskInHand(play, player);
+                Player_RestoreHumanTunicDrawState(play, player);
+            }
         }
 
         if (limbIndex == PLAYER_LIMB_HEAD)
@@ -1444,7 +1455,8 @@ void Player_PostLimbDrawGameplayWrapper(PlayState* play, s32 limbIndex, Gfx** dL
                 AdultMask_DrawTransformationMaskOnFace(play, player);
                 AdultMask_DrawTransformRing(play, player);
             }
-            else if (timer >= ADULT_MASK_GI_FACE_START_TIMER)
+            else if (timer >= 12 &&
+                     !isSetMaskEndAnim)
             {
                 AdultMask_DrawMaskOnFaceNativeLike(play, player);
             }
@@ -1455,15 +1467,20 @@ void Player_PostLimbDrawGameplayWrapper(PlayState* play, s32 limbIndex, Gfx** dL
         if (limbIndex == PLAYER_LIMB_HEAD)
             AdultMask_DrawTransformRing(play, player);
     }
-    else if (AdultMask_IsTakeOffLowerHand())
+    else if (AdultMask_IsTakeOffChild())
     {
         s32 timer = AdultMask_GetTimer();
+        s32 isSetMaskEndAnim = player->skelAnime.animation == &gPlayerAnim_cl_setmaskend;
 
-        if (timer >= ADULT_MASK_TAKE_OFF_LOWER_HAND_START_TIMER &&
-            timer < ADULT_MASK_TAKE_OFF_LOWER_HAND_END_TIMER)
+        if (timer >= 0 &&
+            timer < 0x7FFF &&
+            !isSetMaskEndAnim)
         {
             if (limbIndex == PLAYER_LIMB_LEFT_HAND)
+            {
                 AdultMask_DrawMaskInHand(play, player);
+                Player_RestoreHumanTunicDrawState(play, player);
+            }
         }
     }
 
@@ -1526,23 +1543,6 @@ static int Player_IsCustomSlingshotZTargetAiming(PlayState* play, Player* player
 int Player_OverrideLimbWrapper(PlayState* play, s32 limbIndex, Gfx** dList, Vec3f* pos, Vec3s* rot, void* unk)
 {
     Player* player = GET_PLAYER(play);
-
-    switch (limbIndex)
-    {
-        case PLAYER_LIMB_ROOT:
-        case PLAYER_LIMB_WAIST:
-        case PLAYER_LIMB_LOWER_ROOT:
-        case PLAYER_LIMB_UPPER_ROOT:
-        case PLAYER_LIMB_HEAD:
-        case PLAYER_LIMB_LEFT_SHOULDER:
-        case PLAYER_LIMB_LEFT_FOREARM:
-        case PLAYER_LIMB_LEFT_HAND:
-        case PLAYER_LIMB_RIGHT_SHOULDER:
-        case PLAYER_LIMB_RIGHT_FOREARM:
-        case PLAYER_LIMB_RIGHT_HAND:
-            Player_SetTunicEnvColorOpa(play, player);
-            break;
-    }
     if (Player_IsUsingCustomSlingshot(player) &&
             sPlayerOverrideLimb == Player_OverrideLimbDrawGameplayFirstPerson)
     {
