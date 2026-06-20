@@ -6,7 +6,6 @@ import { DmaData } from '../dma';
 import { arrayToIndexMap } from '../util';
 import { ObjectEditor } from './object-editor';
 import { concatUint8Arrays } from 'uint8array-extras';
-import {raw} from "./raw.ts";
 
 const FILES_TO_INDEX = {
   oot: arrayToIndexMap(FILES.oot),
@@ -378,6 +377,20 @@ export class CustomObjectsBuilder {
     return { name: 'EQ_SLINGSHOT_RIGHT_ARM_STRETCHED', ...editor.build() };
   }
 
+  private async makeEqLinkAdultRightArmOut(): Promise<CustomObject> {
+    const editor = new ObjectEditor(0xa);
+    const obj = await this.getFile('oot', 'objects/object_link_boy');
+
+    editor.loadSegment(0x06, obj);
+    const adultRightArmOut = editor.listData(0x06029918)!;
+    const adultRightHandBowPoseNoBow = editor.listData(0x0602a3d0)!;
+
+    editor.submitList(adultRightArmOut);
+    editor.submitList(adultRightHandBowPoseNoBow);
+
+    return { name: 'EQ_ADULT_RIGHT_ARM_OUT', ...editor.build() };
+  }
+
   private async makeEqBow(): Promise<CustomObject> {
     const editor = new ObjectEditor(0xa);
     const obj = await this.getFile('oot', 'objects/object_link_boy');
@@ -530,6 +543,7 @@ export class CustomObjectsBuilder {
       await this.makeEqHookshot(),
       await this.makeEqSlingshot(),
       await this.makeEqSlingshotRightArmStretched(),
+      await this.makeEqLinkAdultRightArmOut(),
       await this.makeEqBow(),
       await this.makeStrayFairy(),
       await this.makeEffectShock(),
