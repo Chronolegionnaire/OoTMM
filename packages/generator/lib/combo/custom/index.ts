@@ -390,8 +390,16 @@ class CustomAssetsBuilder {
     w32a(0x801c023c, [23, 23]); // playerRightHandInstrumentDLs
     w32a(0x801c0264, [24, 24]); // playerRightHandHookshotDLs
     w32a(0x801c028c, [25, 25]); // playerLeftHandBottleDLs
-    w32a(0x801c02a4, [4, 15, 26, 27, 28]); // First-person DL tables
+    w32(0x801c02a4, d[4]);  // playerFirstPersonLeftForearmDLs[HUMAN]
+    w32(0x801c02b8, d[15]); // playerFirstPersonLeftHandDLs[HUMAN]
+    w32(0x801c02cc, d[26]); // playerFirstPersonRightShoulderDLs[HUMAN]
+    w32(0x801c02e0, d[27]); // playerFirstPersonRightHandDLs[HUMAN]
+    w32(0x801c02f4, d[28]); // playerFirstPersonRightHandHookshotDLs[HUMAN]
     w32(0x801c0d94, d[29]); // Extra bow hand DL pointer
+    w32(0x801c0d7c, 0x457a0000); // meleeWeaponLengths[1] = 4000.0f
+    w32(0x801c0d80, 0x457a0000); // meleeWeaponLengths[2] = 4000.0f
+    w32(0x801c0d84, 0x45abe000); // meleeWeaponLengths[3] = 5500.0f
+    w32(0x801c0d88, 0x45abe000); // meleeWeaponLengths[4] = 5500.0f
     copy32(0x801dca68, 0x801dca60); // playerHeightJtbl[HUMAN] = playerHeightJtbl[ZORA]
 
     const data = new Uint8Array((writes.length + 1) * 0x0c);
