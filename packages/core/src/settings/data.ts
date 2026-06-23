@@ -1,5 +1,5 @@
 import type { Game } from '../defines';
-
+import { MM_AGE_REQ_ITEMS } from '../mm-age-requirements';
 function hasGame(x: any, g: Game) {
   return x.games === g || x.games === 'ootmm';
 }
@@ -19,6 +19,27 @@ const SETTING_PRICE = {
   category: 'main.prices',
   default: 'vanilla',
 } as const;
+
+const MM_AGE_REQ_SETTINGS = MM_AGE_REQ_ITEMS.flatMap(item => [
+  {
+    key: item.childSetting,
+    name: `${item.label} requires Child Link`,
+    category: 'items.mmAgeRequirements',
+    type: 'boolean',
+    description: `Requires Child Link to equip ${item.label} in MM.`,
+    default: item.defaultSide === 'child',
+    cond: hasMM,
+  },
+  {
+    key: item.adultSetting,
+    name: `${item.label} requires Adult Link`,
+    category: 'items.mmAgeRequirements',
+    type: 'boolean',
+    description: `Requires Adult Link to equip ${item.label} in MM.`,
+    default: item.defaultSide === 'adult',
+    cond: hasMM,
+  },
+] as const);
 
 export const SETTINGS = [{
   key: 'games',
@@ -3229,7 +3250,9 @@ export const SETTINGS = [{
   description: 'Allows Link to use the Song of Soaring in OoT independently of his age',
   default: false,
   cond: (s: any) => s.songSoaringOot,
-}, {
+},
+  ...MM_AGE_REQ_SETTINGS,
+{
   key: 'erSelfLoops',
   name: 'Allow Self-Loops',
   category: 'entrances',
