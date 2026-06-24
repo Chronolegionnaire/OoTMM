@@ -133,7 +133,7 @@ function AgeRequirementTable({
             <div className="min-h-0 overflow-y-auto flex flex-col gap-1">
                 {items.length === 0 && (
                     <div className="flex items-center justify-center h-full">
-                        <span className="text-gray-500 text-3xl">No Age Requirements</span>
+                        <span className="text-gray-500 text-2xl">No Age Requirements</span>
                     </div>
                 )}
 

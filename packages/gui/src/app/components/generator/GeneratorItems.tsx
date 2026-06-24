@@ -5,7 +5,7 @@ import { useStore } from '@/app/store';
 import { TabView } from '../nav';
 import { StartingItems } from '../StartingItems';
 import { SettingsEditor } from '../settings';
-import {MmAgeRequirements} from "@/app/components/mmAgeRequirments.tsx";
+import {MmAgeRequirements} from "@/app/components/mmAgeRequirements.tsx";
 
 const PageProgressive = () => <SettingsEditor category='items.progressive'/>;
 const PageShared = () => <SettingsEditor category='items.shared'/>;
@@ -21,7 +21,7 @@ export function GeneratorItems() {
     { name: 'Shared', icon: LuUsers, component: PageShared, disabled: games !== 'ootmm' },
     { name: 'Extensions', icon: LuPuzzle, component: PageExtensions },
     { name: 'Ageless', icon: LuClock, component: PageAgeless, disabled: games === 'mm' },
-    { name: 'MM Age Requirements', icon: LuClock, component: PageMmAgeRequirements, disabled: games === 'oot' },
+    { name: 'MM Age Req.', icon: LuClock, component: PageMmAgeRequirements, disabled: games === 'oot' },
     { name: 'Starting Items', icon: LuPackage, component: StartingItems }
   ];
 
