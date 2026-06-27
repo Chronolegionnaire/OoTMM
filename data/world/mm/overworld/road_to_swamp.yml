@@ -9,9 +9,9 @@
     BOMBS_OR_BOMBCHU: "true"
     ARROWS: "true"
     FISH: "true"
-    MUSHROOM: "has(MASK_SCENTS)"
+    MUSHROOM: "has_mask_scents"
     WATER: "true"
-    PICTURE_TINGLE: "soul_npc(SOUL_NPC_TINGLE) && has(PICTOGRAPH_BOX)"
+    PICTURE_TINGLE: "soul_npc(SOUL_NPC_TINGLE) && can_use_pictograph_box"
     FAIRY: "can_get_gossip_fairy"
   exits:
     "GLOBAL": "true"
@@ -61,8 +61,8 @@
     "GLOBAL": "true"
     "Road to Southern Swamp": "rusty_key(RUSTY_KEY_SWAMP_ARCHERY)"
   locations:
-    "Swamp Archery Reward 1": "soul_bazaar_shopkeeper && has_bow && can_use_wallet(1) && (before(NIGHT1_PM_10_00) || between(DAY2_AM_06_00, NIGHT2_PM_10_00) || between(DAY3_AM_06_00, NIGHT3_PM_10_00))"
-    "Swamp Archery Reward 2": "soul_bazaar_shopkeeper && has_bow && can_use_wallet(1) && (before(NIGHT1_PM_10_00) || between(DAY2_AM_06_00, NIGHT2_PM_10_00) || between(DAY3_AM_06_00, NIGHT3_PM_10_00))"
+    "Swamp Archery Reward 1": "soul_bazaar_shopkeeper && has_bow_raw && can_use_wallet(1) && (before(NIGHT1_PM_10_00) || between(DAY2_AM_06_00, NIGHT2_PM_10_00) || between(DAY3_AM_06_00, NIGHT3_PM_10_00))"
+    "Swamp Archery Reward 2": "soul_bazaar_shopkeeper && has_bow_raw && can_use_wallet(1) && (before(NIGHT1_PM_10_00) || between(DAY2_AM_06_00, NIGHT2_PM_10_00) || between(DAY3_AM_06_00, NIGHT3_PM_10_00))"
 
 "Road to Southern Swamp Grotto":
   region: ENTRANCE
@@ -74,7 +74,7 @@
     BOMBS_OR_BOMBCHU: "true"
     ARROWS: "true"
     FISH: "true"
-    MUSHROOM: "has(MASK_SCENTS)"
+    MUSHROOM: "has_mask_scents"
   exits:
     "GLOBAL": "true"
     "Road to Southern Swamp": "true"

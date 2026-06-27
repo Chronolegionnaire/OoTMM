@@ -123,7 +123,7 @@ function AgeRequirementTable({
             <h2 className="text-xl font-semibold">{title}</h2>
 
             <Select
-                searcheable
+                searchable
                 placeholder="Add item"
                 options={options}
                 value={null}

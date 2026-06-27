@@ -4,7 +4,7 @@
 "is_day": "oot_time(day) || can_play_sun || can_play_double_time"
 "is_night": "oot_time(night) || can_play_sun || can_play_double_time"
 "is_dusk": "oot_time(dusk) || can_play_sun || can_play_double_time"
-"time_travel_at_will": "!setting(ageChange, none) && event(TIME_TRAVEL_AT_WILL)"
+"time_travel_at_will": "(!setting(ageChange, none) && event(TIME_TRAVEL_AT_WILL)) || has_mask_adult"
 
 # Spells
 "can_use_din": "can_use_din_raw"
