@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { FaXmark } from 'react-icons/fa6';
 import { MM_AGE_REQ_ITEMS } from '@ootmm/core';
 
@@ -6,6 +6,7 @@ import { Select, Button, Card } from './ui';
 import { useStore } from '../store';
 
 type AgeSide = 'child' | 'adult';
+type Settings = ReturnType<typeof useStore.getState>['settings'];
 type AgeReqItem = typeof MM_AGE_REQ_ITEMS[number];
 
 function itemSetting(item: AgeReqItem, side: AgeSide) {
@@ -16,24 +17,62 @@ function oppositeSetting(item: AgeReqItem, side: AgeSide) {
     return side === 'child' ? item.adultSetting : item.childSetting;
 }
 
+const MM_AGE_REQ_ITEM_POOL_SETTINGS: Partial<Record<AgeReqItem['id'], keyof Settings>> = {
+    hookshotShort: 'shortHookshotMm',
+    ocarinaFairy: 'fairyOcarinaMm',
+
+    hammer: 'hammerMm',
+    boomerang: 'boomerangMm',
+    slingshot: 'slingshotMm',
+
+    spellFire: 'spellFireMm',
+    spellWind: 'spellWindMm',
+    spellLove: 'spellLoveMm',
+
+    bootsIron: 'bootsIronMm',
+    bootsHover: 'bootsHoverMm',
+
+    tunicGoron: 'tunicGoronMm',
+    tunicZora: 'tunicZoraMm',
+
+    maskGerudo: 'gerudoMaskMm',
+    maskSkull: 'skullMaskMm',
+    maskSpooky: 'spookyMaskMm',
+    maskAdult: 'adultMaskMm',
+};
+
+function isMmAgeReqItemInPool(settings: Settings, item: AgeReqItem) {
+    const poolSetting = MM_AGE_REQ_ITEM_POOL_SETTINGS[item.id];
+
+    if (!poolSetting) {
+        return true;
+    }
+
+    return Boolean(settings[poolSetting]);
+}
+
 export function MmAgeRequirements() {
     const settings = useStore(state => state.settings);
     const patchSettings = useStore(state => state.patchSettings);
 
-    const childItems = useMemo(() => {
-        return MM_AGE_REQ_ITEMS.filter(item => Boolean((settings as any)[item.childSetting]));
+    const poolItems = useMemo(() => {
+        return MM_AGE_REQ_ITEMS.filter(item => isMmAgeReqItemInPool(settings, item));
     }, [settings]);
 
+    const childItems = useMemo(() => {
+        return poolItems.filter(item => Boolean((settings as any)[item.childSetting]));
+    }, [poolItems, settings]);
+
     const adultItems = useMemo(() => {
-        return MM_AGE_REQ_ITEMS.filter(item => Boolean((settings as any)[item.adultSetting]));
-    }, [settings]);
+        return poolItems.filter(item => Boolean((settings as any)[item.adultSetting]));
+    }, [poolItems, settings]);
 
     const usedItems = useMemo(() => {
         return new Set([...childItems, ...adultItems].map(item => item.id));
     }, [childItems, adultItems]);
 
     const itemOptions = useMemo(() => {
-        return MM_AGE_REQ_ITEMS
+        return poolItems
             .filter(item => !usedItems.has(item.id))
             .slice()
             .sort((a, b) => a.label.localeCompare(b.label))
@@ -41,14 +80,37 @@ export function MmAgeRequirements() {
                 value: item.id,
                 label: item.label,
             }));
-    }, [usedItems]);
+    }, [poolItems, usedItems]);
+
+    useEffect(() => {
+        const patch: Record<string, boolean> = {};
+
+        for (const item of MM_AGE_REQ_ITEMS) {
+            if (isMmAgeReqItemInPool(settings, item)) {
+                continue;
+            }
+
+            if (Boolean((settings as any)[item.childSetting])) {
+                patch[item.childSetting] = false;
+            }
+
+            if (Boolean((settings as any)[item.adultSetting])) {
+                patch[item.adultSetting] = false;
+            }
+        }
+
+        if (Object.keys(patch).length > 0) {
+            patchSettings(patch as any);
+        }
+    }, [settings, patchSettings]);
 
     const addItem = useCallback((side: AgeSide, itemId: string | null) => {
         if (!itemId) {
             return;
         }
 
-        const item = MM_AGE_REQ_ITEMS.find(x => x.id === itemId);
+        const item = poolItems.find(x => x.id === itemId);
+
         if (!item) {
             return;
         }
@@ -57,7 +119,7 @@ export function MmAgeRequirements() {
             [itemSetting(item, side)]: true,
             [oppositeSetting(item, side)]: false,
         } as any);
-    }, [patchSettings]);
+    }, [patchSettings, poolItems]);
 
     const removeItem = useCallback((side: AgeSide, item: AgeReqItem) => {
         patchSettings({
