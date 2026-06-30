@@ -17,37 +17,7 @@ typedef struct
 }
 AgeModelCommand;
 
-typedef struct
-{
-    u32 addr;
-    u32 size;
-}
-AgeModelChildRange;
-
-static void ComboPlayer_RestoreChildModelTables(void)
-{
-    u8 data[CUSTOM_MM_AGE_MODEL_CHILD_TABLES_SIZE];
-    u8* p;
-    AgeModelChildRange* range;
-
-    LoadFile(data, CUSTOM_MM_AGE_MODEL_CHILD_TABLES_VROM, CUSTOM_MM_AGE_MODEL_CHILD_TABLES_SIZE);
-
-    p = data;
-
-    for (;;)
-    {
-        range = (AgeModelChildRange*)p;
-        p += sizeof(AgeModelChildRange);
-
-        if (range->addr == 0 || range->size == 0)
-            break;
-
-        memcpy((void*)range->addr, p, range->size);
-        p += range->size;
-    }
-}
-
-static void ComboPlayer_ApplyAdultModelCommand(const AgeModelCommand* cmd)
+static void ComboPlayer_ApplyAgeModelCommand(const AgeModelCommand* cmd)
 {
     switch (cmd->op)
     {
@@ -65,6 +35,19 @@ static void ComboPlayer_ApplyAdultModelCommand(const AgeModelCommand* cmd)
     }
 }
 
+static void ComboPlayer_RestoreChildModelTables(void)
+{
+    AgeModelCommand cmds[CUSTOM_MM_AGE_MODEL_CHILD_TABLES_SIZE / sizeof(AgeModelCommand)];
+    AgeModelCommand* cmd;
+
+    LoadFile(cmds, CUSTOM_MM_AGE_MODEL_CHILD_TABLES_VROM, CUSTOM_MM_AGE_MODEL_CHILD_TABLES_SIZE);
+
+    for (cmd = cmds; cmd->op != AGE_MODEL_CMD_END; ++cmd)
+    {
+        ComboPlayer_ApplyAgeModelCommand(cmd);
+    }
+}
+
 static void ComboPlayer_ApplyAdultModelTables(void)
 {
     AgeModelCommand cmds[CUSTOM_MM_AGE_MODEL_TABLES_SIZE / sizeof(AgeModelCommand)];
@@ -74,7 +57,7 @@ static void ComboPlayer_ApplyAdultModelTables(void)
 
     for (cmd = cmds; cmd->op != AGE_MODEL_CMD_END; ++cmd)
     {
-        ComboPlayer_ApplyAdultModelCommand(cmd);
+        ComboPlayer_ApplyAgeModelCommand(cmd);
     }
 }
 

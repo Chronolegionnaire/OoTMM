@@ -356,6 +356,8 @@ static void AdultMask_CommitAgeApplyTablesAndReloadPlayer(Player* player, PlaySt
     player->actor.draw = NULL;
     AdultMask_StopTransformLoopSfx();
     AdultMask_RestoreEnvVisualState(play);
+    player->skelAnime.animation = NULL;
+    player->actor.draw = NULL;
     AdultMask_CommitAge(player);
     ComboPlayer_ApplyAgeModelTables();
     AdultMask_ApplyTargetHumanAgeProperties();
@@ -382,20 +384,22 @@ static void AdultMask_PlayerPostReloadUpdateWrapper(Actor* thisx, PlayState* pla
     Player* player = (Player*)thisx;
 
     AdultMask_ApplyRuntimeAgePropertiesNow(player, play);
-    PlayerCall_Update(thisx, play);
-    AdultMask_ApplyRuntimeAgePropertiesNow(player, play);
 
-    if (sAdultMaskPostReloadFixFrames > 0)
+    if (sAdultMaskPostReloadFixFrames > 0) {
         sAdultMaskPostReloadFixFrames--;
-
-    if (sAdultMaskPostReloadFixFrames == 0) {
-        player->actor.update = PlayerCall_Update;
-        player->actor.draw = PlayerCall_Draw;
-        if (sAdultMaskCutsceneMode == ADULT_MASK_CS_TAKE_OFF_TRANSFORM || sAdultMaskCutsceneMode == ADULT_MASK_CS_PUT_ON)
-            AdultMask_StartEndingAnim(player, play);
-        else
-            AdultMask_ClearState();
+        return;
     }
+
+    player->actor.update = PlayerCall_Update;
+
+    if (sAdultMaskCutsceneMode == ADULT_MASK_CS_TAKE_OFF_TRANSFORM ||
+        sAdultMaskCutsceneMode == ADULT_MASK_CS_PUT_ON) {
+        AdultMask_StartEndingAnim(player, play);
+        } else {
+            Player_ReturnToDefaultAction(player, play);
+            AdultMask_ClearState();
+        }
+    player->actor.draw = PlayerCall_Draw;
 }
 
 static void AdultMask_PlayerReloadUpdateWrapper(Actor* thisx, PlayState* play)
@@ -403,10 +407,15 @@ static void AdultMask_PlayerReloadUpdateWrapper(Actor* thisx, PlayState* play)
     Player* player = (Player*)thisx;
 
     func_8012301C(thisx, play);
+
     if (player->actor.update != AdultMask_PlayerReloadUpdateWrapper) {
-        sAdultMaskPostReloadFixFrames = 0;
         player->actor.update = AdultMask_PlayerPostReloadUpdateWrapper;
-        player->actor.draw = PlayerCall_Draw;
+
+        /* Critical: do not draw yet. */
+        player->actor.draw = NULL;
+
+        sAdultMaskPostReloadFixFrames = 2;
+
         AdultMask_ApplyRuntimeAgePropertiesNow(player, play);
     }
 }

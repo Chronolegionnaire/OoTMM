@@ -30,6 +30,12 @@ type AddedCustomObject = {
   defines: number[];
 };
 
+type AgeModelWrite = {
+  op: number;
+  addr: number;
+  value: number;
+};
+
 const FILES_TO_INDEX = {
   oot: arrayToIndexMap(FILES.oot),
   mm: arrayToIndexMap(FILES.mm),
@@ -48,18 +54,18 @@ const ENTRIES: CustomEntry[] = [
   { game: 'mm',  name: "GI_REMAINS_GOHT",       file: "objects/object_bsmask",       offsets: [0x06003ad0] },
   { game: 'mm',  name: "GI_REMAINS_GYORG",      file: "objects/object_bsmask",       offsets: [0x06001d80] },
   { game: 'mm',  name: "GI_REMAINS_TWINMOLD",   file: "objects/object_bsmask",       offsets: [0x06005020] },
-  { game: 'mm',  name: "GI_MASK_MAJORA",        file: "objects/object_stk",           offsets: [0x06006bb0] },
-  { game: 'oot', name: "GI_MASTER_SWORD",       file: "objects/object_toki_objects",  offsets: [0x06001bd0] },
-  { game: 'oot', name: "GI_STONE_EMERALD",      file: "objects/object_gi_jewel",      offsets: [0x06001240, 0x060010e0] },
-  { game: 'oot', name: "GI_STONE_RUBY",         file: "objects/object_gi_jewel",      offsets: [0x060020a0, 0x06001fb0] },
-  { game: 'oot', name: "GI_STONE_SAPPHIRE",     file: "objects/object_gi_jewel",      offsets: [0x06003530, 0x06003370] },
-  { game: 'oot', name: "GI_MEDALLION_FOREST",   file: "objects/object_gi_medal",      offsets: [0x06000cb0, 0x06000e18] },
-  { game: 'oot', name: "GI_MEDALLION_FIRE",     file: "objects/object_gi_medal",      offsets: [0x06001af0, 0x06000e18] },
-  { game: 'oot', name: "GI_MEDALLION_WATER",    file: "objects/object_gi_medal",      offsets: [0x06002830, 0x06000e18] },
-  { game: 'oot', name: "GI_MEDALLION_SPIRIT",   file: "objects/object_gi_medal",      offsets: [0x06003610, 0x06000e18] },
-  { game: 'oot', name: "GI_MEDALLION_SHADOW",   file: "objects/object_gi_medal",      offsets: [0x06004330, 0x06000e18] },
-  { game: 'oot', name: "GI_MEDALLION_LIGHT",    file: "objects/object_gi_medal",      offsets: [0x06005220, 0x06000e18] },
-  { game: 'mm',  name: "GI_CLOCK",              file: "objects/object_moguri",        offsets: [0x0600f518, 0x0600cf28, 0x0600bee8, 0x0600c368] },
+  { game: 'mm',  name: "GI_MASK_MAJORA",        file: "objects/object_stk",          offsets: [0x06006bb0] },
+  { game: 'oot', name: "GI_MASTER_SWORD",       file: "objects/object_toki_objects", offsets: [0x06001bd0] },
+  { game: 'oot', name: "GI_STONE_EMERALD",      file: "objects/object_gi_jewel",     offsets: [0x06001240, 0x060010e0] },
+  { game: 'oot', name: "GI_STONE_RUBY",         file: "objects/object_gi_jewel",     offsets: [0x060020a0, 0x06001fb0] },
+  { game: 'oot', name: "GI_STONE_SAPPHIRE",     file: "objects/object_gi_jewel",     offsets: [0x06003530, 0x06003370] },
+  { game: 'oot', name: "GI_MEDALLION_FOREST",   file: "objects/object_gi_medal",     offsets: [0x06000cb0, 0x06000e18] },
+  { game: 'oot', name: "GI_MEDALLION_FIRE",     file: "objects/object_gi_medal",     offsets: [0x06001af0, 0x06000e18] },
+  { game: 'oot', name: "GI_MEDALLION_WATER",    file: "objects/object_gi_medal",     offsets: [0x06002830, 0x06000e18] },
+  { game: 'oot', name: "GI_MEDALLION_SPIRIT",   file: "objects/object_gi_medal",     offsets: [0x06003610, 0x06000e18] },
+  { game: 'oot', name: "GI_MEDALLION_SHADOW",   file: "objects/object_gi_medal",     offsets: [0x06004330, 0x06000e18] },
+  { game: 'oot', name: "GI_MEDALLION_LIGHT",    file: "objects/object_gi_medal",     offsets: [0x06005220, 0x06000e18] },
+  { game: 'mm',  name: "GI_CLOCK",              file: "objects/object_moguri",       offsets: [0x0600f518, 0x0600cf28, 0x0600bee8, 0x0600c368] },
   /*{ game: 'mm',  name: "GI_OWL",                file: "objects/object_tsg",          offsets: [0x3770] },*/
 
   /* Extracted OoT Masks - used for adult masks */
@@ -296,71 +302,32 @@ class CustomAssetsBuilder {
     return this.addCustomObject(name, await raw(filename), defines);
   }
 
-  private extractMmCodeRamRange(ramStart: number, size: number): Uint8Array {
-    const off = 0x00b3c000 + ramStart - 0x800a5ac0;
-    return this.roms.mm.rom.slice(off, off + size);
+  private mmCodeRamToRom(ram: number) {
+    return 0x00b3c000 + ram - 0x800a5ac0;
   }
 
-  private u32pair(a: number, b: number): Uint8Array {
-    const data = new Uint8Array(8);
-    bufWriteU32BE(data, 0, a);
-    bufWriteU32BE(data, 4, b);
-    return data;
+  private extractMmCodeRamU16(ram: number): number {
+    const off = this.mmCodeRamToRom(ram);
+
+    if (off < 0 || off + 2 > this.roms.mm.rom.length) {
+      throw new Error(`MM code RAM u16 read failed: ram=0x${ram.toString(16)}, rom=0x${off.toString(16)}`);
+    }
+
+    return (this.roms.mm.rom[off] << 8) | this.roms.mm.rom[off + 1];
   }
 
-  async addHumanAgeProperties() {
-    const AGE_BASE = 0x8085BA38;
-    const AGE_SIZE = 0xDC;
-    const PLAYER_ACTOR_VRAM = 0x8082DA90;
-    const PLAYER_ACTOR_ROM = 0x00CA7F00;
+  private extractMmCodeRamU32(ram: number): number {
+    const off = this.mmCodeRamToRom(ram);
 
-    const read = (vram: number) => {
-      const rom = PLAYER_ACTOR_ROM + vram - PLAYER_ACTOR_VRAM;
-      const data = this.roms.mm.rom.slice(rom, rom + AGE_SIZE);
+    if (off < 0 || off + 4 > this.roms.mm.rom.length) {
+      throw new Error(`MM code RAM u32 read failed: ram=0x${ram.toString(16)}, rom=0x${off.toString(16)}`);
+    }
 
-      if (rom < 0 || data.length !== AGE_SIZE) {
-        throw new Error(`Player actor ROM read failed: vram=0x${vram.toString(16)}, rom=0x${rom.toString(16)}, size=0x${AGE_SIZE.toString(16)}, got=0x${data.length.toString(16)}`);
-      }
-
-      return data;
-    };
-
-    const childHuman = read(AGE_BASE + AGE_SIZE * 4);
-    const zora = read(AGE_BASE + AGE_SIZE * 2);
-    const fierceDeity = read(AGE_BASE);
-    const adultHuman = new Uint8Array(childHuman);
-
-    adultHuman.set(zora.subarray(0, 0x44), 0);
-    adultHuman.set(fierceDeity.subarray(0x92, 0x94), 0x92);
-    adultHuman.set(childHuman.subarray(0x94, 0x96), 0x94);
-
-    this.cg.define('CUSTOM_MM_CHILD_HUMAN_AGE_PROPERTIES_VROM', this.addRawData('custom/mm_child_human_age_properties', childHuman, false));
-    this.cg.define('CUSTOM_MM_ADULT_HUMAN_AGE_PROPERTIES_VROM', this.addRawData('custom/mm_adult_human_age_properties', adultHuman, false));
+    return bufReadU32BE(this.roms.mm.rom, off);
   }
 
-  async addChildAgeModelTables() {
-    const ranges = [
-      [0x801bfe00, 0x4f8],
-      [0x801c0d78, 0x20],
-      [0x801c2730, 0x10],
-      [0x801dca58, 0x14],
-    ];
-
-    const parts = ranges.flatMap(([addr, size]) => [
-      this.u32pair(addr, size),
-      this.extractMmCodeRamRange(addr, size),
-    ]);
-    parts.push(this.u32pair(0, 0));
-
-    const data = concatUint8Arrays(parts);
-    const vrom = this.addRawData('custom/mm_age_model_child_tables', data, false);
-
-    this.cg.define('CUSTOM_MM_AGE_MODEL_CHILD_TABLES_VROM', vrom);
-    this.cg.define('CUSTOM_MM_AGE_MODEL_CHILD_TABLES_SIZE', data.length);
-  }
-
-  async addAdultAgeModelTables(adultLink: AddedCustomObject) {
-    const writes: { op: number; addr: number; value: number }[] = [];
+  private buildAdultAgeModelWrites(adultLink: AddedCustomObject): AgeModelWrite[] {
+    const writes: AgeModelWrite[] = [];
     const { objectId: id, defines: d } = adultLink;
 
     const w = (op: number, addr: number, value: number) => writes.push({ op, addr, value });
@@ -402,6 +369,10 @@ class CustomAssetsBuilder {
     w32(0x801c0d88, 0x45abe000); // meleeWeaponLengths[4] = 5500.0f
     copy32(0x801dca68, 0x801dca60); // playerHeightJtbl[HUMAN] = playerHeightJtbl[ZORA]
 
+    return writes;
+  }
+
+  private ageModelCommandsToData(writes: AgeModelWrite[]): Uint8Array {
     const data = new Uint8Array((writes.length + 1) * 0x0c);
     [...writes, { op: AGE_MODEL_CMD_END, addr: 0, value: 0 }].forEach(({ op, addr, value }, i) => {
       const off = i * 0x0c;
@@ -410,6 +381,71 @@ class CustomAssetsBuilder {
       bufWriteU32BE(data, off + 0x08, value);
     });
 
+    return data;
+  }
+
+  async addHumanAgeProperties() {
+    const AGE_BASE = 0x8085BA38;
+    const AGE_SIZE = 0xDC;
+    const PLAYER_ACTOR_VRAM = 0x8082DA90;
+    const PLAYER_ACTOR_ROM = 0x00CA7F00;
+
+    const read = (vram: number) => {
+      const rom = PLAYER_ACTOR_ROM + vram - PLAYER_ACTOR_VRAM;
+      const data = this.roms.mm.rom.slice(rom, rom + AGE_SIZE);
+
+      if (rom < 0 || data.length !== AGE_SIZE) {
+        throw new Error(`Player actor ROM read failed: vram=0x${vram.toString(16)}, rom=0x${rom.toString(16)}, size=0x${AGE_SIZE.toString(16)}, got=0x${data.length.toString(16)}`);
+      }
+
+      return data;
+    };
+
+    const childHuman = read(AGE_BASE + AGE_SIZE * 4);
+    const zora = read(AGE_BASE + AGE_SIZE * 2);
+    const fierceDeity = read(AGE_BASE);
+    const adultHuman = new Uint8Array(childHuman);
+
+    adultHuman.set(zora.subarray(0, 0x44), 0);
+    adultHuman.set(fierceDeity.subarray(0x92, 0x94), 0x92);
+    adultHuman.set(childHuman.subarray(0x94, 0x96), 0x94);
+
+    this.cg.define('CUSTOM_MM_CHILD_HUMAN_AGE_PROPERTIES_VROM', this.addRawData('custom/mm_child_human_age_properties', childHuman, false));
+    this.cg.define('CUSTOM_MM_ADULT_HUMAN_AGE_PROPERTIES_VROM', this.addRawData('custom/mm_adult_human_age_properties', adultHuman, false));
+  }
+
+  async addChildAgeModelTables(adultWrites: AgeModelWrite[]) {
+    const originalWrites = adultWrites.map((write): AgeModelWrite => {
+      switch (write.op) {
+        case AGE_MODEL_CMD_WRITE16:
+          return {
+            op: AGE_MODEL_CMD_WRITE16,
+            addr: write.addr,
+            value: this.extractMmCodeRamU16(write.addr),
+          };
+
+        case AGE_MODEL_CMD_WRITE32:
+        case AGE_MODEL_CMD_COPY32:
+          return {
+            op: AGE_MODEL_CMD_WRITE32,
+            addr: write.addr,
+            value: this.extractMmCodeRamU32(write.addr),
+          };
+
+        default:
+          throw new Error(`Unsupported age model write op: ${write.op}`);
+      }
+    });
+
+    const data = this.ageModelCommandsToData(originalWrites);
+    const vrom = this.addRawData('custom/mm_age_model_child_tables', data, false);
+
+    this.cg.define('CUSTOM_MM_AGE_MODEL_CHILD_TABLES_VROM', vrom);
+    this.cg.define('CUSTOM_MM_AGE_MODEL_CHILD_TABLES_SIZE', data.length);
+  }
+
+  async addAdultAgeModelTables(adultWrites: AgeModelWrite[]) {
+    const data = this.ageModelCommandsToData(adultWrites);
     const vrom = this.addRawData('custom/mm_age_model_tables', data, false);
     this.cg.define('CUSTOM_MM_AGE_MODEL_TABLES_VROM', vrom);
     this.cg.define('CUSTOM_MM_AGE_MODEL_TABLES_SIZE', data.length);
@@ -614,8 +650,9 @@ class CustomAssetsBuilder {
       0x0601DC68, 0x0601C068, 0x0601C080, 0x0601C098, 0x06010D50, 0x0600B3F0, 0x0601C0F0, 0x0601C100,
       0x0601C0E0, 0x0600A8E8, 0x060103D8, 0x0601C120, 0x0601C110, 0x0601be60
     ]);
-    await this.addChildAgeModelTables();
-    await this.addAdultAgeModelTables(mmAdultLink);
+    const adultAgeModelWrites = this.buildAdultAgeModelWrites(mmAdultLink);
+    await this.addChildAgeModelTables(adultAgeModelWrites);
+    await this.addAdultAgeModelTables(adultAgeModelWrites);
     await this.addHumanAgeProperties();
     await this.addObjectFile('MM_ADULT_EPONA', 'mm_adult_epona.zobj', []);
     await this.addObjectFile('MM_ADULT_LINK_SPIN_ATTACK_VTX_1', 'mm_adult_link_spin_attack_vtx_1.bin', []);
