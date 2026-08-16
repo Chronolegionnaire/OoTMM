@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 - Add a setting to shuffle the initial stick/nuts capacity as additional upgrades in the item pool.
 - Add a setting to shuffle OoT time flow as a clock item.
 - Added MM Adult Mask
+- Added MM item age requirements
 - Added MM Starting Age Selection
 
 ### Changed

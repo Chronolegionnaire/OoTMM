@@ -598,6 +598,8 @@ MmHumanAgeLoadout;
 
 ASSERT_SIZE(MmHumanAgeLoadout, 0x10);
 
+int KaleidoScope_CheckMmItemAgeReq(u8 item);
+
 typedef struct ALIGNED(16)
 {
     u8 xflags[XFLAGS_COUNT_MM];
