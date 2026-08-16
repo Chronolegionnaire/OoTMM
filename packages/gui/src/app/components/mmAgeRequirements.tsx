@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo } from 'react';
 import { FaXmark } from 'react-icons/fa6';
 import { MM_AGE_REQ_ITEMS, conflictingDependentItems, controllingItemsFor, getMmAgeReqRandomItemIds, isControllingItem, isMmAgeReqItemInPool, isPowderKegSplitAllowed } from '@ootmm/core';
 
-import { Select, Button, Card } from './ui';
+import { Select, Button, Card, Tooltip } from './ui';
 import { useStore } from '../store';
 
 type AgeSide = 'child' | 'adult';
@@ -275,8 +275,31 @@ export function MmAgeRequirements() {
 
     return (
         <main className="h-full flex flex-col">
-            <nav className="flex justify-end gap-2">
-                <Button variant="danger" onClick={removeAll}>Remove All</Button>
+            <nav className="flex justify-end items-center gap-2">
+                <Tooltip>
+                    <div className="space-y-2">
+                        <div>
+                            Mutually Exclusive Items:
+                        </div>
+
+                        <ul className="list-disc pl-5 space-y-1">
+                            <li>Deku Mask | Swamp Title Deed</li>
+                            <li>Goron Mask | Mountain Title Deed</li>
+                            <li>Zora Mask | Ocean Title Deed</li>
+                            <li>Goron Mask / Strength | Powder Keg</li>
+                        </ul>
+
+                        <div className="text-m">
+                            These items must be usable by the same age. Powder Keg
+                            may be assigned to the opposite age when Goron Mask and Strength
+                            are restricted to opposite ages.
+                        </div>
+                    </div>
+                </Tooltip>
+
+                <Button variant="danger" onClick={removeAll}>
+                    Remove All
+                </Button>
             </nav>
 
             <div className="grid grid-cols-3 gap-4 min-h-0 flex-1 mt-4">
