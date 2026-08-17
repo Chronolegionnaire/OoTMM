@@ -32,26 +32,33 @@ function buildItemOptions(
 
     return poolItems
         .filter(item => !usedItems.has(item.id))
-        .filter(item => {
-            if (isControllingItem(item.id)) {
-                return true;
-            }
-            if (
-                item.id === 'powderKeg' &&
-                isPowderKegSplitAllowed(sameSideItemIds, oppositeItemIds)
-            ) {
-                return true;
-            }
-
-            return controllingItemsFor(item.id)
-                .every(controllingId => !oppositeItemIds.has(controllingId));
-        })
         .slice()
         .sort((a, b) => a.label.localeCompare(b.label))
-        .map(item => ({
-            value: item.id,
-            label: item.label,
-        }));
+        .map(item => {
+            let disabled = false;
+
+            if (!isControllingItem(item.id)) {
+                const powderKegSplitAllowed =
+                    item.id === 'powderKeg' &&
+                    isPowderKegSplitAllowed(
+                        sameSideItemIds,
+                        oppositeItemIds,
+                    );
+
+                const hasConflict = controllingItemsFor(item.id)
+                    .some(controllingId =>
+                        oppositeItemIds.has(controllingId)
+                    );
+
+                disabled = hasConflict && !powderKegSplitAllowed;
+            }
+
+            return {
+                value: item.id,
+                label: item.label,
+                disabled,
+            };
+        });
 }
 
 export function MmAgeRequirements() {
@@ -279,6 +286,10 @@ export function MmAgeRequirements() {
                 <Tooltip>
                     <div className="space-y-2">
                         <div>
+                            These settings let you choose which items are restricted to a specific age.
+                        </div>
+
+                        <div>
                             Mutually Exclusive Items:
                         </div>
 
@@ -334,7 +345,11 @@ export function MmAgeRequirements() {
 type AgeRequirementTableProps = {
     title: string;
     items: readonly AgeReqItem[];
-    options: Array<{ value: string; label: string }>;
+    options: Array<{
+        value: string;
+        label: string;
+        disabled?: boolean;
+    }>;
     onSelect: (item: string | null) => void;
     onRemove: (item: AgeReqItem) => void;
 };
