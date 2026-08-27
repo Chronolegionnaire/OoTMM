@@ -9,8 +9,21 @@ void Inventory_ReobtainProgressiveShields(void)
     if (gOotExtraItems.shield & EQ_OOT_SHIELD_HYLIAN)
         gOotSave.info.inventory.equipment.shields |= EQ_OOT_SHIELD_HYLIAN;
 
-    if (gSharedCustomSave.mmProgressiveShields && gMmSave.info.itemEquips.shield == 0)
-        gMmSave.info.itemEquips.shield = 1;
+    if (gSharedCustomSave.mmProgressiveShields & 1)
+    {
+        gSharedCustomSave.mmShieldsOwned |= MM_SHIELD_OWNED_BIT(MM_SHIELD_EXT_DEKU);
+        if (gSharedCustomSave.mmShieldLost == MM_SHIELD_EXT_DEKU)
+            gSharedCustomSave.mmShieldLost = MM_SHIELD_EXT_NONE;
+    }
+
+    if (gSharedCustomSave.mmProgressiveShields & 2)
+    {
+        gSharedCustomSave.mmShieldsOwned |= MM_SHIELD_OWNED_BIT( MM_SHIELD_EXT_HERO);
+        if (gSharedCustomSave.mmShieldLost == MM_SHIELD_EXT_HERO)
+            gSharedCustomSave.mmShieldLost = MM_SHIELD_EXT_NONE;
+    }
+    MmShield_EnsureState();
+    MmShield_RefreshNativeEquip(NULL);
 }
 
 int comboHasFreeBottleOot(void)

@@ -13,6 +13,10 @@
 #include "combo/custom.h"
 #include "combo/mask.h"
 
+#define MM_EQUIPPED_ITEM_OUTLINE ((u8*)0x02001360)
+#define MM_QUEST_SWORD_SLOT       0x05
+#define MM_QUEST_SHIELD_SLOT      0x04
+#define MM_QUEST_SWORD_SLOT       0x05
 
 static u32 comboResolvePauseSlot(PlayState* play, u32 slot)
 {
@@ -23,6 +27,190 @@ static u32 comboResolvePauseSlot(PlayState* play, u32 slot)
 
 static int KaleidoScope_NormalizeMoonMaskSlot(u32 slot);
 static void KaleidoScope_ToggleMaskSlotSkipHidden(u32 slot);
+
+#define MM_EQUIPPED_ITEM_OUTLINE   ((u8*)0x02001360)
+#define MM_QUEST_SWORD_SLOT        0x05
+
+#define MM_PAUSE_QUEST_VTX_OFFSET  0x198
+#define MM_PAUSE_NAMED_ITEM_OFFSET 0x25c
+#define MM_PAUSE_ITEM_NONE         999
+
+static Vtx* KaleidoScope_GetQuestVtx(PlayState* play)
+{
+    return *(Vtx**)((u8*)&play->pauseCtx + MM_PAUSE_QUEST_VTX_OFFSET);
+}
+
+static u16* KaleidoScope_GetNamedItemPtr(PlayState* play)
+{
+    return (u16*)((u8*)&play->pauseCtx + MM_PAUSE_NAMED_ITEM_OFFSET);
+}
+
+static void KaleidoScope_InvalidateNamedItem(PlayState* play)
+{
+    *KaleidoScope_GetNamedItemPtr(play) = MM_PAUSE_ITEM_NONE;
+}
+
+static s32 KaleidoScope_IsSwordSelectorActive(PlayState* play)
+{
+    PauseContext* pauseCtx = &play->pauseCtx;
+
+    if (pauseCtx->state != 6)
+        return 0;
+    if (pauseCtx->mainState != 0)
+        return 0;
+    if (pauseCtx->pageIndex != PAUSE_QUEST)
+        return 0;
+    if (pauseCtx->cursorSlot[PAUSE_QUEST] != MM_QUEST_SWORD_SLOT)
+        return 0;
+
+    MmSword_EnsureState();
+    return MmSword_GetSelected() != MM_SWORD_EXT_NONE;
+}
+
+static s32 KaleidoScope_IsShieldSelectorActive(
+    PlayState* play)
+{
+    PauseContext* pauseCtx = &play->pauseCtx;
+
+    if (pauseCtx->state != 6)
+        return 0;
+
+    if (pauseCtx->mainState != 0)
+        return 0;
+
+    if (pauseCtx->pageIndex != PAUSE_QUEST)
+        return 0;
+
+    if (pauseCtx->cursorSlot[PAUSE_QUEST] !=
+        MM_QUEST_SHIELD_SLOT)
+    {
+        return 0;
+    }
+
+    MmShield_EnsureState();
+
+    return
+        MmShield_GetSelected() !=
+        MM_SHIELD_EXT_NONE;
+}
+
+void KaleidoScope_BeforeUpdateCustomMm(
+    PlayState* play)
+{
+    PauseContext* pauseCtx;
+    u16 press;
+
+    pauseCtx = &play->pauseCtx;
+    press = play->state.input[0].press.button;
+    if (KaleidoScope_IsSwordSelectorActive(play))
+    {
+        MmSwordExt selected;
+        MmSwordExt next;
+
+        pauseCtx->cursorColorIndex = 4;
+
+        if (press & (L_TRIG | U_CBUTTONS))
+        {
+            selected = MmSword_GetSelected();
+            next = MmSword_GetNextOwned(selected);
+
+            if (next != selected)
+            {
+                MmSword_SetSelected(next);
+                KaleidoScope_InvalidateNamedItem(play);
+                PlaySound(0x4809);
+            }
+            else
+            {
+                PlaySound(0x4806);
+            }
+
+            play->state.input[0].press.button &=
+                ~(L_TRIG | U_CBUTTONS);
+
+            return;
+        }
+
+        if (press & A_BUTTON)
+        {
+            selected = MmSword_GetSelected();
+
+            if (selected != MmSword_GetEquipped())
+            {
+                MmSword_Equip(play, selected);
+                KaleidoScope_InvalidateNamedItem(play);
+                PlaySound(0x4809);
+            }
+            else
+            {
+                PlaySound(0x4806);
+            }
+
+            play->state.input[0].press.button &=
+                ~A_BUTTON;
+        }
+
+        return;
+    }
+    if (KaleidoScope_IsShieldSelectorActive(play))
+    {
+        MmShieldExt selected;
+        MmShieldExt next;
+
+        pauseCtx->cursorColorIndex = 4;
+
+        if (press & (L_TRIG | U_CBUTTONS))
+        {
+            selected = MmShield_GetSelected();
+            next = MmShield_GetNextOwned(selected);
+
+            if (next != selected)
+            {
+                MmShield_SetSelected(next);
+                KaleidoScope_InvalidateNamedItem(play);
+                PlaySound(0x4809);
+            }
+            else
+            {
+                PlaySound(0x4806);
+            }
+
+            play->state.input[0].press.button &=
+                ~(L_TRIG | U_CBUTTONS);
+
+            return;
+        }
+
+        if (press & A_BUTTON)
+        {
+            selected = MmShield_GetSelected();
+
+            if (selected != MmShield_GetEquipped())
+            {
+                MmShield_Equip(play, selected);
+                KaleidoScope_InvalidateNamedItem(play);
+                PlaySound(0x4809);
+            }
+            else
+            {
+                PlaySound(0x4806);
+            }
+
+            play->state.input[0].press.button &=
+                ~A_BUTTON;
+        }
+    }
+}
+
+void KaleidoScope_AfterUpdateCustomMm(
+    PlayState* play)
+{
+    if (KaleidoScope_IsSwordSelectorActive(play) ||
+        KaleidoScope_IsShieldSelectorActive(play))
+    {
+        play->pauseCtx.cursorColorIndex = 4;
+    }
+}
 
 static u8 KaleidoScope_CustomMaskToItem(s32 customMask)
 {
@@ -147,30 +335,109 @@ popcount(flags) > 1)
     }
 }
 
+enum
+{
+    MM_EQ_ICON_MASTER = 0,
+    MM_EQ_ICON_BIGGORON,
+    MM_EQ_ICON_BIGGORON_BROKEN,
+
+    MM_EQ_ICON_SHIELD_DEKU,
+};
+
+static const u8 sCustomEquipForeignIcons[] = {
+    ITEM_OOT_SWORD_MASTER,
+    ITEM_OOT_SWORD_KNIFE_BIGGORON,
+    ITEM_OOT_SWORD_KNIFE_BROKEN,
+
+    ITEM_OOT_SHIELD_DEKU,
+};
+
 void KaleidoScope_LoadNamedItemCustom(void* segment, u32 texIndex)
 {
     DmaEntry dma;
     u32 isForeign = 0;
+    if (gPlay &&
+            gPlay->pauseCtx.pageIndex == PAUSE_QUEST &&
+            gPlay->pauseCtx.cursorSlot[PAUSE_QUEST] == MM_QUEST_SWORD_SLOT)
+    {
+        MmSwordExt sword;
+        MmSword_EnsureState();
+        sword = MmSword_GetSelected();
+        switch (sword)
+        {
+            case MM_SWORD_EXT_KOKIRI:
+                LoadIcon(0x00A27660, ITEM_MM_SWORD_KOKIRI, segment,0x400);
+                return;
+            case MM_SWORD_EXT_RAZOR:
+                LoadIcon(0x00A27660,ITEM_MM_SWORD_RAZOR,segment,0x400);
+                return;
+            case MM_SWORD_EXT_GILDED:
+                LoadIcon(0x00A27660,ITEM_MM_SWORD_GILDED,segment,0x400);
+                return;
+            case MM_SWORD_EXT_MASTER:
+                texIndex = 0x7b + ITEM_OOT_SWORD_MASTER;
+                isForeign = 1;
+                break;
+            case MM_SWORD_EXT_GIANTS_KNIFE:
+                if (MmSword_GetGiantsKnifeHealth() == 0)
+                    texIndex = 0x7b + ITEM_OOT_SWORD_KNIFE_BROKEN;
+                else
+                    texIndex = 0x7b + ITEM_OOT_SWORD_KNIFE_BIGGORON;
+                isForeign = 1;
+                break;
+            case MM_SWORD_EXT_BIGGORON:
+                texIndex = 0x7b + ITEM_OOT_SWORD_KNIFE_BIGGORON;
+                isForeign = 1;
+                break;
+            default:
+                break;
+        }
+        if (gPlay && gPlay->pauseCtx.pageIndex == PAUSE_QUEST && gPlay->pauseCtx.cursorSlot[PAUSE_QUEST] == MM_QUEST_SHIELD_SLOT)
+        {
+            MmShieldExt shield;
+            MmShield_EnsureState();
+            shield = MmShield_GetSelected();
+            switch (shield)
+            {
+                case MM_SHIELD_EXT_DEKU:
+                    texIndex = 0x7b + ITEM_OOT_SHIELD_DEKU;
+                    isForeign = 1;
+                    break;
+                case MM_SHIELD_EXT_HERO:
+                    LoadIcon(0x00A27660, ITEM_MM_SHIELD_HERO, segment,0x400);
+                    return;
+                case MM_SHIELD_EXT_MIRROR:
+                    LoadIcon(0x00A27660, ITEM_MM_SHIELD_MIRROR, segment,0x400);
+                    return;
+                default:
+                    break;
+            }
+
+            if (isForeign)
+            {
+                comboDmaLookupForeignId(&dma, 0xf);
+                DMARomToRam((dma.pstart + 0x400 * texIndex) | PI_DOM1_ADDR2, segment,0x400);
+                return;
+            }
+        }
+        if (isForeign)
+        {
+            comboDmaLookupForeignId(&dma, 0xf);
+            DMARomToRam((dma.pstart + 0x400 * texIndex) | PI_DOM1_ADDR2,segment,0x400);
+            return;
+        }
+    }
     switch (texIndex)
     {
-    case ITEM_MM_MASK_ADULT:
+        case ITEM_MM_MASK_ADULT:
         {
-        void* src = comboCacheGetFile(CUSTOM_ADULT_MASK_TEXT_ADDR);
-
-        if (src)
-            memcpy(segment, src, 0x400);
-        else
-            bzero(segment, 0x400);
-
-        return;
+            void* src = comboCacheGetFile(CUSTOM_ADULT_MASK_TEXT_ADDR);
+            if (src)
+                memcpy(segment, src, 0x400);
+            else
+                bzero(segment, 0x400);
+            return;
         }
-    case ITEM_MM_SHIELD_HERO:
-        if (gSharedCustomSave.mmShieldIsDeku)
-        {
-            isForeign = 1;
-            texIndex = 0x7b + ITEM_OOT_SHIELD_DEKU;
-        }
-        break;
     case ITEM_MM_OCARINA_FAIRY:
         isForeign = 1;
         texIndex = 0x7b + ITEM_OOT_OCARINA_FAIRY;
@@ -250,28 +517,124 @@ void KaleidoScope_LoadNamedItemCustom(void* segment, u32 texIndex)
 
 }
 
-void KaleidoScope_ShowEquipMessage(PlayState* play, u16 messageId, u8 yPosition)
+static Vtx sQuestShieldSmallVtx[8];
+static Vtx sQuestShieldPrimaryOutlineVtx[8];
+static Vtx sQuestShieldSmallOutlineVtx[8];
+
+static MmShieldExt MmShield_GetQuestSecondary(void)
 {
-    char* b;
-    Message_ShowMessageAtYPosition(play, messageId, yPosition);
-    s16 itemId = messageId - 0x1737;
-    switch (itemId)
-    {
-    case ITEM_MM_SHIELD_HERO:
-        if (!gSharedCustomSave.mmShieldIsDeku)
-            break;
-        b = play->msgCtx.font.textBuffer.schar;
-        b[2] = 0xFE; /* Use No Icon */
-        b += 11;
-        comboTextAppendStr(&b, TEXT_COLOR_YELLOW "Deku Shield" TEXT_NL);
-        comboTextAppendClearColor(&b);
-        comboTextAppendStr(&b, "A basic shield." TEXT_NL "Vulnerable to fire." TEXT_END);
-        break;
-    }
+    MmShieldExt selected;
+    selected = MmShield_GetSelected();
+    return MmShield_GetNextOwned(selected);
+}
+static Vtx* KaleidoScope_GetQuestShieldSmallVtx(
+    PlayState* play)
+{
+    Vtx* questVtx;
+    const Vtx* src;
+    s32 frame;
+    Vtx* dst;
+    questVtx = KaleidoScope_GetQuestVtx(play);
+    if (!questVtx)
+        return NULL;
+    src = questVtx + MM_QUEST_SHIELD_SLOT * 4;
+    frame = play->state.gfxCtx-> displayListCounter & 1;
+    dst = &sQuestShieldSmallVtx[frame * 4];
+    for (s32 i = 0; i < 4; i++)
+        dst[i] = src[i];
+    dst[0].v.ob[0] += 16;
+    dst[2].v.ob[0] += 16;
+    dst[0].v.ob[1] -= 16;
+    dst[1].v.ob[1] -= 16;
+    return dst;
 }
 
-PATCH_CALL(0x808184e4, KaleidoScope_ShowEquipMessage);
-PATCH_CALL(0x80818528, KaleidoScope_ShowEquipMessage);
+static Vtx*
+KaleidoScope_GetQuestShieldPrimaryOutlineVtx(PlayState* play)
+{
+    Vtx* questVtx;
+    const Vtx* src;
+    s32 frame;
+    Vtx* dst;
+    questVtx = KaleidoScope_GetQuestVtx(play);
+    if (!questVtx)
+        return NULL;
+    src = questVtx + MM_QUEST_SHIELD_SLOT * 4;
+    frame = play->state.gfxCtx-> displayListCounter & 1;
+    dst = &sQuestShieldPrimaryOutlineVtx[frame * 4];
+    for (s32 i = 0; i < 4; i++)
+        dst[i] = src[i];
+    dst[0].v.ob[0] -= 2;
+    dst[2].v.ob[0] -= 2;
+    dst[1].v.ob[0] += 2;
+    dst[3].v.ob[0] += 2;
+    dst[0].v.ob[1] += 2;
+    dst[1].v.ob[1] += 2;
+    dst[2].v.ob[1] -= 2;
+    dst[3].v.ob[1] -= 2;
+    return dst;
+}
+
+static Vtx*
+KaleidoScope_GetQuestShieldSmallOutlineVtx(
+    PlayState* play,
+    const Vtx* smallVtx)
+{
+    s32 frame;
+    Vtx* dst;
+    if (!smallVtx)
+        return NULL;
+    frame = play->state.gfxCtx-> displayListCounter & 1;
+    dst = &sQuestShieldSmallOutlineVtx[frame * 4];
+    for (s32 i = 0; i < 4; i++)
+        dst[i] = smallVtx[i];
+    dst[0].v.ob[0] -= 1;
+    dst[2].v.ob[0] -= 1;
+    dst[1].v.ob[0] += 1;
+    dst[3].v.ob[0] += 1;
+    dst[0].v.ob[1] += 1;
+    dst[1].v.ob[1] += 1;
+    dst[2].v.ob[1] -= 1;
+    dst[3].v.ob[1] -= 1;
+    return dst;
+}
+
+static void KaleidoScope_LoadQuestShieldPrimaryVtx(GraphicsContext* gfxCtx)
+{
+    PlayState* play;
+    Vtx* questVtx;
+    play = gfxCtx->play;
+    questVtx = KaleidoScope_GetQuestVtx(play);
+    if (!questVtx)
+        return;
+    OPEN_DISPS(gfxCtx);
+    gSPVertex(POLY_OPA_DISP++, questVtx + MM_QUEST_SHIELD_SLOT * 4, 4, 0);
+    CLOSE_DISPS();
+}
+
+static s32 KaleidoScope_IsQuestShieldDraw(GraphicsContext* gfxCtx, u32 texture, u16 width, u16 height)
+{
+    PauseContext* pauseCtx;
+    u32* gItemIcons;
+    u8 nativeShield;
+    u32 expectedTexture;
+    pauseCtx = &gfxCtx->play->pauseCtx;
+    if (pauseCtx->pageIndex != PAUSE_QUEST)
+        return 0;
+    if (width != 32 || height != 32)
+        return 0;
+    nativeShield =
+        gMmSave.info.itemEquips.shield;
+    if (nativeShield < 1 || nativeShield > 2)
+    {
+        return 0;
+    }
+    gItemIcons = (u32*)0x801c1e6c;
+    expectedTexture = gItemIcons[ITEM_MM_SHIELD_HERO + nativeShield - 1];
+    return texture == expectedTexture;
+}
+
+
 
 void KaleidoScope_ShowItemMessage(PlayState* play, u16 messageId, u8 yPosition)
 {
@@ -518,6 +881,7 @@ PATCH_CALL(0x80822a00, KaleidoScope_DrawDungeonUnk2);
 PATCH_CALL(0x80822f68, KaleidoScope_DrawDungeonUnk2);
 
 u32 gCustomIconAddr;
+static u32 gCustomEquipIconAddr;
 
 static u32 sCustomIcons[] = {
     ITEM_MM_SPELL_WIND,
@@ -639,11 +1003,33 @@ void KaleidoScope_LoadIcons(u32 vrom, void* dst, size_t* size)
 
         *size += customIconSize;
     }
-
-    /* Replace the Hero's Shield texture with Deku Shield */
-    if (gSharedCustomSave.mmShieldIsDeku)
+    gCustomEquipIconAddr = (u32)dst + *size;
+    for (u32 i = 0; i < ARRAY_COUNT(sCustomEquipForeignIcons); i++)
     {
-        DMARomToRam((textureFileAddress + customIconSize * ITEM_OOT_SHIELD_DEKU) | PI_DOM1_ADDR2, (char*)dst + customIconSize * ITEM_MM_SHIELD_HERO, customIconSize);
+        u32 foreignIcon = sCustomEquipForeignIcons[i];
+        u32 textureOffset = customIconSize * foreignIcon;
+        u32 customDestination = gCustomEquipIconAddr + i * customIconSize;
+        DMARomToRam((textureFileAddress + textureOffset) | PI_DOM1_ADDR2, (void*)customDestination, customIconSize);
+        *size += customIconSize;
+    }
+}
+
+static u32 MmShield_GetPauseTexture(MmShieldExt shield)
+{
+    u32* gItemIcons = (u32*)0x801c1e6c;
+    switch (shield)
+    {
+        case MM_SHIELD_EXT_DEKU:
+            return
+                gCustomEquipIconAddr + MM_EQ_ICON_SHIELD_DEKU * customIconSize;
+        case MM_SHIELD_EXT_HERO:
+            return
+                gItemIcons[ITEM_MM_SHIELD_HERO];
+        case MM_SHIELD_EXT_MIRROR:
+            return
+                gItemIcons[ITEM_MM_SHIELD_MIRROR];
+        default:
+            return 0;
     }
 }
 
@@ -651,14 +1037,69 @@ static u32 GetItemTexture(u8 item)
 {
     u32* gItemIcons = (u32*)0x801c1e6c;
     if (item < ITEM_MM_CUSTOM_MIN)
-    {
         return gItemIcons[item];
-    }
-    else
+    return gCustomIconAddr + (customIconSize * (item - ITEM_MM_CUSTOM_MIN));
+}
+
+static u32 MmSword_GetPauseTexture(MmSwordExt sword)
+{
+    u32* gItemIcons = (u32*)0x801c1e6c;
+    switch (sword)
     {
-        u8 customItem = item - ITEM_MM_CUSTOM_MIN;
-        return gCustomIconAddr + (customIconSize * customItem);
+    case MM_SWORD_EXT_KOKIRI:
+        return gItemIcons[ITEM_MM_SWORD_KOKIRI];
+    case MM_SWORD_EXT_RAZOR:
+        return gItemIcons[ITEM_MM_SWORD_RAZOR];
+    case MM_SWORD_EXT_GILDED:
+        return gItemIcons[ITEM_MM_SWORD_GILDED];
+    case MM_SWORD_EXT_MASTER:
+        return gCustomEquipIconAddr + MM_EQ_ICON_MASTER * customIconSize;
+    case MM_SWORD_EXT_GIANTS_KNIFE:
+        if (MmSword_GetGiantsKnifeHealth() == 0)
+            return gCustomEquipIconAddr + MM_EQ_ICON_BIGGORON_BROKEN * customIconSize;
+        return gCustomEquipIconAddr + MM_EQ_ICON_BIGGORON * customIconSize;
+    case MM_SWORD_EXT_BIGGORON:
+        return gCustomEquipIconAddr + MM_EQ_ICON_BIGGORON * customIconSize;
+    default:
+        return 0;
     }
+}
+
+static u8 MmSword_GetForeignHudIcon(void)
+{
+    MmSword_EnsureState();
+    switch (MmSword_GetEquipped())
+    {
+    case MM_SWORD_EXT_MASTER:
+        return ITEM_OOT_SWORD_MASTER;
+    case MM_SWORD_EXT_GIANTS_KNIFE:
+        if (MmSword_GetGiantsKnifeHealth() == 0)
+            return ITEM_OOT_SWORD_KNIFE_BROKEN;
+        return ITEM_OOT_SWORD_KNIFE_BIGGORON;
+    case MM_SWORD_EXT_BIGGORON:
+        return ITEM_OOT_SWORD_KNIFE_BIGGORON;
+    default:
+        return ITEM_NONE;
+    }
+}
+
+void MmSword_LoadHudIcon(PlayState* play)
+{
+    DmaEntry dma;
+    u8 foreignIcon;
+    u32 textureOffset;
+    if (!play)
+        return;
+    if (gSaveContext.save.playerForm != MM_PLAYER_FORM_HUMAN)
+        return;
+    foreignIcon = MmSword_GetForeignHudIcon();
+    if (foreignIcon == ITEM_NONE)
+        return;
+    comboDmaLookupForeignId(&dma, 8);
+    textureOffset = customIconSize * foreignIcon;
+    DMARomToRam((dma.pstart + textureOffset) | PI_DOM1_ADDR2,
+                play->interfaceCtx.iconItemSegment,
+                customIconSize);
 }
 
 static u8 GetNextItem(u32 slot, s32* outTableIndex)
@@ -673,6 +1114,14 @@ static u8 GetNextItem(u32 slot, s32* outTableIndex)
         return comboGetNextTrade(*itemPtr, flags, table, tableSize);
     }
     return ITEM_NONE;
+}
+
+static void KaleidoScope_DrawTexQuadRGBA32Raw(GraphicsContext* gfxCtx, u32 texture, u16 width, u16 height, u16 point)
+{
+    OPEN_DISPS(gfxCtx);
+    gDPLoadTextureBlock(POLY_OPA_DISP++, texture, G_IM_FMT_RGBA, G_IM_SIZ_32b, width, height, 0, G_TX_NOMIRROR | G_TX_WRAP, G_TX_NOMIRROR | G_TX_WRAP, G_TX_NOMASK, G_TX_NOMASK, G_TX_NOLOD, G_TX_NOLOD);
+    gSP1Quadrangle(POLY_OPA_DISP++, point, point + 2, point + 3, point + 1, 0);
+    CLOSE_DISPS();
 }
 
 /* Vertex buffers. */
@@ -731,15 +1180,10 @@ static void DrawIcon(GraphicsContext* gfxCtx, const Vtx* vtx, u32 segAddr, u16 w
     CLOSE_DISPS();
 }
 
-typedef void (*KaleidoScope_DrawIcon)(GraphicsContext* gfxCtx, u32 texture, u16 width, u16 height, u16 point);
-
 void KaleidoScope_DrawIconCustom(GraphicsContext* gfxCtx, u8 item, u16 width, u16 height, u32 slot, u16 point, u16 vertIdx)
 {
     u32 texture = GetItemTexture(item);
-
-    KaleidoScope_DrawIcon KaleidoScope_DrawIcon = OverlayAddr(0x80821ad4);
-    KaleidoScope_DrawIcon(gfxCtx, texture, width, height, point);
-
+    KaleidoScope_DrawTexQuadRGBA32Raw(gfxCtx, texture, width, height, point);
     s32 tableIndex;
     u8 next = GetNextItem(slot, &tableIndex);
     if (next != ITEM_NONE && next != item)
@@ -748,6 +1192,244 @@ void KaleidoScope_DrawIconCustom(GraphicsContext* gfxCtx, u8 item, u16 width, u1
         Vtx* vtx = GetVtxBuffer(gfxCtx->play, vertIdx, tableIndex);
         DrawIcon(gfxCtx, vtx, texture, width, height, point);
     }
+}
+
+static Vtx sQuestSwordSmallVtx[8];
+static Vtx sQuestSwordPrimaryOutlineVtx[8];
+static Vtx sQuestSwordSmallOutlineVtx[8];
+
+static MmSwordExt MmSword_GetQuestSecondary(void)
+{
+    MmSwordExt selected;
+    selected = MmSword_GetSelected();
+    return MmSword_GetNextOwned(selected);
+}
+
+static Vtx* KaleidoScope_GetQuestSwordSmallVtx(PlayState* play)
+{
+    Vtx* questVtx;
+    const Vtx* src;
+    s32 frame;
+    Vtx* dst;
+    questVtx = KaleidoScope_GetQuestVtx(play);
+    if (!questVtx)
+        return NULL;
+    src = questVtx + MM_QUEST_SWORD_SLOT * 4;
+    frame = play->state.gfxCtx->displayListCounter & 1;
+    dst = &sQuestSwordSmallVtx[frame * 4];
+    for (s32 i = 0; i < 4; i++)
+        dst[i] = src[i];
+    dst[0].v.ob[0] += 16;
+    dst[2].v.ob[0] += 16;
+    dst[0].v.ob[1] -= 16;
+    dst[1].v.ob[1] -= 16;
+    return dst;
+}
+
+static Vtx* KaleidoScope_GetQuestSwordPrimaryOutlineVtx(PlayState* play)
+{
+    Vtx* questVtx;
+    const Vtx* src;
+    s32 frame;
+    Vtx* dst;
+    questVtx = KaleidoScope_GetQuestVtx(play);
+    if (!questVtx)
+        return NULL;
+    src = questVtx + MM_QUEST_SWORD_SLOT * 4;
+    frame = play->state.gfxCtx->displayListCounter & 1;
+    dst = &sQuestSwordPrimaryOutlineVtx[frame * 4];
+    for (s32 i = 0; i < 4; i++)
+        dst[i] = src[i];
+    dst[0].v.ob[0] -= 2;
+    dst[2].v.ob[0] -= 2;
+    dst[1].v.ob[0] += 2;
+    dst[3].v.ob[0] += 2;
+    dst[0].v.ob[1] += 2;
+    dst[1].v.ob[1] += 2;
+    dst[2].v.ob[1] -= 2;
+    dst[3].v.ob[1] -= 2;
+    return dst;
+}
+
+static Vtx* KaleidoScope_GetQuestSwordSmallOutlineVtx(PlayState* play, const Vtx* smallVtx)
+{
+    s32 frame;
+    Vtx* dst;
+    if (!smallVtx)
+        return NULL;
+    frame = play->state.gfxCtx->displayListCounter & 1;
+    dst = &sQuestSwordSmallOutlineVtx[frame * 4];
+    for (s32 i = 0; i < 4; i++)
+        dst[i] = smallVtx[i];
+    dst[0].v.ob[0] -= 1;
+    dst[2].v.ob[0] -= 1;
+    dst[1].v.ob[0] += 1;
+    dst[3].v.ob[0] += 1;
+    dst[0].v.ob[1] += 1;
+    dst[1].v.ob[1] += 1;
+    dst[2].v.ob[1] -= 1;
+    dst[3].v.ob[1] -= 1;
+
+    return dst;
+}
+
+static void KaleidoScope_LoadQuestSwordPrimaryVtx(GraphicsContext* gfxCtx)
+{
+    PlayState* play;
+    Vtx* questVtx;
+    play = gfxCtx->play;
+    questVtx = KaleidoScope_GetQuestVtx(play);
+    if (!questVtx)
+        return;
+    OPEN_DISPS(gfxCtx);
+    gSPVertex(POLY_OPA_DISP++, questVtx + MM_QUEST_SWORD_SLOT * 4, 4, 0);
+    CLOSE_DISPS();
+}
+
+static void KaleidoScope_LoadQuestSwordVtx(GraphicsContext* gfxCtx, Vtx* vtx)
+{
+    if (!vtx)
+        return;
+    OPEN_DISPS(gfxCtx);
+    gSPVertex(POLY_OPA_DISP++, vtx, 4, 0);
+    CLOSE_DISPS();
+}
+
+static void KaleidoScope_DrawEquippedOutline(GraphicsContext* gfxCtx, Vtx* vtx)
+{
+    PauseContext* pauseCtx;
+    if (!vtx)
+        return;
+    pauseCtx = &gfxCtx->play->pauseCtx;
+    OPEN_DISPS(gfxCtx);
+    gDPPipeSync(POLY_OPA_DISP++);
+    gDPSetCombineMode(POLY_OPA_DISP++, G_CC_MODULATEIA_PRIM, G_CC_MODULATEIA_PRIM);
+    gDPSetPrimColor(POLY_OPA_DISP++, 0, 0, 255, 255, 255, pauseCtx->itemAlpha);
+    gSPVertex(POLY_OPA_DISP++, vtx, 4, 0);
+    gDPLoadTextureBlock(POLY_OPA_DISP++, MM_EQUIPPED_ITEM_OUTLINE, G_IM_FMT_IA, G_IM_SIZ_8b, 32, 32, 0, G_TX_NOMIRROR | G_TX_WRAP, G_TX_NOMIRROR | G_TX_WRAP, G_TX_NOMASK, G_TX_NOMASK, G_TX_NOLOD, G_TX_NOLOD);
+    gSP1Quadrangle(POLY_OPA_DISP++, 0, 2, 3, 1, 0);
+    CLOSE_DISPS();
+}
+
+static s32 KaleidoScope_IsQuestSwordDraw(GraphicsContext* gfxCtx, u32 texture, u16 width, u16 height)
+{
+    PauseContext* pauseCtx = &gfxCtx->play->pauseCtx;
+    u32* gItemIcons;
+    u8 nativeSword;
+    u32 expectedTexture;
+    if (pauseCtx->pageIndex != PAUSE_QUEST)
+        return 0;
+    if (width != 32 || height != 32)
+        return 0;
+    nativeSword = gMmSave.info.itemEquips.sword;
+    if (nativeSword < 1 || nativeSword > 3)
+        return 0;
+    gItemIcons = (u32*)0x801c1e6c;
+    expectedTexture = gItemIcons[(ITEM_MM_SWORD_KOKIRI - 1) + nativeSword];
+    return texture == expectedTexture;
+}
+
+static void KaleidoScope_DrawQuestShieldCustom(GraphicsContext* gfxCtx, u32 originalTexture, u16 width, u16 height, u16 point)
+{
+    PlayState* play;
+    MmShieldExt selected;
+    MmShieldExt equipped;
+    MmShieldExt secondary;
+    u32 selectedTex;
+    u32 secondaryTex;
+    Vtx* smallVtx;
+    Vtx* outlineVtx;
+    play = gfxCtx->play;
+    MmShield_EnsureState();
+    selected = MmShield_GetSelected();
+    equipped = MmShield_GetEquipped();
+    selectedTex = MmShield_GetPauseTexture(selected);
+    if (!selectedTex)
+    {
+        KaleidoScope_DrawTexQuadRGBA32Raw(gfxCtx, originalTexture, width, height, point);
+        return;
+    }
+    if (selected == equipped)
+    {
+        outlineVtx = KaleidoScope_GetQuestShieldPrimaryOutlineVtx(play);
+        KaleidoScope_DrawEquippedOutline(gfxCtx, outlineVtx);
+    }
+    KaleidoScope_LoadQuestShieldPrimaryVtx(gfxCtx);
+    KaleidoScope_DrawTexQuadRGBA32Raw(gfxCtx, selectedTex, 32, 32, 0);
+    secondary = MmShield_GetQuestSecondary();
+    if (secondary == MM_SHIELD_EXT_NONE || secondary == selected)
+        return;
+    secondaryTex = MmShield_GetPauseTexture(secondary);
+    if (!secondaryTex)
+        return;
+    smallVtx = KaleidoScope_GetQuestShieldSmallVtx(play);
+    if (!smallVtx)
+        return;
+    if (secondary == equipped)
+    {
+        outlineVtx = KaleidoScope_GetQuestShieldSmallOutlineVtx(play, smallVtx);
+        KaleidoScope_DrawEquippedOutline(gfxCtx, outlineVtx);
+    }
+    KaleidoScope_LoadQuestSwordVtx(gfxCtx, smallVtx);
+    KaleidoScope_DrawTexQuadRGBA32Raw(gfxCtx, secondaryTex, 32, 32, 0);
+}
+
+void KaleidoScope_DrawTexQuadRGBA32Custom(GraphicsContext* gfxCtx, u32 texture, u16 width, u16 height, u16 point)
+{
+    PlayState* play;
+    MmSwordExt selected;
+    MmSwordExt equipped;
+    MmSwordExt secondary;
+    u32 selectedTex;
+    u32 secondaryTex;
+    Vtx* smallVtx;
+    Vtx* outlineVtx;
+    if (KaleidoScope_IsQuestShieldDraw(gfxCtx, texture, width, height))
+    {
+        KaleidoScope_DrawQuestShieldCustom(gfxCtx, texture, width, height, point);
+        return;
+    }
+
+    if (!KaleidoScope_IsQuestSwordDraw(gfxCtx, texture, width, height))
+    {
+        KaleidoScope_DrawTexQuadRGBA32Raw(gfxCtx, texture, width, height, point);
+        return;
+    }
+    play = gfxCtx->play;
+    MmSword_EnsureState();
+    selected = MmSword_GetSelected();
+    equipped = MmSword_GetEquipped();
+    selectedTex = MmSword_GetPauseTexture(selected);
+    if (!selectedTex)
+    {
+        KaleidoScope_DrawTexQuadRGBA32Raw(gfxCtx, texture, width, height, point);
+        return;
+    }
+    if (selected == equipped)
+    {
+        outlineVtx = KaleidoScope_GetQuestSwordPrimaryOutlineVtx(play);
+        KaleidoScope_DrawEquippedOutline(gfxCtx, outlineVtx);
+    }
+    KaleidoScope_LoadQuestSwordPrimaryVtx(gfxCtx);
+    KaleidoScope_DrawTexQuadRGBA32Raw(gfxCtx, selectedTex, 32, 32, 0);
+    secondary = MmSword_GetQuestSecondary();
+    if (secondary == MM_SWORD_EXT_NONE || secondary == selected)
+    {
+        return;
+    }
+    secondaryTex = MmSword_GetPauseTexture(secondary);
+    if (!secondaryTex)
+        return;
+    smallVtx = KaleidoScope_GetQuestSwordSmallVtx(play);
+    if (!smallVtx)
+        return;
+    if (secondary == equipped)
+    {
+        outlineVtx = KaleidoScope_GetQuestSwordSmallOutlineVtx(play, smallVtx);
+        KaleidoScope_DrawEquippedOutline(gfxCtx, outlineVtx);
+    }
+    KaleidoScope_LoadQuestSwordVtx(gfxCtx, smallVtx);
+    KaleidoScope_DrawTexQuadRGBA32Raw(gfxCtx, secondaryTex, 32, 32, 0);
 }
 
 #define MOON_MASK_BIT(i, f) ((u16)(((i) << 8) | (f)))
@@ -885,16 +1567,14 @@ void KaleidoScope_DrawMaskIconCustom(GraphicsContext* gfxCtx, u8 item, u16 width
     s32 tableIndex;
     u8 primary;
     u8 next;
-    KaleidoScope_DrawIcon KaleidoScope_DrawIcon;
 
     maskSlot = vertIdx >> 2;
     slot = maskSlot + ITEM_NUM_SLOTS;
 
-    KaleidoScope_DrawIcon = OverlayAddr(0x80821ad4);
     if (!KaleidoScope_IsMoonGivenParam0Mask(slot, item))
     {
         texture = GetItemTexture(item);
-        KaleidoScope_DrawIcon(gfxCtx, texture, width, height, point);
+        KaleidoScope_DrawTexQuadRGBA32Raw(gfxCtx, texture, width, height, point);
 
         next = GetNextVisibleMaskOverlayItem(slot, item, &tableIndex);
         if (next != ITEM_NONE && next != item && tableIndex >= 0)
@@ -909,7 +1589,7 @@ void KaleidoScope_DrawMaskIconCustom(GraphicsContext* gfxCtx, u8 item, u16 width
     if (primary == ITEM_NONE)
         return;
     texture = GetItemTexture(primary);
-    KaleidoScope_DrawIcon(gfxCtx, texture, width, height, point);
+    KaleidoScope_DrawTexQuadRGBA32Raw(gfxCtx, texture, width, height, point);
     next = GetNextVisibleMaskOverlayItem(slot, primary, &tableIndex);
     if (next != ITEM_NONE && next != primary && tableIndex >= 0)
     {

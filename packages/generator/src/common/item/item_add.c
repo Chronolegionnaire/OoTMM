@@ -7,6 +7,8 @@
 #include <combo/config.h>
 #include <combo/global.h>
 
+#include "combo/inventory.h"
+
 #if defined(GAME_OOT)
 # define addRupeesRaw  addRupeesRawOot
 #else
@@ -1123,29 +1125,294 @@ static int addItemSwordOot(PlayState* play, u8 itemId, s16 gi, u16 param)
     return 0;
 }
 
-static int addItemSwordMm(PlayState* play, u8 itemId, s16 gi, u16 param)
+s32 MmSword_IsOwned(MmSwordExt sword)
 {
-    int shouldChangeBtn;
+    if (sword <= MM_SWORD_EXT_NONE || sword >= MM_SWORD_EXT_MAX)
+        return 0;
+    return !!(gSharedCustomSave.mmSwordsOwned &
+              MM_SWORD_OWNED_BIT(sword));
+}
 
-    shouldChangeBtn = 1;
-#if defined(GAME_MM)
-    if (gSave.playerForm == MM_PLAYER_FORM_FIERCE_DEITY)
-        shouldChangeBtn = 0;
-#endif
+void MmSword_EnsureState(void)
+{
+    MmSwordExt first = MM_SWORD_EXT_NONE;
+    u8 nativeSword = gMmSave.info.itemEquips.sword;
+    if (gSharedCustomSave.mmSwordsOwned == 0 && nativeSword >= 1 && nativeSword <= 3)
+    {
+        for (u8 sword = 1; sword <= nativeSword; sword++)
+            gSharedCustomSave.mmSwordsOwned |= MM_SWORD_OWNED_BIT(sword);
+        gSharedCustomSave.mmSwordEquipped = nativeSword;
+        gSharedCustomSave.mmSwordSelected = nativeSword;
+    }
 
-    if (shouldChangeBtn)
-        gMmSave.info.itemEquips.buttonItems[0][0] = kMmSwords[param];
-    gMmSave.info.itemEquips.sword = param;
+    for (MmSwordExt sword = MM_SWORD_EXT_KOKIRI;
+         sword < MM_SWORD_EXT_MAX;
+         sword++)
+    {
+        if (MmSword_IsOwned(sword))
+        {
+            first = sword;
+            break;
+        }
+    }
 
-    if (param == 2)
-        gMmSave.info.playerData.swordHealth = 100;
+    if (first == MM_SWORD_EXT_NONE)
+    {
+        gSharedCustomSave.mmSwordSelected = MM_SWORD_EXT_NONE;
+        gSharedCustomSave.mmSwordEquipped = MM_SWORD_EXT_NONE;
+        return;
+    }
+    if (!MmSword_IsOwned((MmSwordExt)gSharedCustomSave.mmSwordEquipped))
+        gSharedCustomSave.mmSwordEquipped = first;
+    if (!MmSword_IsOwned((MmSwordExt)gSharedCustomSave.mmSwordSelected))
+        gSharedCustomSave.mmSwordSelected = gSharedCustomSave.mmSwordEquipped;
+}
 
+MmSwordExt MmSword_GetSelected(void)
+{
+    MmSword_EnsureState();
+    return (MmSwordExt)gSharedCustomSave.mmSwordSelected;
+}
+
+MmSwordExt MmSword_GetEquipped(void)
+{
+    MmSword_EnsureState();
+    return (MmSwordExt)gSharedCustomSave.mmSwordEquipped;
+}
+
+void MmSword_SetSelected(MmSwordExt sword)
+{
+    if (MmSword_IsOwned(sword))
+        gSharedCustomSave.mmSwordSelected = sword;
+}
+
+MmSwordExt MmSword_GetNextOwned(MmSwordExt current)
+{
+    MmSwordExt sword = current;
+    for (s32 i = 0; i < MM_SWORD_EXT_MAX; i++)
+    {
+        sword++;
+        if (sword >= MM_SWORD_EXT_MAX)
+            sword = MM_SWORD_EXT_KOKIRI;
+        if (MmSword_IsOwned(sword))
+            return sword;
+    }
+    return current;
+}
+
+u16 MmSword_GetGiantsKnifeHealth(void)
+{
+    if (Config_Flag(CFG_SHARED_SWORDS))
+        return gOotSave.info.playerData.swordHealth;
+    return gSharedCustomSave.mmGiantsKnifeHealth;
+}
+
+void MmSword_SetGiantsKnifeHealth(u16 health)
+{
+    if (Config_Flag(CFG_SHARED_SWORDS))
+        gOotSave.info.playerData.swordHealth = health;
+    else
+        gSharedCustomSave.mmGiantsKnifeHealth = health;
+}
+
+void MmSword_Equip(PlayState* play, MmSwordExt sword)
+{
+    u8 nativeSword;
+    if (!MmSword_IsOwned(sword))
+        return;
+    gSharedCustomSave.mmSwordEquipped = sword;
+    gSharedCustomSave.mmSwordSelected = sword;
+    nativeSword = (sword <= MM_SWORD_EXT_GILDED) ? sword : MM_SWORD_EXT_GILDED;
+    gMmSave.info.itemEquips.sword = nativeSword;
+    gMmSave.info.itemEquips.buttonItems[0][0] = kMmSwords[nativeSword];
 #if defined(GAME_MM)
     if (play)
+    {
+        UpdateEquipment(play, GET_PLAYER(play));
         Interface_LoadItemIconImpl(play, 0);
+        MmSword_LoadHudIcon(play);
+    }
 #endif
+}
+
+static int addItemSwordMm(PlayState* play, u8 itemId, s16 gi, u16 param)
+{
+    MmSwordExt sword;
+    if (param <= MM_SWORD_EXT_NONE || param >= MM_SWORD_EXT_MAX)
+        return 0;
+    sword = (MmSwordExt)param;
+    MmSword_EnsureState();
+    gSharedCustomSave.mmSwordsOwned |=
+        MM_SWORD_OWNED_BIT(sword);
+    if (sword == MM_SWORD_EXT_GIANTS_KNIFE)
+        MmSword_SetGiantsKnifeHealth(8);
+    if (sword == MM_SWORD_EXT_RAZOR)
+        gMmSave.info.playerData.swordHealth = 100;
+    if (gSharedCustomSave.mmSwordEquipped == MM_SWORD_EXT_NONE)
+        MmSword_Equip(play, sword);
+    else if (!MmSword_IsOwned(
+                 (MmSwordExt)gSharedCustomSave.mmSwordSelected))
+        gSharedCustomSave.mmSwordSelected = gSharedCustomSave.mmSwordEquipped;
 
     return 0;
+}
+
+static MmShieldExt MmShield_FirstOwned(void)
+{
+    for (MmShieldExt shield = MM_SHIELD_EXT_DEKU;
+         shield < MM_SHIELD_EXT_MAX;
+         shield++)
+    {
+        if (MmShield_IsOwned(shield))
+            return shield;
+    }
+    return MM_SHIELD_EXT_NONE;
+}
+
+s32 MmShield_IsOwned(MmShieldExt shield)
+{
+    if (shield <= MM_SHIELD_EXT_NONE || shield >= MM_SHIELD_EXT_MAX)
+        return 0;
+    return !!(gSharedCustomSave.mmShieldsOwned & MM_SHIELD_OWNED_BIT(shield));
+}
+
+void MmShield_EnsureState(void)
+{
+    MmShieldExt first;
+    MmShieldExt nativeShield;
+    u8 nativeValue;
+
+    nativeValue = gMmSave.info.itemEquips.shield;
+    if (gSharedCustomSave.mmShieldsOwned == 0)
+    {
+        if (gSharedCustomSave.mmProgressiveShields & 1)
+            gSharedCustomSave.mmShieldsOwned |= MM_SHIELD_OWNED_BIT(MM_SHIELD_EXT_DEKU);
+        if (gSharedCustomSave.mmProgressiveShields & 2)
+            gSharedCustomSave.mmShieldsOwned |= MM_SHIELD_OWNED_BIT(MM_SHIELD_EXT_HERO);
+        nativeShield = MM_SHIELD_EXT_NONE;
+        switch (nativeValue)
+        {
+        case 1:
+            nativeShield = gSharedCustomSave.mmShieldIsDeku ? MM_SHIELD_EXT_DEKU : MM_SHIELD_EXT_HERO;
+            break;
+        case 2:
+            nativeShield = MM_SHIELD_EXT_MIRROR;
+            break;
+        }
+        if (nativeShield != MM_SHIELD_EXT_NONE)
+        {
+            gSharedCustomSave.mmShieldsOwned |= MM_SHIELD_OWNED_BIT(nativeShield);
+            gSharedCustomSave.mmShieldEquipped = nativeShield;
+            gSharedCustomSave.mmShieldSelected = nativeShield;
+        }
+    }
+    first = MmShield_FirstOwned();
+    if (first == MM_SHIELD_EXT_NONE)
+    {
+        gSharedCustomSave.mmShieldSelected = MM_SHIELD_EXT_NONE;
+        gSharedCustomSave.mmShieldEquipped = MM_SHIELD_EXT_NONE;
+        return;
+    }
+    if (!MmShield_IsOwned((MmShieldExt)gSharedCustomSave.mmShieldEquipped))
+        gSharedCustomSave.mmShieldEquipped = first;
+    if (!MmShield_IsOwned((MmShieldExt)gSharedCustomSave.mmShieldSelected))
+        gSharedCustomSave.mmShieldSelected = gSharedCustomSave.mmShieldEquipped;
+}
+
+MmShieldExt MmShield_GetSelected(void)
+{
+    MmShield_EnsureState();
+    return
+        (MmShieldExt)gSharedCustomSave.mmShieldSelected;
+}
+
+MmShieldExt MmShield_GetEquipped(void)
+{
+    MmShield_EnsureState();
+    return
+        (MmShieldExt)gSharedCustomSave.mmShieldEquipped;
+}
+
+MmShieldExt MmShield_GetLost(void)
+{
+    MmShieldExt shield;
+    shield = (MmShieldExt)gSharedCustomSave.mmShieldLost;
+    if (shield <= MM_SHIELD_EXT_NONE || shield >= MM_SHIELD_EXT_MAX)
+        return MM_SHIELD_EXT_NONE;
+    return shield;
+}
+
+void MmShield_SetSelected(MmShieldExt shield)
+{
+    if (MmShield_IsOwned(shield))
+    {
+        gSharedCustomSave.mmShieldSelected = shield;
+    }
+}
+
+MmShieldExt MmShield_GetNextOwned(MmShieldExt current)
+{
+    MmShieldExt shield;
+    shield = current;
+    for (s32 i = 0; i < MM_SHIELD_EXT_MAX; i++)
+    {
+        shield++;
+        if (shield >= MM_SHIELD_EXT_MAX)
+            shield = MM_SHIELD_EXT_DEKU;
+        if (MmShield_IsOwned(shield))
+            return shield;
+    }
+    return current;
+}
+
+static u8 MmShield_GetNativeEquipValue(
+    MmShieldExt shield)
+{
+    switch (shield)
+    {
+    case MM_SHIELD_EXT_DEKU:
+    case MM_SHIELD_EXT_HERO:
+        return 1;
+    case MM_SHIELD_EXT_MIRROR:
+        return 2;
+    default:
+        return 0;
+    }
+}
+
+void MmShield_RefreshNativeEquip(PlayState* play)
+{
+    MmShieldExt shield;
+    MmShield_EnsureState();
+    shield = (MmShieldExt)gSharedCustomSave.mmShieldEquipped;
+    gMmSave.info.itemEquips.shield = MmShield_GetNativeEquipValue(shield);
+#if defined(GAME_MM)
+    if (play)
+        UpdateEquipment(play, GET_PLAYER(play));
+#endif
+}
+
+void MmShield_Equip(PlayState* play, MmShieldExt shield)
+{
+    if (!MmShield_IsOwned(shield))
+        return;
+    gSharedCustomSave.mmShieldEquipped = shield;
+    gSharedCustomSave.mmShieldSelected = shield;
+    MmShield_RefreshNativeEquip(play);
+}
+
+void MmShield_Lose(PlayState* play, MmShieldExt shield)
+{
+    if (!MmShield_IsOwned(shield))
+        return;
+    gSharedCustomSave.mmShieldsOwned &= ~MM_SHIELD_OWNED_BIT(shield);
+    gSharedCustomSave.mmShieldLost = shield;
+    if (gSharedCustomSave.mmShieldSelected == shield)
+        gSharedCustomSave.mmShieldSelected = MM_SHIELD_EXT_NONE;
+    if (gSharedCustomSave.mmShieldEquipped == shield)
+        gSharedCustomSave.mmShieldEquipped = MM_SHIELD_EXT_NONE;
+    MmShield_EnsureState();
+    MmShield_RefreshNativeEquip(play);
 }
 
 static void addBombBagRawOot(PlayState* play, u8 index)
@@ -1197,28 +1464,31 @@ static int addItemShieldOot(PlayState* play, u8 itemId, s16 gi, u16 param)
 
 static int addItemShieldMm(PlayState* play, u8 itemId, s16 gi, u16 param)
 {
-    u8 shieldVal;
+    MmShieldExt shield;
     u8 shieldType;
     u8 isProgressive;
 
     shieldType = (param & 0xff);
     isProgressive = !!((param >> 8) & 0xff);
-    shieldVal = (shieldType == 3) ? 2 : 1;
 
+    if (shieldType <= MM_SHIELD_EXT_NONE || shieldType >= MM_SHIELD_EXT_MAX)
+        return 0;
+    shield = (MmShieldExt)shieldType;
+    if (!Config_Flag(CFG_MM_DEKU_SHIELD) && shield == MM_SHIELD_EXT_DEKU)
+        return 0;
+    MmShield_EnsureState();
+    gSharedCustomSave.mmShieldsOwned |=
+        MM_SHIELD_OWNED_BIT(shield);
     if (isProgressive)
         gSharedCustomSave.mmProgressiveShields |= (1 << (shieldType - 1));
-    if (!Config_Flag(CFG_MM_DEKU_SHIELD) && shieldType == 1)
-        return 0;
-
-    if (shieldVal > gMmSave.info.itemEquips.shield)
-        gMmSave.info.itemEquips.shield = shieldVal;
-    if (shieldType >= 2)
+    if (gSharedCustomSave.mmShieldLost == shield)
+        gSharedCustomSave.mmShieldLost = MM_SHIELD_EXT_NONE;
+    if (shield >= MM_SHIELD_EXT_HERO)
         gSharedCustomSave.mmShieldIsDeku = 0;
-
-#if defined(GAME_MM)
-    if (play)
-        UpdateEquipment(play, GET_PLAYER(play));
-#endif
+    if (gSharedCustomSave.mmShieldEquipped == MM_SHIELD_EXT_NONE)
+        MmShield_Equip(play, shield);
+    else if (!MmShield_IsOwned((MmShieldExt) gSharedCustomSave.mmShieldSelected))
+        gSharedCustomSave.mmShieldSelected = gSharedCustomSave.mmShieldEquipped;
 
     return 0;
 }

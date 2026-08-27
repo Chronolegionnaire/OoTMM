@@ -4,6 +4,7 @@
 #include <combo/custom.h>
 #include <combo/entrance.h>
 #include <combo/player.h>
+#include <combo/inventory.h>
 #include <combo/mask.h>
 #include <combo/magic.h>
 #include <combo/math.h>
@@ -22,16 +23,25 @@ static void Player_TryBurnDekuShield(Player* this, PlayState* play)
 {
     char* b;
 
-    if (this->transformation == MM_PLAYER_FORM_HUMAN && this->currentShield == 1 && gSharedCustomSave.mmShieldIsDeku)
+    if (this->transformation == MM_PLAYER_FORM_HUMAN &&
+        this->currentShield == 1 && MmShield_GetEquipped() == MM_SHIELD_EXT_DEKU)
     {
-        gMmSave.info.itemEquips.shield = 0;
-        UpdateEquipment(play, this);
+        MmShield_Lose(play, MM_SHIELD_EXT_DEKU);
         PlayerDisplayTextBox(play, 0xf6, NULL);
         b = play->msgCtx.font.textBuffer.schar;
         b += 11;
-        comboTextAppendStr(&b, TEXT_COLOR_BLUE "Your ");
+        comboTextAppendStr(
+            &b,
+            TEXT_COLOR_BLUE "Your "
+        );
         comboTextAppendClearColor(&b);
-        comboTextAppendStr(&b, "shield" TEXT_COLOR_BLUE " is gone!\x1c\x00\x20" TEXT_END);
+        comboTextAppendStr(
+            &b,
+            "shield"
+            TEXT_COLOR_BLUE
+            " is gone!\x1c\x00\x20"
+            TEXT_END
+        );
     }
 }
 
@@ -117,6 +127,33 @@ static void Player_UpdateCustomMaskBehavior(Player* player)
         player->currentMask = effectiveMask;
 }
 
+static void Player_SyncExtendedShieldLoss(
+    Player* player,
+    PlayState* play)
+{
+    MmShieldExt shield;
+
+    if (player->transformation !=
+        MM_PLAYER_FORM_HUMAN)
+    {
+        return;
+    }
+
+    shield = MmShield_GetEquipped();
+
+    if (shield == MM_SHIELD_EXT_NONE)
+        return;
+
+    /*
+     * Vanilla just removed the underlying native shield.
+     * Convert that into removal of the actual logical shield.
+     */
+    if (gMmSave.info.itemEquips.shield == 0)
+    {
+        MmShield_Lose(play, shield);
+    }
+}
+
 static s8 sLoadedMaskObjectAdult = -1;
 
 static void Player_RefreshMaskObjectForAge(Player* player)
@@ -153,6 +190,7 @@ void Player_UpdateWrapper(Player* this, PlayState* play)
     Player_ClearCustomMaskSpoofBeforeUpdate(this);
     Player_RefreshMaskObjectForAge(this);
     Player_Update(this, play);
+    Player_SyncExtendedShieldLoss(this, play);
     Player_UpdateCustomMaskBehavior(this);
     Player_HandleBronzeScale(this, play);
     Dpad_Update(play);
@@ -297,6 +335,18 @@ static u8 sMagicSpellLoopTimer[] = { 70, 10, 10 };
 
 s32 Player_CustomItemToItemAction(Player* this, s32 item, s32 itemAction)
 {
+    if (item == ITEM_MM_SWORD_GILDED &&
+        this->transformation == MM_PLAYER_FORM_HUMAN)
+    {
+        MmSwordExt sword = MmSword_GetEquipped();
+
+        if (sword == MM_SWORD_EXT_GIANTS_KNIFE ||
+            sword == MM_SWORD_EXT_BIGGORON)
+        {
+            return PLAYER_IA_SWORD_TWO_HANDED;
+        }
+    }
+
     s32 customItem = item - ITEM_MM_CUSTOM_MIN;
     if (customItem < 0)
     {
@@ -1321,6 +1371,121 @@ static void* Player_CustomHandEq(u32 handDlist, void* eqData, u32 eqDlist)
     return dlist;
 }
 
+static void* Player_CustomEq(void* eqData, u32 eqDlist)
+{
+    Gfx* dlist;
+    Gfx* d;
+
+    if (!eqData)
+        return (void*)kDListEmpty;
+
+    d = dlist = GRAPH_ALLOC(
+        gPlay->state.gfxCtx,
+        sizeof(Gfx) * 2
+    );
+
+    gSPSegment(d++, 0x0a, eqData);
+    gSPBranchList(d++, eqDlist);
+
+    return dlist;
+}
+
+static void* Player_GetExtendedSwordHand(MmSwordExt sword)
+{
+    void* obj;
+    u32 dlist;
+
+    switch (sword)
+    {
+    case MM_SWORD_EXT_MASTER:
+        obj = comboGetObject(CUSTOM_OBJECT_ID_EQ_MASTER_SWORD);
+        dlist = CUSTOM_OBJECT_EQ_MASTER_SWORD_0;
+        break;
+
+    case MM_SWORD_EXT_GIANTS_KNIFE:
+        if (MmSword_GetGiantsKnifeHealth() != 0)
+        {
+            obj = comboGetObject(CUSTOM_OBJECT_ID_EQ_BIGGORON_SWORD);
+            dlist = CUSTOM_OBJECT_EQ_BIGGORON_SWORD_0;
+        }
+        else
+        {
+            obj = comboGetObject(CUSTOM_OBJECT_ID_EQ_BIGGORON_SWORD_BROKEN);
+            dlist = CUSTOM_OBJECT_EQ_BIGGORON_SWORD_BROKEN_0;
+        }
+        break;
+
+    case MM_SWORD_EXT_BIGGORON:
+        obj = comboGetObject(CUSTOM_OBJECT_ID_EQ_BIGGORON_SWORD);
+        dlist = CUSTOM_OBJECT_EQ_BIGGORON_SWORD_0;
+        break;
+
+    default:
+        return NULL;
+    }
+    if (!obj)
+        return NULL;
+
+    return Player_CustomHandEq(DLIST_LHAND_CLOSED, obj, dlist);
+}
+
+static s32 Player_IsExtendedSword(MmSwordExt sword)
+{
+    switch (sword)
+    {
+    case MM_SWORD_EXT_MASTER:
+    case MM_SWORD_EXT_GIANTS_KNIFE:
+    case MM_SWORD_EXT_BIGGORON:
+        return 1;
+
+    default:
+        return 0;
+    }
+}
+
+static s32 Player_IsSwordInHand(Player* player)
+{
+    return
+        player->leftHandType == PLAYER_MODELTYPE_LH_ONE_HAND_SWORD ||
+        player->leftHandType == PLAYER_MODELTYPE_LH_TWO_HAND_SWORD;
+}
+
+static void* Player_GetExtendedSwordSheath(Player* player)
+{
+    MmSwordExt sword;
+    void* obj;
+    u32 dlist;
+
+    MmSword_EnsureState();
+
+    sword = MmSword_GetEquipped();
+
+    if (!Player_IsExtendedSword(sword))
+        return NULL;
+    if (Player_IsSwordInHand(player))
+    {
+        obj = comboGetObject(
+            CUSTOM_OBJECT_ID_EQ_SHEATH_SWORD_OOT_ADULT_EMPTY
+        );
+
+        dlist =
+            CUSTOM_OBJECT_EQ_SHEATH_SWORD_OOT_ADULT_EMPTY_0;
+    }
+    else
+    {
+        obj = comboGetObject(
+            CUSTOM_OBJECT_ID_EQ_SHEATH_SWORD_OOT_ADULT_FULL
+        );
+
+        dlist =
+            CUSTOM_OBJECT_EQ_SHEATH_SWORD_OOT_ADULT_FULL_0;
+    }
+    if (!obj)
+        return NULL;
+
+    return Player_CustomEq(obj, dlist);
+}
+
 static int (*sPlayerOverrideLimb)(PlayState*, s32, Gfx**, Vec3f*, Vec3s*, void*);
 
 extern void* kLinkHumanShieldsDLs[];
@@ -1328,22 +1493,49 @@ extern void* kLinkHumanShieldsDLs[];
 void Player_DrawShield(PlayState* play, Player* player)
 {
     void* obj;
+    MmShieldExt shield;
 
     if (player->currentShield == 0)
         return;
 
-    OPEN_DISPS(play->state.gfxCtx);
-    if (gSharedCustomSave.mmShieldIsDeku)
+    MmShield_EnsureState();
+    shield = MmShield_GetEquipped();
+
+    if (shield == MM_SHIELD_EXT_DEKU)
     {
-        obj = comboGetObject(CUSTOM_OBJECT_ID_EQ_SHIELD_DEKU);
+        obj = comboGetObject(
+            CUSTOM_OBJECT_ID_EQ_SHIELD_DEKU
+        );
+
         if (!obj)
             return;
-        gSPSegment(POLY_OPA_DISP++, 0x0a, obj);
-        gSPDisplayList(POLY_OPA_DISP++, CUSTOM_OBJECT_EQ_SHIELD_DEKU_1);
+
+        OPEN_DISPS(play->state.gfxCtx);
+
+        gSPSegment(
+            POLY_OPA_DISP++,
+            0x0a,
+            obj
+        );
+
+        gSPDisplayList(
+            POLY_OPA_DISP++,
+            CUSTOM_OBJECT_EQ_SHIELD_DEKU_1
+        );
+
+        CLOSE_DISPS();
+
         return;
     }
+    OPEN_DISPS(play->state.gfxCtx);
 
-    gSPDisplayList(POLY_OPA_DISP++, kLinkHumanShieldsDLs[(player->currentShield - 1) * 2]);
+    gSPDisplayList(
+        POLY_OPA_DISP++,
+        kLinkHumanShieldsDLs[
+            (player->currentShield - 1) * 2
+        ]
+    );
+
     CLOSE_DISPS();
 }
 
@@ -1600,6 +1792,25 @@ int Player_OverrideLimbWrapper(PlayState* play, s32 limbIndex, Gfx** dList, Vec3
     {
         if (limbIndex == PLAYER_LIMB_LEFT_HAND)
         {
+            if (player->leftHandType == PLAYER_MODELTYPE_LH_ONE_HAND_SWORD ||
+                player->leftHandType == PLAYER_MODELTYPE_LH_TWO_HAND_SWORD)
+            {
+                MmSwordExt sword = MmSword_GetEquipped();
+
+                if (sword == MM_SWORD_EXT_MASTER ||
+                    sword == MM_SWORD_EXT_GIANTS_KNIFE ||
+                    sword == MM_SWORD_EXT_BIGGORON)
+                {
+                    void* swordHand = Player_GetExtendedSwordHand(sword);
+
+                    if (swordHand)
+                    {
+                        *dList = swordHand;
+                        return FALSE;
+                    }
+                }
+            }
+
             if (player->itemAction == PLAYER_CUSTOM_IA_BOOMERANG)
             {
                 if (Player_IsCustomBoomerangThrown(player))
@@ -1621,11 +1832,42 @@ int Player_OverrideLimbWrapper(PlayState* play, s32 limbIndex, Gfx** dList, Vec3
             }
         }
 
+        if (limbIndex == PLAYER_LIMB_SHEATH)
+        {
+            MmSwordExt sword;
+
+            MmSword_EnsureState();
+            sword = MmSword_GetEquipped();
+
+            if (Player_IsExtendedSword(sword))
+            {
+                void* sheath =
+                    Player_GetExtendedSwordSheath(player);
+
+                if (sheath)
+                {
+                    *dList = sheath;
+                    return FALSE;
+                }
+            }
+        }
+
         if (limbIndex == PLAYER_LIMB_RIGHT_HAND)
         {
-            if ((player->rightHandType == PLAYER_MODELTYPE_RH_SHIELD) && gSharedCustomSave.mmShieldIsDeku && player->currentShield)
+            if (player->rightHandType ==
+        PLAYER_MODELTYPE_RH_SHIELD &&
+    player->currentShield &&
+    MmShield_GetEquipped() ==
+        MM_SHIELD_EXT_DEKU)
             {
-                *dList = Player_CustomHandEq((u32)kDListEmpty, comboGetObject(CUSTOM_OBJECT_ID_EQ_SHIELD_DEKU), CUSTOM_OBJECT_EQ_SHIELD_DEKU_0);
+                *dList = Player_CustomHandEq(
+                    (u32)kDListEmpty,
+                    comboGetObject(
+                        CUSTOM_OBJECT_ID_EQ_SHIELD_DEKU
+                    ),
+                    CUSTOM_OBJECT_EQ_SHIELD_DEKU_0
+                );
+
                 return FALSE;
             }
             else if (player->rightHandType == PLAYER_MODELTYPE_RH_INSTRUMENT && gMmSave.info.inventory.items[ITS_MM_OCARINA] == ITEM_MM_OCARINA_FAIRY)
@@ -1698,6 +1940,47 @@ static void DrawExtendedMaskSpooky(PlayState* play, Player* link)
 u8 gGerudoTunic;
 EXPORT_SYMBOL(GERUDO_TUNIC, gGerudoTunic);
 
+typedef void* (*MmSetupHiliteFunc)(Vec3f* pos, PlayState* play);
+
+static s32 Player_ExtendedSwordNeedsOotHilite(Player* player)
+{
+    MmSwordExt sword;
+
+    if (player->transformation != MM_PLAYER_FORM_HUMAN)
+        return 0;
+
+    MmSword_EnsureState();
+    sword = MmSword_GetEquipped();
+
+    switch (sword)
+    {
+        case MM_SWORD_EXT_MASTER:
+        case MM_SWORD_EXT_GIANTS_KNIFE:
+        case MM_SWORD_EXT_BIGGORON:
+            return 1;
+
+        default:
+            return 0;
+    }
+}
+
+static void Player_SetupExtendedSwordHilite(PlayState* play, Player* player)
+{
+    /*
+     * MM:
+     * func_800BCBF4(Vec3f* pos, PlayState* play)
+     *
+     * Sets up POLY_OPA LookAt + Hilite using the current camera and
+     * environment directional light.
+     *
+     * This is core code, NOT an overlay address, so don't use OverlayAddr().
+     */
+    MmSetupHiliteFunc setupHilite =
+        (MmSetupHiliteFunc)0x800BCBF4;
+
+    setupHilite(&player->actor.world.pos, play);
+}
+
 void Player_SkelAnime_DrawFlexLod(PlayState* play, void** skeleton, Vec3s* jointTable, s32 dListCount, OverrideLimbDrawOpa overrideLimbDraw, PostLimbDrawFlex postLimbDraw, Player* player, s32 lod)
 {
     OPEN_DISPS(play->state.gfxCtx);
@@ -1726,9 +2009,24 @@ void Player_SkelAnime_DrawFlexLod(PlayState* play, void** skeleton, Vec3s* joint
     if (postLimbDraw == (void*)Player_PostLimbDrawGameplay)
         postLimbDraw = Player_PostLimbDrawGameplayWrapper;
 
-    sPlayerOverrideLimb = overrideLimbDraw;
-    SkelAnime_DrawFlexLod(play, skeleton, jointTable, dListCount, Player_OverrideLimbWrapper, postLimbDraw, &player->actor, lod);
+    if (overrideLimbDraw != Player_OverrideLimbDrawGameplayFirstPerson &&
+        Player_ExtendedSwordNeedsOotHilite(player))
+    {
+        Player_SetupExtendedSwordHilite(play, player);
+    }
 
+    sPlayerOverrideLimb = overrideLimbDraw;
+
+    SkelAnime_DrawFlexLod(
+        play,
+        skeleton,
+        jointTable,
+        dListCount,
+        Player_OverrideLimbWrapper,
+        postLimbDraw,
+        &player->actor,
+        lod
+    );
     if (overrideLimbDraw != Player_OverrideLimbDrawGameplayFirstPerson && gSaveContext.gameMode != GAMEMODE_END_CREDITS)
     {
         switch (GET_PLAYER_CUSTOM_BOOTS(player))
@@ -2523,14 +2821,54 @@ void Player_GetCustomSwordLength(PlayState* play, Player* player) {
 
     if (player->itemAction == PLAYER_CUSTOM_IA_HAMMER) {
         D_801C0994->x = 2500.0f;
-    } else if (player->itemAction == PLAYER_IA_DEKU_STICK) {
-        D_801C0994->x = player->unk_B0C * 5000.0f;
-    } else {
-        D_801C0994->x = sMeleeWeaponLengths[Player_GetMeleeWeaponHeld(player)];
+        return;
     }
+
+    if (player->itemAction == PLAYER_IA_DEKU_STICK) {
+        D_801C0994->x = player->unk_B0C * 5000.0f;
+        return;
+    }
+
+    if (player->transformation == MM_PLAYER_FORM_HUMAN &&
+        player->itemAction >= PLAYER_IA_SWORD_MIN &&
+        player->itemAction <= PLAYER_IA_SWORD_TWO_HANDED)
+    {
+        switch (MmSword_GetEquipped())
+        {
+        case MM_SWORD_EXT_MASTER:
+            /* OoT Master Sword */
+            D_801C0994->x = 4000.0f;
+            return;
+
+        case MM_SWORD_EXT_GIANTS_KNIFE:
+            /* OoT Giant's Knife / Broken Giant's Knife */
+            D_801C0994->x =
+                MmSword_GetGiantsKnifeHealth() != 0 ?
+                    5500.0f : 1500.0f;
+            return;
+
+        case MM_SWORD_EXT_BIGGORON:
+            /* OoT Biggoron Sword */
+            D_801C0994->x = 5500.0f;
+            return;
+
+        default:
+            break;
+        }
+    }
+
+    D_801C0994->x =
+        sMeleeWeaponLengths[Player_GetMeleeWeaponHeld(player)];
 }
 
-static MeleeWeaponDamageInfo megatonHammerDmgInfo = { DMG_GORON_PUNCH, 2, 4, 2, 4 };
+static MeleeWeaponDamageInfo megatonHammerDmgInfo =
+    { DMG_GORON_PUNCH, 2, 4, 2, 4 };
+static MeleeWeaponDamageInfo sMasterSwordDmgInfo =
+    { DMG_SWORD, 4, 8, 2, 4 };
+static MeleeWeaponDamageInfo sBiggoronSwordDmgInfo =
+    { DMG_SWORD, 4, 8, 4, 8 };
+static MeleeWeaponDamageInfo sBrokenGiantsKnifeDmgInfo =
+    { DMG_SWORD, 4, 8, 1, 2 };
 
 void Player_SetMeleeWeaponInfo(Player* this, PlayerMeleeWeaponAnimation meleeWeaponAnim) {
     MeleeWeaponDamageInfo* D_8085D09C = OverlayAddr(0x8085D09C);
@@ -2549,7 +2887,32 @@ void Player_SetMeleeWeaponInfo(Player* this, PlayerMeleeWeaponAnimation meleeWea
     } else if (this->heldItemAction == PLAYER_CUSTOM_IA_HAMMER) {
         dmgInfo = &megatonHammerDmgInfo;
         dmgFlags = dmgInfo->dmgFlags;
+    } else if (this->transformation == MM_PLAYER_FORM_HUMAN &&
+               this->heldItemAction >= PLAYER_IA_SWORD_MIN &&
+               this->heldItemAction <= PLAYER_IA_SWORD_TWO_HANDED) {
+        switch (MmSword_GetEquipped())
+        {
+        case MM_SWORD_EXT_MASTER:
+            dmgInfo = &sMasterSwordDmgInfo;
+            break;
 
+        case MM_SWORD_EXT_GIANTS_KNIFE:
+            dmgInfo =
+                MmSword_GetGiantsKnifeHealth() != 0 ?
+                    &sBiggoronSwordDmgInfo :
+                    &sBrokenGiantsKnifeDmgInfo;
+            break;
+
+        case MM_SWORD_EXT_BIGGORON:
+            dmgInfo = &sBiggoronSwordDmgInfo;
+            break;
+
+        default:
+            dmgInfo = &D_8085D09C[Player_GetMeleeWeaponHeld(this)];
+            break;
+        }
+
+        dmgFlags = dmgInfo->dmgFlags;
     } else {
         dmgInfo = &D_8085D09C[(this->transformation == MM_PLAYER_FORM_GORON) ? PLAYER_MELEEWEAPON_NONE : Player_GetMeleeWeaponHeld(this)];
         dmgFlags = dmgInfo->dmgFlags;
@@ -2565,6 +2928,52 @@ void Player_SetMeleeWeaponInfo(Player* this, PlayerMeleeWeaponAnimation meleeWea
 }
 
 PATCH_FUNC(0x8083375C, Player_SetMeleeWeaponInfo)
+
+s32 Player_HandleSwordDurability(PlayState* play, Player* player)
+{
+    MmSwordExt sword;
+    u16 health;
+
+    /* Preserve OoTMM's current permanent Razor Sword behavior. */
+    if (player->heldItemAction == PLAYER_IA_SWORD_RAZOR)
+        return 1;
+
+    if (player->transformation != MM_PLAYER_FORM_HUMAN)
+        return 0;
+
+    sword = MmSword_GetEquipped();
+
+    if (sword != MM_SWORD_EXT_GIANTS_KNIFE)
+        return 0;
+
+    /* Giant's Knife is routed through MM's native two-handed action. */
+    if (player->heldItemAction != PLAYER_IA_SWORD_TWO_HANDED)
+        return 0;
+
+    health = MmSword_GetGiantsKnifeHealth();
+
+    if (health != 0)
+    {
+        health--;
+        MmSword_SetGiantsKnifeHealth(health);
+
+        if (health == 0)
+        {
+            Player_PlaySfx(player, NA_SE_IT_MAJIN_SWORD_BROKEN);
+
+            /*
+             * B remains the Gilded Sword behavior proxy.  Only the icon
+             * needs to change from the intact Biggoron texture to the
+             * broken Giant's Knife texture.
+             */
+            MmSword_LoadHudIcon(play);
+        }
+    }
+
+    return 1;
+}
+
+PATCH_FUNC(0x8083FFEC, Player_HandleSwordDurability)
 
 static AttackAnimInfo sHammerAttackAnimInfo[] = {
     /* PLAYER_MWA_HAMMER_FORWARD */
@@ -2618,6 +3027,16 @@ void Player_SpecialMeleeWeaponAnim(Player* this, void* a1, PlayerMeleeWeaponAnim
     }
 }
 
+static s32 Player_IsBrokenGiantsKnife(Player* player)
+{
+    if (player->transformation != MM_PLAYER_FORM_HUMAN)
+        return 0;
+
+    return
+        MmSword_GetEquipped() == MM_SWORD_EXT_GIANTS_KNIFE &&
+        MmSword_GetGiantsKnifeHealth() == 0;
+}
+
 s32 Player_CanQuickspin(Player* this) {
     s8 sp3C[4];
     s8* iter;
@@ -2626,7 +3045,10 @@ s32 Player_CanQuickspin(Player* this) {
     s8 temp2;
     s32 i;
 
-    if (this->heldItemAction == PLAYER_IA_DEKU_STICK || this->heldItemAction == PLAYER_CUSTOM_IA_HAMMER) {
+    if (this->heldItemAction == PLAYER_IA_DEKU_STICK ||
+    this->heldItemAction == PLAYER_CUSTOM_IA_HAMMER ||
+    Player_IsBrokenGiantsKnife(this))
+    {
         return 0;
     }
 
@@ -2656,6 +3078,21 @@ s32 Player_CanQuickspin(Player* this) {
 }
 
 PATCH_FUNC(0x808333CC, Player_CanQuickspin)
+
+PlayerMeleeWeapon Player_GetMeleeWeaponHeldForCharge(Player* player)
+{
+    PlayerMeleeWeapon (*Player_GetMeleeWeaponHeld)(Player*) =
+        (void*)0x80124190;
+    if (player->heldItemAction == PLAYER_CUSTOM_IA_HAMMER ||
+        Player_IsBrokenGiantsKnife(player))
+    {
+        return PLAYER_MELEEWEAPON_NONE;
+    }
+
+    return Player_GetMeleeWeaponHeld(player);
+}
+
+PATCH_CALL(0x8083A5C4, Player_GetMeleeWeaponHeldForCharge);
 
 Actor* Player_FindGrottoNearPos(PlayState* play, Vec3f* refPos, f32 distanceXZ, f32 distanceY) {
     Actor* actor = play->actorCtx.actors[ACTORCAT_ITEMACTION].first;

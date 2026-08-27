@@ -135,8 +135,10 @@ export class CustomObjectsBuilder {
 
   private async makeEqSheathSwordOotAdultFull(): Promise<CustomObject> {
     const editor = new ObjectEditor(0xa);
-    const object_link_child = await this.getFile('oot', 'objects/object_link_boy');
-    editor.loadSegment(0x06, object_link_child);
+    const object_link_boy = await this.getFile('oot', 'objects/object_link_boy');
+    const gameplay_keep = await this.getFile('oot', 'objects/gameplay_keep');
+    editor.loadSegment(0x04, gameplay_keep);
+    editor.loadSegment(0x06, object_link_boy);
 
     const b = 0x06023160;
     const list = editor.listData(b)!;
@@ -147,8 +149,10 @@ export class CustomObjectsBuilder {
 
   private async makeEqSheathSwordOotAdultEmpty(): Promise<CustomObject> {
     const editor = new ObjectEditor(0xa);
-    const object_link_child = await this.getFile('oot', 'objects/object_link_boy');
-    editor.loadSegment(0x06, object_link_child);
+    const object_link_boy = await this.getFile('oot', 'objects/object_link_boy');
+    const gameplay_keep = await this.getFile('oot', 'objects/gameplay_keep');
+    editor.loadSegment(0x04, gameplay_keep);
+    editor.loadSegment(0x06, object_link_boy);
 
     const b = 0x060249d8;
     const list = editor.listData(b)!;
@@ -224,6 +228,8 @@ export class CustomObjectsBuilder {
   private async makeEqMasterSword(): Promise<CustomObject> {
     const editor = new ObjectEditor(0xa);
     const object_link_boy = await this.getFile('oot', 'objects/object_link_boy');
+    const gameplay_keep = await this.getFile('oot', 'objects/gameplay_keep');
+    editor.loadSegment(0x04, gameplay_keep);
     editor.loadSegment(0x06, object_link_boy);
 
     let ms = editor.listData(0x06021f78)!;
@@ -236,6 +242,8 @@ export class CustomObjectsBuilder {
   private async makeEqBiggoronSword(): Promise<CustomObject> {
     const editor = new ObjectEditor(0xa);
     const object_link_boy = await this.getFile('oot', 'objects/object_link_boy');
+    const gameplay_keep = await this.getFile('oot', 'objects/gameplay_keep');
+    editor.loadSegment(0x04, gameplay_keep);
     editor.loadSegment(0x06, object_link_boy);
 
     const b = 0x060238c8;
@@ -249,6 +257,8 @@ export class CustomObjectsBuilder {
   private async makeEqBiggoronSwordBroken(): Promise<CustomObject> {
     const editor = new ObjectEditor(0xa);
     const object_link_boy = await this.getFile('oot', 'objects/object_link_boy');
+    const gameplay_keep = await this.getFile('oot', 'objects/gameplay_keep');
+    editor.loadSegment(0x04, gameplay_keep);
     editor.loadSegment(0x06, object_link_boy);
 
     const b = 0x06023d50;
