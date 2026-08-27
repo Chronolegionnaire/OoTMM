@@ -1367,6 +1367,8 @@ void MmShield_RefreshNativeEquip(PlayState* play)
 #endif
 }
 
+
+
 void MmSword_RefreshNativeEquip(PlayState* play)
 {
     MmSwordExt sword;
@@ -1400,8 +1402,7 @@ void MmSword_RefreshNativeEquip(PlayState* play)
     if (play)
     {
         UpdateEquipment(play, GET_PLAYER(play));
-        Interface_LoadItemIconImpl(play, EQUIP_SLOT_B);
-        MmSword_LoadHudIcon(play);
+        MmSword_RefreshHudIcon(play);
     }
 #endif
 }

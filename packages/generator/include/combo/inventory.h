@@ -84,4 +84,5 @@ void MmShield_Equip(PlayState* play, MmShieldExt shield);
 void MmShield_Lose(PlayState* play, MmShieldExt shield);
 void MmShield_RefreshNativeEquip(PlayState* play);
 void MmSword_RefreshNativeEquip(PlayState* play);
+void MmSword_RefreshHudIcon(PlayState* play);
 #endif

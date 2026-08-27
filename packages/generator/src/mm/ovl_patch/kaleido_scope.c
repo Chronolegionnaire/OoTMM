@@ -134,11 +134,8 @@ static void KaleidoScope_BeginQuestEquipProxy(
     if (!play)
         return;
 
-    if (play->pauseCtx.state != 6 ||
-        play->pauseCtx.pageIndex != PAUSE_QUEST)
-    {
+    if (play->pauseCtx.state == 0)
         return;
-    }
 
     MmSword_EnsureState();
     MmShield_EnsureState();
@@ -188,8 +185,7 @@ void KaleidoScope_BeforeUpdateCustomMm(
     pauseCtx = &play->pauseCtx;
     press = play->state.input[0].press.button;
 
-    if (play->pauseCtx.state == 6 &&
-    play->pauseCtx.pageIndex == PAUSE_QUEST)
+    if (play->pauseCtx.state != 0)
     {
         KaleidoScope_BeginQuestEquipProxy(play);
     }
@@ -310,8 +306,7 @@ void KaleidoScope_AfterUpdateCustomMm(
         play->pauseCtx.cursorColorIndex = 4;
     }
     if (sQuestEquipProxyActive &&
-        (play->pauseCtx.state != 6 ||
-         play->pauseCtx.pageIndex != PAUSE_QUEST))
+    play->pauseCtx.state == 0)
     {
         KaleidoScope_EndQuestEquipProxy();
     }
@@ -717,26 +712,22 @@ static void KaleidoScope_LoadQuestShieldPrimaryVtx(GraphicsContext* gfxCtx)
     CLOSE_DISPS();
 }
 
-static s32 KaleidoScope_IsQuestShieldDraw(GraphicsContext* gfxCtx, u32 texture, u16 width, u16 height)
+static s32 KaleidoScope_IsQuestShieldDraw(
+    GraphicsContext* gfxCtx,
+    u32 texture,
+    u16 width,
+    u16 height)
 {
-    PauseContext* pauseCtx;
     u32* gItemIcons;
-    u8 nativeShield;
-    u32 expectedTexture;
-    pauseCtx = &gfxCtx->play->pauseCtx;
-    if (pauseCtx->pageIndex != PAUSE_QUEST)
-        return 0;
+
     if (width != 32 || height != 32)
         return 0;
-    nativeShield =
-        gMmSave.info.itemEquips.shield;
-    if (nativeShield < 1 || nativeShield > 2)
-    {
-        return 0;
-    }
+
     gItemIcons = (u32*)0x801c1e6c;
-    expectedTexture = gItemIcons[ITEM_MM_SHIELD_HERO + nativeShield - 1];
-    return texture == expectedTexture;
+
+    return
+        texture == gItemIcons[ITEM_MM_SHIELD_HERO] ||
+        texture == gItemIcons[ITEM_MM_SHIELD_MIRROR];
 }
 
 
@@ -1018,6 +1009,54 @@ s8 gPlayerFormCustomItemRestrictions[5][ITEM_MM_CUSTOM_USABLE_MAX - ITEM_MM_CUST
 typedef void (*KaleidoScope_GrayOutTextureRGBA32)(u32*, u16);
 
 const size_t customIconSize = 0x1000;
+
+void MmSword_RefreshHudIcon(PlayState* play)
+{
+    MmSwordExt sword;
+
+    if (!play)
+        return;
+
+    if (gSaveContext.save.playerForm != MM_PLAYER_FORM_HUMAN)
+        return;
+
+    MmSword_EnsureState();
+    sword = MmSword_GetEquipped();
+
+    switch (sword)
+    {
+        case MM_SWORD_EXT_NONE:
+            bzero(
+                play->interfaceCtx.iconItemSegment +
+                    EQUIP_SLOT_B * customIconSize,
+                customIconSize);
+            break;
+
+        case MM_SWORD_EXT_KOKIRI:
+        case MM_SWORD_EXT_RAZOR:
+        case MM_SWORD_EXT_GILDED:
+            /*
+             * These actually are native MM swords, so vanilla
+             * loads the correct texture directly.
+             */
+            Interface_LoadItemIconImpl(
+                play,
+                EQUIP_SLOT_B);
+            break;
+
+        case MM_SWORD_EXT_MASTER:
+        case MM_SWORD_EXT_GIANTS_KNIFE:
+        case MM_SWORD_EXT_BIGGORON:
+            /*
+             * Do NOT load the Gilded proxy first.
+             */
+            MmSword_LoadHudIcon(play);
+            break;
+
+        default:
+            break;
+    }
+}
 
 void KaleidoScope_LoadIcons(u32 vrom, void* dst, size_t* size)
 {
@@ -1416,22 +1455,23 @@ static void KaleidoScope_DrawEquippedOutline(GraphicsContext* gfxCtx, Vtx* vtx)
     CLOSE_DISPS();
 }
 
-static s32 KaleidoScope_IsQuestSwordDraw(GraphicsContext* gfxCtx, u32 texture, u16 width, u16 height)
+static s32 KaleidoScope_IsQuestSwordDraw(
+    GraphicsContext* gfxCtx,
+    u32 texture,
+    u16 width,
+    u16 height)
 {
-    PauseContext* pauseCtx = &gfxCtx->play->pauseCtx;
     u32* gItemIcons;
-    u8 nativeSword;
-    u32 expectedTexture;
-    if (pauseCtx->pageIndex != PAUSE_QUEST)
-        return 0;
+
     if (width != 32 || height != 32)
         return 0;
-    nativeSword = gMmSave.info.itemEquips.sword;
-    if (nativeSword < 1 || nativeSword > 3)
-        return 0;
+
     gItemIcons = (u32*)0x801c1e6c;
-    expectedTexture = gItemIcons[(ITEM_MM_SWORD_KOKIRI - 1) + nativeSword];
-    return texture == expectedTexture;
+
+    return
+        texture == gItemIcons[ITEM_MM_SWORD_KOKIRI] ||
+        texture == gItemIcons[ITEM_MM_SWORD_RAZOR] ||
+        texture == gItemIcons[ITEM_MM_SWORD_GILDED];
 }
 
 static void KaleidoScope_DrawQuestShieldCustom(GraphicsContext* gfxCtx, u32 originalTexture, u16 width, u16 height, u16 point)

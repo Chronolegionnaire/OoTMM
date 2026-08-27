@@ -469,8 +469,7 @@ static void AdultMask_PlayerPostReloadUpdateWrapper(Actor* thisx, PlayState* pla
     Player_SetBootData(play, player);
     Player_CheckCustomBoots(play);
     UpdateEquipment(play, player);
-    Interface_LoadItemIconImpl(play, EQUIP_SLOT_B);
-    MmSword_LoadHudIcon(play);
+    MmSword_RefreshHudIcon(play);
     AdultMask_RefreshButtonIcons(play);
 
     player->actor.update = (ActorFunc)Player_UpdateWrapper;
