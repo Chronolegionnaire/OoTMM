@@ -1,6 +1,7 @@
 #include <combo.h>
 #include <combo/item.h>
 #include <combo/config.h>
+#include <combo/inventory.h>
 
 static s16 progressiveRutoLetterOot(void)
 {
@@ -161,10 +162,15 @@ static s16 progressiveHookshotMm(s16 gi)
     return gi;
 }
 
-static s16 progressiveSwordGoron(void)
+static s16 progressiveBiggoronSwordOot(void)
 {
-    if (!(gOotSave.info.inventory.equipment.swords & (EQ_OOT_SWORD_KNIFE | EQ_OOT_SWORD_KNIFE_BROKEN)))
+    if (!(gOotSave.info.inventory.equipment.swords &
+          (EQ_OOT_SWORD_KNIFE |
+           EQ_OOT_SWORD_KNIFE_BROKEN)))
+    {
         return GI_OOT_SWORD_KNIFE;
+    }
+
     return GI_OOT_SWORD_BIGGORON;
 }
 
@@ -174,7 +180,17 @@ static s16 progressiveSwordOot(void)
         return GI_OOT_SWORD_KOKIRI;
     if (!(gOotSave.info.inventory.equipment.swords & EQ_OOT_SWORD_MASTER))
         return GI_OOT_SWORD_MASTER;
-    return progressiveSwordGoron();
+    return progressiveBiggoronSwordOot();
+}
+
+static s16 progressiveBiggoronSwordMm(void)
+{
+    MmSword_EnsureState();
+
+    if (!MmSword_IsOwned(MM_SWORD_EXT_GIANTS_KNIFE))
+        return GI_MM_SWORD_KNIFE;
+
+    return GI_MM_SWORD_BIGGORON;
 }
 
 static s16 progressiveSwordMm(void)
@@ -512,10 +528,15 @@ s16 Item_Progressive(s16 gi, int ovflags)
         if (Config_Flag(CFG_OOT_PROGRESSIVE_SWORDS))
             gi = progressiveSwordOot();
         break;
-    case GI_OOT_SWORD_BIGGORON:
     case GI_OOT_SWORD_KNIFE:
-        if (Config_Flag(CFG_OOT_PROGRESSIVE_SWORDS) || Config_Flag(CFG_OOT_PROGRESSIVE_SWORDS_GORON))
-            gi = progressiveSwordGoron();
+    case GI_OOT_SWORD_BIGGORON:
+        if (Config_Flag(CFG_OOT_PROGRESSIVE_BIGGORON_SWORD))
+            gi = progressiveBiggoronSwordOot();
+        break;
+    case GI_MM_SWORD_KNIFE:
+    case GI_MM_SWORD_BIGGORON:
+        if (Config_Flag(CFG_MM_PROGRESSIVE_BIGGORON_SWORD))
+            gi = progressiveBiggoronSwordMm();
         break;
     case GI_OOT_PROGRESSIVE_SHIELD_DEKU:
     case GI_OOT_PROGRESSIVE_SHIELD_HYLIAN:

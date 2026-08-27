@@ -94,6 +94,91 @@ static s32 KaleidoScope_IsShieldSelectorActive(
         MM_SHIELD_EXT_NONE;
 }
 
+static s32 sQuestEquipProxyActive;
+
+static u8 KaleidoScope_GetSwordNativeProxy(
+    MmSwordExt sword)
+{
+    if (sword == MM_SWORD_EXT_NONE)
+        return 0;
+
+    if (sword <= MM_SWORD_EXT_GILDED)
+        return (u8)sword;
+
+    return MM_SWORD_EXT_GILDED;
+}
+
+static u8 KaleidoScope_GetShieldNativeProxy(
+    MmShieldExt shield)
+{
+    switch (shield)
+    {
+        case MM_SHIELD_EXT_DEKU:
+        case MM_SHIELD_EXT_HERO:
+            return 1;
+
+        case MM_SHIELD_EXT_MIRROR:
+            return 2;
+
+        default:
+            return 0;
+    }
+}
+
+static void KaleidoScope_BeginQuestEquipProxy(
+    PlayState* play)
+{
+    MmSwordExt sword;
+    MmShieldExt shield;
+
+    if (!play)
+        return;
+
+    if (play->pauseCtx.state != 6 ||
+        play->pauseCtx.pageIndex != PAUSE_QUEST)
+    {
+        return;
+    }
+
+    MmSword_EnsureState();
+    MmShield_EnsureState();
+
+    /*
+     * Use SELECTED as vanilla's temporary pause-display
+     * value. This does NOT represent gameplay equipment.
+     */
+    sword = MmSword_GetSelected();
+    shield = MmShield_GetSelected();
+
+    gMmSave.info.itemEquips.sword =
+        KaleidoScope_GetSwordNativeProxy(sword);
+
+    gMmSave.info.itemEquips.shield =
+        KaleidoScope_GetShieldNativeProxy(shield);
+
+    sQuestEquipProxyActive = 1;
+}
+
+static void KaleidoScope_EndQuestEquipProxy(void)
+{
+    MmSwordExt sword;
+    MmShieldExt shield;
+
+    if (!sQuestEquipProxyActive)
+        return;
+
+    sword = MmSword_GetEquipped();
+    shield = MmShield_GetEquipped();
+
+    gMmSave.info.itemEquips.sword =
+        KaleidoScope_GetSwordNativeProxy(sword);
+
+    gMmSave.info.itemEquips.shield =
+        KaleidoScope_GetShieldNativeProxy(shield);
+
+    sQuestEquipProxyActive = 0;
+}
+
 void KaleidoScope_BeforeUpdateCustomMm(
     PlayState* play)
 {
@@ -102,6 +187,16 @@ void KaleidoScope_BeforeUpdateCustomMm(
 
     pauseCtx = &play->pauseCtx;
     press = play->state.input[0].press.button;
+
+    if (play->pauseCtx.state == 6 &&
+    play->pauseCtx.pageIndex == PAUSE_QUEST)
+    {
+        KaleidoScope_BeginQuestEquipProxy(play);
+    }
+    else
+    {
+        KaleidoScope_EndQuestEquipProxy();
+    }
     if (KaleidoScope_IsSwordSelectorActive(play))
     {
         MmSwordExt selected;
@@ -117,6 +212,7 @@ void KaleidoScope_BeforeUpdateCustomMm(
             if (next != selected)
             {
                 MmSword_SetSelected(next);
+                KaleidoScope_BeginQuestEquipProxy(play);
                 KaleidoScope_InvalidateNamedItem(play);
                 PlaySound(0x4809);
             }
@@ -138,6 +234,7 @@ void KaleidoScope_BeforeUpdateCustomMm(
             if (selected != MmSword_GetEquipped())
             {
                 MmSword_Equip(play, selected);
+                KaleidoScope_BeginQuestEquipProxy(play);
                 KaleidoScope_InvalidateNamedItem(play);
                 PlaySound(0x4809);
             }
@@ -167,6 +264,7 @@ void KaleidoScope_BeforeUpdateCustomMm(
             if (next != selected)
             {
                 MmShield_SetSelected(next);
+                KaleidoScope_BeginQuestEquipProxy(play);
                 KaleidoScope_InvalidateNamedItem(play);
                 PlaySound(0x4809);
             }
@@ -188,6 +286,7 @@ void KaleidoScope_BeforeUpdateCustomMm(
             if (selected != MmShield_GetEquipped())
             {
                 MmShield_Equip(play, selected);
+                KaleidoScope_BeginQuestEquipProxy(play);
                 KaleidoScope_InvalidateNamedItem(play);
                 PlaySound(0x4809);
             }
@@ -209,6 +308,12 @@ void KaleidoScope_AfterUpdateCustomMm(
         KaleidoScope_IsShieldSelectorActive(play))
     {
         play->pauseCtx.cursorColorIndex = 4;
+    }
+    if (sQuestEquipProxyActive &&
+        (play->pauseCtx.state != 6 ||
+         play->pauseCtx.pageIndex != PAUSE_QUEST))
+    {
+        KaleidoScope_EndQuestEquipProxy();
     }
 }
 

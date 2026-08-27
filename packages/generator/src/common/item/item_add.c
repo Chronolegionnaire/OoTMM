@@ -1136,14 +1136,6 @@ s32 MmSword_IsOwned(MmSwordExt sword)
 void MmSword_EnsureState(void)
 {
     MmSwordExt first = MM_SWORD_EXT_NONE;
-    u8 nativeSword = gMmSave.info.itemEquips.sword;
-    if (gSharedCustomSave.mmSwordsOwned == 0 && nativeSword >= 1 && nativeSword <= 3)
-    {
-        for (u8 sword = 1; sword <= nativeSword; sword++)
-            gSharedCustomSave.mmSwordsOwned |= MM_SWORD_OWNED_BIT(sword);
-        gSharedCustomSave.mmSwordEquipped = nativeSword;
-        gSharedCustomSave.mmSwordSelected = nativeSword;
-    }
 
     for (MmSwordExt sword = MM_SWORD_EXT_KOKIRI;
          sword < MM_SWORD_EXT_MAX;
@@ -1158,14 +1150,24 @@ void MmSword_EnsureState(void)
 
     if (first == MM_SWORD_EXT_NONE)
     {
-        gSharedCustomSave.mmSwordSelected = MM_SWORD_EXT_NONE;
-        gSharedCustomSave.mmSwordEquipped = MM_SWORD_EXT_NONE;
+        gSharedCustomSave.mmSwordSelected =
+            MM_SWORD_EXT_NONE;
+        gSharedCustomSave.mmSwordEquipped =
+            MM_SWORD_EXT_NONE;
         return;
     }
-    if (!MmSword_IsOwned((MmSwordExt)gSharedCustomSave.mmSwordEquipped))
-        gSharedCustomSave.mmSwordEquipped = first;
-    if (!MmSword_IsOwned((MmSwordExt)gSharedCustomSave.mmSwordSelected))
-        gSharedCustomSave.mmSwordSelected = gSharedCustomSave.mmSwordEquipped;
+    if (!MmSword_IsOwned(
+            (MmSwordExt)gSharedCustomSave.mmSwordSelected))
+    {
+        gSharedCustomSave.mmSwordSelected = first;
+    }
+
+    if (!MmSword_IsOwned(
+            (MmSwordExt)gSharedCustomSave.mmSwordEquipped))
+    {
+        gSharedCustomSave.mmSwordEquipped =
+            MM_SWORD_EXT_NONE;
+    }
 }
 
 MmSwordExt MmSword_GetSelected(void)
@@ -1202,14 +1204,15 @@ MmSwordExt MmSword_GetNextOwned(MmSwordExt current)
 
 u16 MmSword_GetGiantsKnifeHealth(void)
 {
-    if (Config_Flag(CFG_SHARED_SWORDS))
+    if (Config_Flag(CFG_SHARED_BIGGORON_SWORD))
         return gOotSave.info.playerData.swordHealth;
+
     return gSharedCustomSave.mmGiantsKnifeHealth;
 }
 
 void MmSword_SetGiantsKnifeHealth(u16 health)
 {
-    if (Config_Flag(CFG_SHARED_SWORDS))
+    if (Config_Flag(CFG_SHARED_BIGGORON_SWORD))
         gOotSave.info.playerData.swordHealth = health;
     else
         gSharedCustomSave.mmGiantsKnifeHealth = health;
@@ -1217,22 +1220,14 @@ void MmSword_SetGiantsKnifeHealth(u16 health)
 
 void MmSword_Equip(PlayState* play, MmSwordExt sword)
 {
-    u8 nativeSword;
     if (!MmSword_IsOwned(sword))
         return;
     gSharedCustomSave.mmSwordEquipped = sword;
     gSharedCustomSave.mmSwordSelected = sword;
-    nativeSword = (sword <= MM_SWORD_EXT_GILDED) ? sword : MM_SWORD_EXT_GILDED;
-    gMmSave.info.itemEquips.sword = nativeSword;
-    gMmSave.info.itemEquips.buttonItems[0][0] = kMmSwords[nativeSword];
-#if defined(GAME_MM)
-    if (play)
-    {
-        UpdateEquipment(play, GET_PLAYER(play));
-        Interface_LoadItemIconImpl(play, 0);
-        MmSword_LoadHudIcon(play);
-    }
-#endif
+    gSharedCustomSave.mm.humanAgeLoadouts[gMmSave.linkAge].sword =
+        (u8)sword;
+
+    MmSword_RefreshNativeEquip(play);
 }
 
 static int addItemSwordMm(PlayState* play, u8 itemId, s16 gi, u16 param)
@@ -1248,11 +1243,6 @@ static int addItemSwordMm(PlayState* play, u8 itemId, s16 gi, u16 param)
         MmSword_SetGiantsKnifeHealth(8);
     if (sword == MM_SWORD_EXT_RAZOR)
         gMmSave.info.playerData.swordHealth = 100;
-    if (gSharedCustomSave.mmSwordEquipped == MM_SWORD_EXT_NONE)
-        MmSword_Equip(play, sword);
-    else if (!MmSword_IsOwned(
-                 (MmSwordExt)gSharedCustomSave.mmSwordSelected))
-        gSharedCustomSave.mmSwordSelected = gSharedCustomSave.mmSwordEquipped;
 
     return 0;
 }
@@ -1279,44 +1269,29 @@ s32 MmShield_IsOwned(MmShieldExt shield)
 void MmShield_EnsureState(void)
 {
     MmShieldExt first;
-    MmShieldExt nativeShield;
-    u8 nativeValue;
 
-    nativeValue = gMmSave.info.itemEquips.shield;
-    if (gSharedCustomSave.mmShieldsOwned == 0)
-    {
-        if (gSharedCustomSave.mmProgressiveShields & 1)
-            gSharedCustomSave.mmShieldsOwned |= MM_SHIELD_OWNED_BIT(MM_SHIELD_EXT_DEKU);
-        if (gSharedCustomSave.mmProgressiveShields & 2)
-            gSharedCustomSave.mmShieldsOwned |= MM_SHIELD_OWNED_BIT(MM_SHIELD_EXT_HERO);
-        nativeShield = MM_SHIELD_EXT_NONE;
-        switch (nativeValue)
-        {
-        case 1:
-            nativeShield = gSharedCustomSave.mmShieldIsDeku ? MM_SHIELD_EXT_DEKU : MM_SHIELD_EXT_HERO;
-            break;
-        case 2:
-            nativeShield = MM_SHIELD_EXT_MIRROR;
-            break;
-        }
-        if (nativeShield != MM_SHIELD_EXT_NONE)
-        {
-            gSharedCustomSave.mmShieldsOwned |= MM_SHIELD_OWNED_BIT(nativeShield);
-            gSharedCustomSave.mmShieldEquipped = nativeShield;
-            gSharedCustomSave.mmShieldSelected = nativeShield;
-        }
-    }
     first = MmShield_FirstOwned();
+
     if (first == MM_SHIELD_EXT_NONE)
     {
-        gSharedCustomSave.mmShieldSelected = MM_SHIELD_EXT_NONE;
-        gSharedCustomSave.mmShieldEquipped = MM_SHIELD_EXT_NONE;
+        gSharedCustomSave.mmShieldSelected =
+            MM_SHIELD_EXT_NONE;
+        gSharedCustomSave.mmShieldEquipped =
+            MM_SHIELD_EXT_NONE;
         return;
     }
-    if (!MmShield_IsOwned((MmShieldExt)gSharedCustomSave.mmShieldEquipped))
-        gSharedCustomSave.mmShieldEquipped = first;
-    if (!MmShield_IsOwned((MmShieldExt)gSharedCustomSave.mmShieldSelected))
-        gSharedCustomSave.mmShieldSelected = gSharedCustomSave.mmShieldEquipped;
+    if (!MmShield_IsOwned(
+            (MmShieldExt)gSharedCustomSave.mmShieldSelected))
+    {
+        gSharedCustomSave.mmShieldSelected = first;
+    }
+
+    if (!MmShield_IsOwned(
+            (MmShieldExt)gSharedCustomSave.mmShieldEquipped))
+    {
+        gSharedCustomSave.mmShieldEquipped =
+            MM_SHIELD_EXT_NONE;
+    }
 }
 
 MmShieldExt MmShield_GetSelected(void)
@@ -1392,25 +1367,97 @@ void MmShield_RefreshNativeEquip(PlayState* play)
 #endif
 }
 
-void MmShield_Equip(PlayState* play, MmShieldExt shield)
+void MmSword_RefreshNativeEquip(PlayState* play)
+{
+    MmSwordExt sword;
+    u8 nativeSword;
+    MmSword_EnsureState();
+    sword = (MmSwordExt)gSharedCustomSave.mmSwordEquipped;
+    if (sword == MM_SWORD_EXT_NONE)
+    {
+        nativeSword = 0;
+    }
+    else if (sword <= MM_SWORD_EXT_GILDED)
+    {
+        nativeSword = (u8)sword;
+    }
+    else
+    {
+        nativeSword = MM_SWORD_EXT_GILDED;
+    }
+    gMmSave.info.itemEquips.sword = nativeSword;
+    if (nativeSword == 0)
+    {
+        gMmSave.info.itemEquips.buttonItems[0][EQUIP_SLOT_B] =
+            ITEM_NONE;
+    }
+    else
+    {
+        gMmSave.info.itemEquips.buttonItems[0][EQUIP_SLOT_B] =
+            kMmSwords[nativeSword];
+    }
+#if defined(GAME_MM)
+    if (play)
+    {
+        UpdateEquipment(play, GET_PLAYER(play));
+        Interface_LoadItemIconImpl(play, EQUIP_SLOT_B);
+        MmSword_LoadHudIcon(play);
+    }
+#endif
+}
+
+void MmShield_Equip(
+    PlayState* play,
+    MmShieldExt shield)
 {
     if (!MmShield_IsOwned(shield))
         return;
+
     gSharedCustomSave.mmShieldEquipped = shield;
     gSharedCustomSave.mmShieldSelected = shield;
+
+    gSharedCustomSave.mm.humanAgeLoadouts[gMmSave.linkAge].shield =
+        (u8)shield;
+
     MmShield_RefreshNativeEquip(play);
 }
 
-void MmShield_Lose(PlayState* play, MmShieldExt shield)
+void MmShield_Lose(
+    PlayState* play,
+    MmShieldExt shield)
 {
+    s32 age;
+
     if (!MmShield_IsOwned(shield))
         return;
-    gSharedCustomSave.mmShieldsOwned &= ~MM_SHIELD_OWNED_BIT(shield);
+
+    gSharedCustomSave.mmShieldsOwned &=
+        ~MM_SHIELD_OWNED_BIT(shield);
+
     gSharedCustomSave.mmShieldLost = shield;
+
+    for (age = 0; age < 2; age++)
+    {
+        if (gSharedCustomSave.mm.humanAgeLoadouts[age].shield ==
+            (u8)shield)
+        {
+            gSharedCustomSave.mm.humanAgeLoadouts[age].shield =
+                MM_SHIELD_EXT_NONE;
+        }
+    }
+
     if (gSharedCustomSave.mmShieldSelected == shield)
-        gSharedCustomSave.mmShieldSelected = MM_SHIELD_EXT_NONE;
+    {
+        gSharedCustomSave.mmShieldSelected =
+            MM_SHIELD_EXT_NONE;
+    }
+
     if (gSharedCustomSave.mmShieldEquipped == shield)
-        gSharedCustomSave.mmShieldEquipped = MM_SHIELD_EXT_NONE;
+    {
+        gSharedCustomSave.mmShieldEquipped =
+            MM_SHIELD_EXT_NONE;
+    }
+
     MmShield_EnsureState();
     MmShield_RefreshNativeEquip(play);
 }
@@ -1462,33 +1509,55 @@ static int addItemShieldOot(PlayState* play, u8 itemId, s16 gi, u16 param)
     return 0;
 }
 
-static int addItemShieldMm(PlayState* play, u8 itemId, s16 gi, u16 param)
+static int addItemShieldMm(
+    PlayState* play,
+    u8 itemId,
+    s16 gi,
+    u16 param)
 {
     MmShieldExt shield;
     u8 shieldType;
     u8 isProgressive;
 
-    shieldType = (param & 0xff);
+    shieldType = param & 0xff;
     isProgressive = !!((param >> 8) & 0xff);
 
-    if (shieldType <= MM_SHIELD_EXT_NONE || shieldType >= MM_SHIELD_EXT_MAX)
+    if (shieldType <= MM_SHIELD_EXT_NONE ||
+        shieldType >= MM_SHIELD_EXT_MAX)
+    {
         return 0;
+    }
+
     shield = (MmShieldExt)shieldType;
-    if (!Config_Flag(CFG_MM_DEKU_SHIELD) && shield == MM_SHIELD_EXT_DEKU)
+
+    if (!Config_Flag(CFG_MM_DEKU_SHIELD) &&
+        shield == MM_SHIELD_EXT_DEKU)
+    {
         return 0;
+    }
+
     MmShield_EnsureState();
+
     gSharedCustomSave.mmShieldsOwned |=
         MM_SHIELD_OWNED_BIT(shield);
+
     if (isProgressive)
-        gSharedCustomSave.mmProgressiveShields |= (1 << (shieldType - 1));
+    {
+        gSharedCustomSave.mmProgressiveShields |=
+            (1 << (shieldType - 1));
+    }
+
     if (gSharedCustomSave.mmShieldLost == shield)
-        gSharedCustomSave.mmShieldLost = MM_SHIELD_EXT_NONE;
+        gSharedCustomSave.mmShieldLost =
+            MM_SHIELD_EXT_NONE;
+
     if (shield >= MM_SHIELD_EXT_HERO)
         gSharedCustomSave.mmShieldIsDeku = 0;
-    if (gSharedCustomSave.mmShieldEquipped == MM_SHIELD_EXT_NONE)
-        MmShield_Equip(play, shield);
-    else if (!MmShield_IsOwned((MmShieldExt) gSharedCustomSave.mmShieldSelected))
-        gSharedCustomSave.mmShieldSelected = gSharedCustomSave.mmShieldEquipped;
+    if (!MmShield_IsOwned(
+            (MmShieldExt)gSharedCustomSave.mmShieldSelected))
+    {
+        gSharedCustomSave.mmShieldSelected = shield;
+    }
 
     return 0;
 }
@@ -2802,9 +2871,12 @@ static const SharedItem kSimpleSharedItems[] = {
     { CFG_SHARED_STRENGTH, GI_OOT_GORON_BRACELET, GI_MM_GORON_BRACELET },
     { CFG_SHARED_STRENGTH, GI_OOT_SILVER_GAUNTLETS, GI_MM_SILVER_GAUNTLETS },
     { CFG_SHARED_STRENGTH, GI_OOT_GOLDEN_GAUNTLETS, GI_MM_GOLDEN_GAUNTLETS },
-    { CFG_SHARED_SWORDS, GI_OOT_SWORD_KOKIRI, GI_MM_SWORD_KOKIRI },
-    { CFG_SHARED_SWORDS, GI_OOT_SWORD_RAZOR, GI_MM_SWORD_RAZOR },
-    { CFG_SHARED_SWORDS, GI_OOT_SWORD_GILDED, GI_MM_SWORD_GILDED },
+    { CFG_SHARED_CHILD_SWORDS, GI_OOT_SWORD_KOKIRI, GI_MM_SWORD_KOKIRI },
+    { CFG_SHARED_CHILD_SWORDS, GI_OOT_SWORD_RAZOR, GI_MM_SWORD_RAZOR },
+    { CFG_SHARED_CHILD_SWORDS, GI_OOT_SWORD_GILDED, GI_MM_SWORD_GILDED },
+    { CFG_SHARED_MASTER_SWORD, GI_OOT_SWORD_MASTER, GI_MM_SWORD_MASTER },
+    { CFG_SHARED_BIGGORON_SWORD, GI_OOT_SWORD_KNIFE, GI_MM_SWORD_KNIFE },
+    { CFG_SHARED_BIGGORON_SWORD, GI_OOT_SWORD_BIGGORON,GI_MM_SWORD_BIGGORON },
     { CFG_SHARED_SOULS_NPC, GI_OOT_SOUL_NPC_THIEVES, GI_MM_SOUL_NPC_THIEVES },
     { CFG_SHARED_SOULS_ENEMY, GI_OOT_SOUL_ENEMY_THIEVES, GI_MM_SOUL_ENEMY_THIEVES },
     { CFG_SHARED_HAMMER, GI_OOT_HAMMER, GI_MM_HAMMER },
