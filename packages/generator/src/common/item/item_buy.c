@@ -18,14 +18,13 @@ static int canBuyShieldOotRaw(int level)
 
 static int canBuyShieldMmRaw(int level)
 {
+    MmShield_EnsureState();
     switch (level)
     {
-    case 0:
-        return gMmSave.info.itemEquips.shield == 0;
-    case 1:
-        return gMmSave.info.itemEquips.shield == 0 || gSharedCustomSave.mmShieldIsDeku;
-    default:
-        return 1;
+        case 0:
+            return !MmShield_IsOwned(MM_SHIELD_EXT_DEKU);
+        case 1:
+            return !MmShield_IsOwned(MM_SHIELD_EXT_HERO);
     }
 }
 

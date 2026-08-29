@@ -9,7 +9,7 @@ import { gi, playerId } from './util';
 import { bufReadU32BE, bufWriteU16BE, bufWriteU32BE } from '../util/buffer';
 
 const SHARED_ITEMS_OOT = new Map([
-  ['SHARED_SWORD', 'OOT_SWORD_KOKIRI'],
+  ['SHARED_SWORD_CHILD', 'OOT_SWORD_KOKIRI'],
   ['SHARED_BOW', 'OOT_BOW'],
   ['SHARED_BOMB_BAG', 'OOT_BOMB_BAG'],
   ['SHARED_ARROWS_5', 'OOT_ARROWS_5'],
@@ -132,7 +132,7 @@ const SHARED_ITEMS_OOT = new Map([
 ]);
 
 const SHARED_ITEMS_MM = new Map([
-  ['SHARED_SWORD', 'MM_SWORD_KOKIRI'],
+  ['SHARED_SWORD_CHILD', 'MM_SWORD_KOKIRI'],
   ['SHARED_BOW', 'MM_BOW'],
   ['SHARED_BOMB_BAG', 'MM_BOMB_BAG'],
   ['SHARED_ARROWS_5', 'OOT_ARROWS_5'], /* MM lacks 5 pack */
@@ -264,6 +264,7 @@ export const ITEMS_SUBSTITUTIONS: { [k: string]: string } = {
   OOT_WALLET: 'OOT_WALLET2',
   OOT_SWORD: 'OOT_SWORD_KOKIRI',
   OOT_SWORD_GORON: 'OOT_SWORD_KNIFE',
+  MM_SWORD_GORON: 'MM_SWORD_KNIFE',
   OOT_OCARINA: 'OOT_OCARINA_FAIRY',
   OOT_STRENGTH: 'OOT_GORON_BRACELET',
   OOT_SCALE: 'OOT_SCALE_SILVER',

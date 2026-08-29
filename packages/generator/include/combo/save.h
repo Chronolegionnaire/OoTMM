@@ -71,6 +71,15 @@ typedef struct ALIGNED(16)
     u8              rustyKeysOot[(DOORID_OOT_MAX + 7) / 8];
     u8              rustyKeysMm[(DOORID_MM_MAX + 7) / 8];
     u8              saveFlags[(SAVE_FLAG_MAX + 7) / 8];
+    u8              mmSwordsOwned;
+    u8              mmSwordSelected;
+    u8              mmSwordEquipped;
+    u8              mmSwordReserved;
+    u16             mmGiantsKnifeHealth;
+    u8              mmShieldsOwned;
+    u8              mmShieldSelected;
+    u8              mmShieldEquipped;
+    u8              mmShieldLost;
 #if defined(DEBUG)
     u8              cheats[4];
 #endif

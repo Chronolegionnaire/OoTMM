@@ -224,4 +224,11 @@ void Player_UpdateWrapper(Player* this, PlayState* play);
 
 void Player_CheckCustomBoots(PlayState* play);
 
+static Vec3f sChildHylianShieldQuad[4] = {
+    { -3000.0f, -3000.0f, -900.0f },
+    {  3000.0f, -3000.0f, -900.0f },
+    { -3000.0f,  3000.0f, -900.0f },
+    {  3000.0f,  3000.0f, -900.0f },
+};
+
 #endif

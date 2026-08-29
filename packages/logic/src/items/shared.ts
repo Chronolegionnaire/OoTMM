@@ -142,3 +142,35 @@ const BOTTLES: ItemSharedDef[] = [
 ]
 
 export const SharedItemGroups = { SOULS_ENEMY, SOULS_NPC, SOULS_ANIMAL, SOULS_MISC, SKELETON_KEY, PLATINUM_TOKEN, OCARINA_BUTTONS, SHIELDS, BOTTLES, SHOVEL };
+
+const MASTER_SWORD: ItemSharedDef[] = [
+  {
+    shared: Items.SHARED_SWORD_MASTER,
+    oot: Items.OOT_SWORD_MASTER,
+    mm: Items.MM_SWORD_MASTER,
+  },
+];
+
+const BIGGORON_SWORDS: ItemSharedDef[] = [
+  {
+    shared: Items.SHARED_SWORD_KNIFE,
+    oot: Items.OOT_SWORD_KNIFE,
+    mm: Items.MM_SWORD_KNIFE,
+  },
+  {
+    shared: Items.SHARED_SWORD_BIGGORON,
+    oot: Items.OOT_SWORD_BIGGORON,
+    mm: Items.MM_SWORD_BIGGORON,
+  },
+];
+
+const BIGGORON_SWORD_PROGRESSIVE: ItemSharedDef[] = [
+  {
+    shared: Items.SHARED_SWORD_GORON,
+    oot: Items.OOT_SWORD_GORON,
+    mm: Items.MM_SWORD_GORON,
+  },
+];
+
+
+export const SharedItemGroups = { SOULS_ENEMY, SOULS_NPC, SOULS_ANIMAL, SOULS_MISC, SKELETON_KEY, PLATINUM_TOKEN, OCARINA_BUTTONS, SHIELDS, BOTTLES, SHOVEL, MASTER_SWORD, BIGGORON_SWORD_PROGRESSIVE, BIGGORON_SWORDS };

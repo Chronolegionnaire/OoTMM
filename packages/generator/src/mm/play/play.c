@@ -543,6 +543,11 @@ static void Play_AfterInit(PlayState* play)
         comboClearCustomRespawn(CUSTOM_RESPAWN_MODE_DUNGEON_ENTRANCE);
         break;
     }
+    MmSword_RefreshNativeEquip(
+        gSaveContext.save.playerForm == MM_PLAYER_FORM_HUMAN
+            ? play
+            : NULL
+    );
 }
 
 u32 gGameEntrance;

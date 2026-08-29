@@ -728,4 +728,6 @@ bool func_800B715C(struct PlayState* play);
 
 void func_8012301C(Actor* thisx, struct PlayState* play2);
 
+void Player_SetModelsForHoldingShield(Player*);
+
 #endif
