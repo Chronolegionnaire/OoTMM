@@ -89,12 +89,7 @@ static void KaleidoScope_EndQuestEquipProxy(void)
 void MmShield_Unequip(PlayState* play)
 {
     MmShield_EnsureState();
-
-    gSharedCustomSave.mmShieldEquipped = MM_SHIELD_EXT_NONE;
-    gSharedCustomSave.mm
-        .humanAgeLoadouts[gMmSave.linkAge]
-        .shield = MM_SHIELD_EXT_NONE;
-
+    gSharedCustomSave.mm.humanAgeLoadouts[gMmSave.linkAge].shield = MM_SHIELD_EXT_NONE;
     MmShield_RefreshNativeEquip(play);
 }
 
