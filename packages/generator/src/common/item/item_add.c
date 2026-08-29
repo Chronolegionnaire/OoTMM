@@ -1349,10 +1349,6 @@ static int addItemShieldMm(
         return 0;
     }
 
-    /*
-     * Shared shields implicitly make the MM Hylian Shield
-     * available, even if the standalone MM extension is off.
-     */
     if (!Config_Flag(CFG_MM_SHIELD_HYLIAN) &&
         !Config_Flag(CFG_SHARED_SHIELDS) &&
         shield == MM_SHIELD_EXT_HYLIAN)
@@ -1363,10 +1359,6 @@ static int addItemShieldMm(
     MmShield_EnsureState();
     selectedBefore = MmShield_GetSelected();
 
-    /*
-     * Hero/Hylian is one shared cross-game pickup, but they
-     * remain two independently selectable shields in MM.
-     */
     if (Config_Flag(CFG_SHARED_SHIELDS) &&
         (shield == MM_SHIELD_EXT_HERO ||
          shield == MM_SHIELD_EXT_HYLIAN))
