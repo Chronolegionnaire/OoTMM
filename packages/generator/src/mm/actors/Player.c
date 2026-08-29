@@ -29,18 +29,9 @@ static void Player_TryBurnDekuShield(Player* this, PlayState* play)
         PlayerDisplayTextBox(play, 0xf6, NULL);
         b = play->msgCtx.font.textBuffer.schar;
         b += 11;
-        comboTextAppendStr(
-            &b,
-            TEXT_COLOR_BLUE "Your "
-        );
+        comboTextAppendStr(&b, TEXT_COLOR_BLUE "Your ");
         comboTextAppendClearColor(&b);
-        comboTextAppendStr(
-            &b,
-            "shield"
-            TEXT_COLOR_BLUE
-            " is gone!\x1c\x00\x20"
-            TEXT_END
-        );
+        comboTextAppendStr(&b, "shield" TEXT_COLOR_BLUE " is gone!\x1c\x00\x20" TEXT_END);
     }
 }
 
@@ -317,16 +308,12 @@ s32 Player_CustomItemToItemAction(Player* this, s32 item, s32 itemAction)
     {
         case ITEM_MM_SWORD_MASTER:
             return PLAYER_CUSTOM_IA_SWORD_MASTER;
-
         case ITEM_MM_SWORD_GIANTS_KNIFE:
             return PLAYER_CUSTOM_IA_SWORD_GIANTS_KNIFE;
-
         case ITEM_MM_SWORD_BIGGORON:
             return PLAYER_CUSTOM_IA_SWORD_BIGGORON;
     }
-
     s32 customItem = item - ITEM_MM_CUSTOM_MIN;
-
     if (customItem < 0)
         return itemAction;
 
@@ -1365,29 +1352,16 @@ EXPORT_SYMBOL(MM_COLOR_TUNIC_ZORA, sTunicColors[3]);
 #define DLIST_LHAND_OPEN            DLIST_INDIRECT(0x801c0134)
 #define DLIST_LHAND_CLOSED          DLIST_INDIRECT(0x801c015c)
 
-static void* Player_CustomHandEq(u32 handDlist, void* eqData, u32 eqDlist)
+static void* Player_CustomEquipment(u32 baseDlist, void* object, u32 eqDlist)
 {
     Gfx* dlist;
     Gfx* d;
-
-    if (!eqData) return (void*)kDListEmpty;
-
-    d = dlist = GRAPH_ALLOC(gPlay->state.gfxCtx, sizeof(Gfx) * 3);
-    gSPDisplayList(d++, handDlist);
-    gSPSegment(d++, 0x0a, eqData);
-    gSPBranchList(d++, eqDlist);
-
-    return dlist;
-}
-
-static void* Player_CustomEq(void* eqData, u32 eqDlist)
-{
-    Gfx* dlist;
-    Gfx* d;
-    if (!eqData)
+    if (!object)
         return (void*)kDListEmpty;
-    d = dlist = GRAPH_ALLOC(gPlay->state.gfxCtx, sizeof(Gfx) * 2);
-    gSPSegment(d++, 0x0a, eqData);
+    d = dlist = GRAPH_ALLOC(gPlay->state.gfxCtx, sizeof(Gfx) * (baseDlist ? 3 : 2));
+    if (baseDlist)
+        gSPDisplayList(d++, baseDlist);
+    gSPSegment(d++, 0x0a, object);
     gSPBranchList(d++, eqDlist);
     return dlist;
 }
@@ -1760,7 +1734,7 @@ int Player_OverrideLimbWrapper(PlayState* play, s32 limbIndex, Gfx** dList, Vec3
 
                 if (obj)
                 {
-                    *dList = Player_CustomHandEq(DLIST_LHAND_CLOSED, obj, swordDlist);
+                    *dList = Player_CustomEquipment(DLIST_LHAND_CLOSED, obj, swordDlist);
                     return FALSE;
                 }
             }
@@ -1820,7 +1794,7 @@ int Player_OverrideLimbWrapper(PlayState* play, s32 limbIndex, Gfx** dList, Vec3
 
             if (obj)
             {
-                *dList = Player_CustomEq(obj, sheathDlist);
+                *dList = Player_CustomEquipment(0, obj, sheathDlist);
                 return FALSE;
             }
         }
@@ -1833,29 +1807,25 @@ int Player_OverrideLimbWrapper(PlayState* play, s32 limbIndex, Gfx** dList, Vec3
 
                 if (shield == MM_SHIELD_EXT_DEKU)
                 {
-                    *dList = Player_CustomHandEq((u32)kDListEmpty, comboGetObject(CUSTOM_OBJECT_ID_EQ_SHIELD_DEKU), CUSTOM_OBJECT_EQ_SHIELD_DEKU_0);
+                    *dList = Player_CustomEquipment((u32)kDListEmpty, comboGetObject(CUSTOM_OBJECT_ID_EQ_SHIELD_DEKU), CUSTOM_OBJECT_EQ_SHIELD_DEKU_0);
                     return FALSE;
                 }
 
                 if (shield == MM_SHIELD_EXT_HYLIAN && comboIsLinkAdult())
                 {
-                    *dList = Player_CustomEq(comboGetObject(CUSTOM_OBJECT_ID_EQ_SHIELD_HYLIAN_ADULT), CUSTOM_OBJECT_EQ_SHIELD_HYLIAN_ADULT_0);
+                    *dList = Player_CustomEquipment(0, comboGetObject(CUSTOM_OBJECT_ID_EQ_SHIELD_HYLIAN_ADULT), CUSTOM_OBJECT_EQ_SHIELD_HYLIAN_ADULT_0);
                     return FALSE;
                 }
             }
 
             if (player->rightHandType == PLAYER_MODELTYPE_RH_INSTRUMENT && gMmSave.info.inventory.items[ITS_MM_OCARINA] == ITEM_MM_OCARINA_FAIRY)
             {
-                *dList = Player_CustomHandEq(DLIST_RHAND_OPEN, comboGetObject(CUSTOM_OBJECT_ID_EQ_OCARINA_FAIRY), CUSTOM_OBJECT_EQ_OCARINA_FAIRY_0);
+                *dList = Player_CustomEquipment(DLIST_RHAND_OPEN, comboGetObject(CUSTOM_OBJECT_ID_EQ_OCARINA_FAIRY), CUSTOM_OBJECT_EQ_OCARINA_FAIRY_0);
                 return FALSE;
             }
             else if (player->itemAction == PLAYER_CUSTOM_IA_SLINGSHOT)
             {
-                *dList = Player_CustomHandEq(
-                    DLIST_RHAND_CLOSED,
-                    comboGetObject(CUSTOM_OBJECT_ID_EQ_SLINGSHOT),
-                    CUSTOM_OBJECT_EQ_SLINGSHOT_2
-                );
+                *dList = Player_CustomEquipment(DLIST_RHAND_CLOSED, comboGetObject(CUSTOM_OBJECT_ID_EQ_SLINGSHOT), CUSTOM_OBJECT_EQ_SLINGSHOT_2);
                 return FALSE;
             }
         }
