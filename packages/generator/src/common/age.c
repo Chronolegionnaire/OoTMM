@@ -63,8 +63,6 @@ static void Age_SwapEquipmentMm(void)
 {
     MmHumanAgeLoadout* curAge;
     MmHumanAgeLoadout* newAge;
-    MmSwordExt sword;
-    MmShieldExt shield;
 
     curAge = &gSharedCustomSave.mm.humanAgeLoadouts[gMmSave.linkAge];
     newAge = &gSharedCustomSave.mm.humanAgeLoadouts[1 - gMmSave.linkAge];
@@ -77,8 +75,13 @@ static void Age_SwapEquipmentMm(void)
     }
     curAge->boots = gMmSave.info.itemEquips.boots;
     curAge->tunic = gMmSave.info.itemEquips.tunic;
-    curAge->sword = (u8)MmSword_GetEquipped();
-    curAge->shield = (u8)MmShield_GetEquipped();
+
+    /* Validate new age equips */
+    if (newAge->sword != MM_SWORD_EXT_NONE && !MmSword_IsOwned((MmSwordExt)newAge->sword))
+        newAge->sword = MM_SWORD_EXT_NONE;
+    if (newAge->shield != MM_SHIELD_EXT_NONE && !MmShield_IsOwned((MmShieldExt)newAge->shield))
+        newAge->shield = MM_SHIELD_EXT_NONE;
+
     /* Load new equips */
     for (int i = EQUIP_SLOT_C_LEFT; i <= EQUIP_SLOT_C_RIGHT; ++i)
     {
@@ -87,23 +90,6 @@ static void Age_SwapEquipmentMm(void)
     }
     gMmSave.info.itemEquips.boots = newAge->boots;
     gMmSave.info.itemEquips.tunic = newAge->tunic;
-    sword = (MmSwordExt)newAge->sword;
-    if (sword != MM_SWORD_EXT_NONE &&
-        !MmSword_IsOwned(sword))
-    {
-        sword = MM_SWORD_EXT_NONE;
-        newAge->sword = MM_SWORD_EXT_NONE;
-    }
-    gSharedCustomSave.mmSwordEquipped = (u8)sword;
-    shield = (MmShieldExt)newAge->shield;
-    if (shield != MM_SHIELD_EXT_NONE && !MmShield_IsOwned(shield))
-    {
-        shield = MM_SHIELD_EXT_NONE;
-        newAge->shield = MM_SHIELD_EXT_NONE;
-    }
-    gSharedCustomSave.mmShieldEquipped = (u8)shield;
-    MmSword_RefreshNativeEquip(NULL);
-    MmShield_RefreshNativeEquip(NULL);
 
     /* Reload bottles */
     for (int i = EQUIP_SLOT_C_LEFT; i <= EQUIP_SLOT_C_RIGHT; ++i)
@@ -113,7 +99,6 @@ static void Age_SwapEquipmentMm(void)
             gMmSave.info.itemEquips.buttonItems[0][i] = gMmSave.info.inventory.items[slot];
     }
 }
-
 static void Age_OnChangeOot(void)
 {
     Age_SwapFaroreOot();
@@ -154,6 +139,9 @@ void Age_SetRawMm(PlayState* play, int age)
 
     Age_OnChangeMm();
     gMmSave.linkAge = age;
+
+    MmSword_RefreshNativeEquip(NULL);
+    MmShield_RefreshNativeEquip(NULL);
 }
 
 void Age_SetOot(PlayState* play, int age)

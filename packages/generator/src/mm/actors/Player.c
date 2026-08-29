@@ -23,8 +23,7 @@ static void Player_TryBurnDekuShield(Player* this, PlayState* play)
 {
     char* b;
 
-    if (this->transformation == MM_PLAYER_FORM_HUMAN &&
-        this->currentShield == 1 && MmShield_GetEquipped() == MM_SHIELD_EXT_DEKU)
+    if (this->transformation == MM_PLAYER_FORM_HUMAN && MmShield_GetEquipped() == MM_SHIELD_EXT_DEKU)
     {
         MmShield_Lose(play, MM_SHIELD_EXT_DEKU);
         PlayerDisplayTextBox(play, 0xf6, NULL);

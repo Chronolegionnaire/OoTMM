@@ -1125,6 +1125,7 @@ static int addItemSwordMm(
     u16 param)
 {
     MmSwordExt sword;
+    MmSwordExt selectedBefore;
     MmSwordExt equippedBefore;
     s32 age;
 
@@ -1137,6 +1138,7 @@ static int addItemSwordMm(
     sword = (MmSwordExt)param;
 
     MmSword_EnsureState();
+    selectedBefore = MmSword_GetSelected();
     equippedBefore = MmSword_GetEquipped();
 
     switch (sword)
@@ -1162,19 +1164,6 @@ static int addItemSwordMm(
         gSharedCustomSave.mmSwordsOwned |=
             MM_SWORD_OWNED_BIT(MM_SWORD_EXT_RAZOR);
 
-        if (gSharedCustomSave.mmSwordSelected ==
-            MM_SWORD_EXT_KOKIRI)
-        {
-            gSharedCustomSave.mmSwordSelected =
-                MM_SWORD_EXT_RAZOR;
-        }
-
-        if (gSharedCustomSave.mmSwordEquipped ==
-            MM_SWORD_EXT_KOKIRI)
-        {
-            gSharedCustomSave.mmSwordEquipped =
-                MM_SWORD_EXT_RAZOR;
-        }
 
         for (age = 0; age < 2; age++)
         {
@@ -1197,23 +1186,6 @@ static int addItemSwordMm(
         gSharedCustomSave.mmSwordsOwned |=
             MM_SWORD_OWNED_BIT(MM_SWORD_EXT_GILDED);
 
-        if (gSharedCustomSave.mmSwordSelected ==
-                MM_SWORD_EXT_KOKIRI ||
-            gSharedCustomSave.mmSwordSelected ==
-                MM_SWORD_EXT_RAZOR)
-        {
-            gSharedCustomSave.mmSwordSelected =
-                MM_SWORD_EXT_GILDED;
-        }
-
-        if (gSharedCustomSave.mmSwordEquipped ==
-                MM_SWORD_EXT_KOKIRI ||
-            gSharedCustomSave.mmSwordEquipped ==
-                MM_SWORD_EXT_RAZOR)
-        {
-            gSharedCustomSave.mmSwordEquipped =
-                MM_SWORD_EXT_GILDED;
-        }
 
         for (age = 0; age < 2; age++)
         {
@@ -1250,19 +1222,6 @@ static int addItemSwordMm(
         gSharedCustomSave.mmSwordsOwned |=
             MM_SWORD_OWNED_BIT(MM_SWORD_EXT_BIGGORON);
 
-        if (gSharedCustomSave.mmSwordSelected ==
-            MM_SWORD_EXT_GIANTS_KNIFE)
-        {
-            gSharedCustomSave.mmSwordSelected =
-                MM_SWORD_EXT_BIGGORON;
-        }
-
-        if (gSharedCustomSave.mmSwordEquipped ==
-            MM_SWORD_EXT_GIANTS_KNIFE)
-        {
-            gSharedCustomSave.mmSwordEquipped =
-                MM_SWORD_EXT_BIGGORON;
-        }
 
         for (age = 0; age < 2; age++)
         {
@@ -1278,16 +1237,12 @@ static int addItemSwordMm(
     default:
         return 0;
     }
-    if (!MmSword_IsOwned(
-            (MmSwordExt)gSharedCustomSave.mmSwordSelected))
-    {
-        gSharedCustomSave.mmSwordSelected = sword;
-    }
-    if (equippedBefore !=
-        (MmSwordExt)gSharedCustomSave.mmSwordEquipped)
-    {
+    if (!MmSword_IsOwned(selectedBefore))
+        MmSword_SetSelected(sword);
+
+    MmSword_EnsureState();
+    if (equippedBefore != MmSword_GetEquipped())
         MmSword_RefreshNativeEquip(play);
-    }
 
     return 0;
 }
@@ -1339,11 +1294,10 @@ static int addItemShieldOot(PlayState* play, u8 itemId, s16 gi, u16 param)
     return 0;
 }
 
-static void MmShield_Grant(
-    MmShieldExt shield,
-    u8 isProgressive)
+static void MmShield_Grant(MmShieldExt shield, u8 isProgressive)
 {
     u32 bit;
+    u8 progressiveBit;
 
     if (shield <= MM_SHIELD_EXT_NONE ||
         shield >= MM_SHIELD_EXT_MAX)
@@ -1352,15 +1306,19 @@ static void MmShield_Grant(
     }
 
     bit = MM_SHIELD_OWNED_BIT(shield);
-
     gSharedCustomSave.mmShieldsOwned |= bit;
 
-    if (isProgressive)
-        gSharedCustomSave.mmProgressiveShields |= bit;
+    progressiveBit = 0;
 
-    if (gSharedCustomSave.mmShieldLost == shield)
-        gSharedCustomSave.mmShieldLost =
-            MM_SHIELD_EXT_NONE;
+    if (shield == MM_SHIELD_EXT_DEKU)
+        progressiveBit = 1;
+    else if (shield == MM_SHIELD_EXT_HERO || shield == MM_SHIELD_EXT_HYLIAN)
+        progressiveBit = 2;
+
+    if (isProgressive)
+        gSharedCustomSave.mmProgressiveShields |= progressiveBit;
+    else
+        gSharedCustomSave.mmProgressiveShields &= ~progressiveBit;
 }
 
 static int addItemShieldMm(
@@ -1370,6 +1328,7 @@ static int addItemShieldMm(
     u16 param)
 {
     MmShieldExt shield;
+    MmShieldExt selectedBefore;
     u8 shieldType;
     u8 isProgressive;
 
@@ -1402,6 +1361,7 @@ static int addItemShieldMm(
     }
 
     MmShield_EnsureState();
+    selectedBefore = MmShield_GetSelected();
 
     /*
      * Hero/Hylian is one shared cross-game pickup, but they
@@ -1427,11 +1387,10 @@ static int addItemShieldMm(
     if (shield >= MM_SHIELD_EXT_HERO)
         gSharedCustomSave.mmShieldIsDeku = 0;
 
-    if (!MmShield_IsOwned(
-            (MmShieldExt)gSharedCustomSave.mmShieldSelected))
-    {
-        gSharedCustomSave.mmShieldSelected = shield;
-    }
+    if (!MmShield_IsOwned(selectedBefore))
+        MmShield_SetSelected(shield);
+    else
+        MmShield_EnsureState();
 
     return 0;
 }
