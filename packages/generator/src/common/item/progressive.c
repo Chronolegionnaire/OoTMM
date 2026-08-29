@@ -522,12 +522,16 @@ s16 Item_Progressive(s16 gi, int ovflags)
         break;
     case GI_OOT_SWORD_KNIFE:
     case GI_OOT_SWORD_BIGGORON:
-        if (Config_Flag(CFG_OOT_PROGRESSIVE_BIGGORON_SWORD))
+        if (Config_Flag(CFG_OOT_PROGRESSIVE_SWORDS))
+            gi = progressiveSwordOot();
+        else if (Config_Flag(CFG_OOT_PROGRESSIVE_BIGGORON_SWORD))
             gi = progressiveBiggoronSwordOot();
         break;
     case GI_MM_SWORD_KNIFE:
     case GI_MM_SWORD_BIGGORON:
-        if (Config_Flag(CFG_MM_PROGRESSIVE_BIGGORON_SWORD))
+        if (Config_Flag(CFG_SHARED_BIGGORON_SWORD) && Config_Flag(CFG_OOT_PROGRESSIVE_SWORDS))
+            gi = progressiveSwordOot();
+        else if (Config_Flag(CFG_MM_PROGRESSIVE_BIGGORON_SWORD))
             gi = progressiveBiggoronSwordMm();
         break;
     case GI_OOT_PROGRESSIVE_SHIELD_DEKU:

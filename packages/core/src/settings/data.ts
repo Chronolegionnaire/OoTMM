@@ -1733,9 +1733,10 @@ export const SETTINGS = [{
   description: 'Alters the behavior of the OoT Swords',
   values: [
     { value: 'separate', name: 'Separate', description: 'They can be found independently from each other' },
+    { value: 'goron', name: 'Progressive Knife and Biggoron', description: 'Kokiri Sword and Master Sword are independent. However, Giant\'s Knife and Biggoron Sword are progressive.' },
     { value: 'progressive', name: 'Progressive', description: 'Each Progressive Sword will grant you the next one: Kokiri Sword -> Master Sword -> Giant\'s Knife -> Biggoron Sword' },
   ],
-  default: 'separate',
+  default: 'goron',
   cond: hasOoT,
 }, {
   key: 'progressiveShieldsMm',
@@ -2978,98 +2979,42 @@ export const SETTINGS = [{
       s.masterSwordMm &&
       s.progressiveSwordsOot !== 'progressive',
 }, {
-  key: 'sharedBiggoronSword',
-  name: 'Shared Biggoron Swords',
-  category: 'items.shared',
-  type: 'boolean',
-  description:
-      'Shares the Giant\'s Knife and Biggoron Sword between OoT and MM.',
-  default: false,
-  cond: (s: any) =>
-      hasOoTMM(s) &&
-      s.biggoronSwordMm &&
-      s.progressiveSwordsOot !== 'progressive',
-},{
   key: 'biggoronSwordMm',
   name: 'Biggoron Swords (MM)',
   category: 'items.extensions',
-  type: 'boolean',
+  type: 'enum',
   description:
-      'Adds the Giant\'s Knife and Biggoron Sword to Majora\'s Mask. ' +
-      'The Giant\'s Knife can break into the Broken Giant\'s Knife.',
-  default: false,
+      'Controls how Giant\'s Knife and Biggoron Sword are added to Majora\'s Mask.',
+  values: [
+    {
+      value: 'none',
+      name: 'None',
+      description:
+          'Giant\'s Knife and Biggoron Sword are not added to Majora\'s Mask.',
+    },
+    {
+      value: 'separate',
+      name: 'Separate',
+      description:
+          'Adds Giant\'s Knife and Biggoron Sword to MM as two separate items.',
+    },
+    {
+      value: 'progressive',
+      name: 'Progressive',
+      description:
+          'Adds Giant\'s Knife and Biggoron Sword to MM as a two-item progressive chain.',
+    },
+    {
+      value: 'shared',
+      name: 'Shared with OoT',
+      description:
+          'Adds Giant\'s Knife and Biggoron Sword to MM and shares them with OoT. Their progression follows the OoT Swords setting.',
+      cond: hasOoTMM,
+    },
+  ],
+  default: 'none',
   cond: hasMM,
-},{
-  key: 'progressiveBiggoronSwordOot',
-  name: 'OoT Biggoron Sword',
-  category: 'items.progressive',
-  type: 'enum',
-  description:
-      'Controls whether the Giant\'s Knife and Biggoron Sword ' +
-      'are separate or progressive in Ocarina of Time.',
-  values: [
-    {
-      value: 'separate',
-      name: 'Separate',
-      description:
-          'Giant\'s Knife and Biggoron Sword are separate items.',
-    },
-    {
-      value: 'progressive',
-      name: 'Progressive',
-      description:
-          'First item gives Giant\'s Knife, second gives Biggoron Sword.',
-    },
-  ],
-  default: 'progressive',
-  cond: (s: any) =>
-      hasOoT(s) &&
-      !s.sharedBiggoronSword &&
-      s.progressiveSwordsOot !== 'progressive',
 }, {
-  key: 'progressiveBiggoronSwordMm',
-  name: 'MM Biggoron Sword',
-  category: 'items.progressive',
-  type: 'enum',
-  description:
-      'Controls whether the Giant\'s Knife and Biggoron Sword ' +
-      'are separate or progressive in Majora\'s Mask.',
-  values: [
-    { value: 'separate', name: 'Separate' },
-    { value: 'progressive', name: 'Progressive' },
-  ],
-  default: 'progressive',
-  cond: (s: any) =>
-      hasMM(s) &&
-      s.biggoronSwordMm &&
-      !s.sharedBiggoronSword,
-}, {
-  key: 'progressiveBiggoronSwordShared',
-  name: 'Shared Biggoron Swords',
-  category: 'items.progressive',
-  type: 'enum',
-  description:
-      'Controls the progression of shared Giant\'s Knife and ' +
-      'Biggoron Sword items.',
-  values: [
-    {
-      value: 'separate',
-      name: 'Separate',
-      description:
-          'Shared Giant\'s Knife and shared Biggoron Sword are separate.',
-    },
-    {
-      value: 'progressive',
-      name: 'Progressive',
-      description:
-          'Two shared progressive items give Giant\'s Knife then Biggoron Sword.',
-    },
-  ],
-  default: 'progressive',
-  cond: (s: any) =>
-      hasOoTMM(s) &&
-      s.sharedBiggoronSword,
-},{
   key: 'sharedChildSwords',
   name: 'Shared Child Swords',
   category: 'items.shared',
