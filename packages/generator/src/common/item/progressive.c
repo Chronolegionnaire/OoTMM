@@ -164,13 +164,8 @@ static s16 progressiveHookshotMm(s16 gi)
 
 static s16 progressiveBiggoronSwordOot(void)
 {
-    if (!(gOotSave.info.inventory.equipment.swords &
-          (EQ_OOT_SWORD_KNIFE |
-           EQ_OOT_SWORD_KNIFE_BROKEN)))
-    {
+    if (!(gOotSave.info.inventory.equipment.swords & (EQ_OOT_SWORD_KNIFE | EQ_OOT_SWORD_KNIFE_BROKEN)))
         return GI_OOT_SWORD_KNIFE;
-    }
-
     return GI_OOT_SWORD_BIGGORON;
 }
 
@@ -186,29 +181,20 @@ static s16 progressiveSwordOot(void)
 static s16 progressiveBiggoronSwordMm(void)
 {
     MmSword_EnsureState();
-
-    if (MmSword_IsOwned(MM_SWORD_EXT_GIANTS_KNIFE) ||
-        MmSword_IsOwned(MM_SWORD_EXT_BIGGORON))
-    {
+    if (MmSword_IsOwned(MM_SWORD_EXT_GIANTS_KNIFE) || MmSword_IsOwned(MM_SWORD_EXT_BIGGORON))
         return GI_MM_SWORD_BIGGORON;
-    }
-
     return GI_MM_SWORD_KNIFE;
 }
 
 static s16 progressiveSwordMm(void)
 {
     MmSword_EnsureState();
-
     if (MmSword_IsOwned(MM_SWORD_EXT_GILDED))
         return GI_MM_SWORD_GILDED;
-
     if (MmSword_IsOwned(MM_SWORD_EXT_RAZOR))
         return GI_MM_SWORD_GILDED;
-
     if (MmSword_IsOwned(MM_SWORD_EXT_KOKIRI))
         return GI_MM_SWORD_RAZOR;
-
     return GI_MM_SWORD_KOKIRI;
 }
 
@@ -224,28 +210,12 @@ static s16 progressiveShieldOot(void)
 
 static s16 progressiveShieldMm(void)
 {
-    if ((Config_Flag(CFG_MM_DEKU_SHIELD) ||
-         Config_Flag(CFG_SHARED_SHIELDS)) &&
-        !(gSharedCustomSave.mmProgressiveShields &
-          MM_SHIELD_OWNED_BIT(MM_SHIELD_EXT_DEKU)))
-    {
+    if ((Config_Flag(CFG_MM_DEKU_SHIELD) || Config_Flag(CFG_SHARED_SHIELDS)) && !(gSharedCustomSave.mmProgressiveShields & MM_SHIELD_OWNED_BIT(MM_SHIELD_EXT_DEKU)))
         return GI_MM_PROGRESSIVE_SHIELD_DEKU;
-    }
-
-    if (!(gSharedCustomSave.mmProgressiveShields &
-          MM_SHIELD_OWNED_BIT(MM_SHIELD_EXT_HERO)))
-    {
+    if (!(gSharedCustomSave.mmProgressiveShields & MM_SHIELD_OWNED_BIT(MM_SHIELD_EXT_HERO)))
         return GI_MM_PROGRESSIVE_SHIELD_HERO;
-    }
-
-    if ((Config_Flag(CFG_MM_SHIELD_HYLIAN) ||
-         Config_Flag(CFG_SHARED_SHIELDS)) &&
-        !(gSharedCustomSave.mmProgressiveShields &
-          MM_SHIELD_OWNED_BIT(MM_SHIELD_EXT_HYLIAN)))
-    {
+    if ((Config_Flag(CFG_MM_SHIELD_HYLIAN) || Config_Flag(CFG_SHARED_SHIELDS)) && !(gSharedCustomSave.mmProgressiveShields & MM_SHIELD_OWNED_BIT(MM_SHIELD_EXT_HYLIAN)))
         return GI_MM_PROGRESSIVE_SHIELD_HYLIAN;
-    }
-
     return GI_MM_SHIELD_MIRROR;
 }
 

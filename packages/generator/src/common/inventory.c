@@ -229,19 +229,14 @@ static u8 MmSword_GetItemId(MmSwordExt sword)
     {
         case MM_SWORD_EXT_KOKIRI:
             return ITEM_MM_SWORD_KOKIRI;
-
         case MM_SWORD_EXT_RAZOR:
             return ITEM_MM_SWORD_RAZOR;
-
         case MM_SWORD_EXT_GILDED:
             return ITEM_MM_SWORD_GILDED;
-
         case MM_SWORD_EXT_MASTER:
             return ITEM_MM_SWORD_MASTER;
-
         case MM_SWORD_EXT_GIANTS_KNIFE:
             return ITEM_MM_SWORD_GIANTS_KNIFE;
-
         case MM_SWORD_EXT_BIGGORON:
             return ITEM_MM_SWORD_BIGGORON;
 
@@ -256,10 +251,8 @@ static u8 MmSword_GetNativeEquipValue(MmSwordExt sword)
     {
         case MM_SWORD_EXT_KOKIRI:
             return 1;
-
         case MM_SWORD_EXT_RAZOR:
             return 2;
-
         case MM_SWORD_EXT_GILDED:
             return 3;
         case MM_SWORD_EXT_MASTER:
@@ -348,12 +341,9 @@ void Inventory_ReobtainProgressiveShields(void)
             gSharedCustomSave.mmShieldsOwned |= MM_SHIELD_OWNED_BIT(MM_SHIELD_EXT_HERO);
 
             if (Config_Flag(CFG_SHARED_SHIELDS))
-            {
                 gSharedCustomSave.mmShieldsOwned |= MM_SHIELD_OWNED_BIT(MM_SHIELD_EXT_HYLIAN);
-            }
         }
     }
-
     MmShield_EnsureState();
     MmShield_RefreshNativeEquip(NULL);
 }
