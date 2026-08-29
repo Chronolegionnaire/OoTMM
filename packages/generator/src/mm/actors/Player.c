@@ -146,12 +146,71 @@ static void Player_RefreshMaskObjectForAge(Player* player)
     player->maskObjectLoadState = 1;
 }
 
+static u8 Player_GetExtendedSwordBItem(void)
+{
+    switch (MmSword_GetEquipped())
+    {
+        case MM_SWORD_EXT_MASTER:
+            return ITEM_MM_SWORD_MASTER;
+
+        case MM_SWORD_EXT_GIANTS_KNIFE:
+            return ITEM_MM_SWORD_GIANTS_KNIFE;
+
+        case MM_SWORD_EXT_BIGGORON:
+            return ITEM_MM_SWORD_BIGGORON;
+
+        default:
+            return ITEM_NONE;
+    }
+}
+
+static s32 Player_MaskUsesSpecialBAction(Player* player)
+{
+    switch (player->currentMask)
+    {
+        case MASK_BLAST:
+        case MASK_BREMEN:
+        case MASK_KAMARO:
+            return 1;
+
+        default:
+            return 0;
+    }
+}
+
+static void Player_SyncExtendedSwordSpecialMaskB(Player* player)
+{
+    u8 extendedSwordItem;
+    if (player->transformation != MM_PLAYER_FORM_HUMAN)
+        return;
+
+    if (gSave.playerForm != MM_PLAYER_FORM_HUMAN)
+        return;
+
+    extendedSwordItem = Player_GetExtendedSwordBItem();
+
+    if (extendedSwordItem == ITEM_NONE)
+        return;
+
+    if (Player_MaskUsesSpecialBAction(player))
+    {
+        gMmSave.info.itemEquips.buttonItems[0][EQUIP_SLOT_B] =
+            ITEM_MM_SWORD_GILDED;
+    }
+    else
+    {
+        gMmSave.info.itemEquips.buttonItems[0][EQUIP_SLOT_B] =
+            extendedSwordItem;
+    }
+}
+
 void Player_UpdateWrapper(Player* this, PlayState* play)
 {
     ArrowCycle_Handle(this, play);
     Player_HandleBurningDekuShield(this, play);
     Player_ClearCustomMaskSpoofBeforeUpdate(this);
     Player_RefreshMaskObjectForAge(this);
+    Player_SyncExtendedSwordSpecialMaskB(this);
     Player_Update(this, play);
     if (this->transformation == MM_PLAYER_FORM_HUMAN)
     {

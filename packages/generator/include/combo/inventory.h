@@ -83,4 +83,5 @@ void MmShield_RefreshNativeEquip(PlayState* play);
 void MmSword_RefreshNativeEquip(PlayState* play);
 void MmSword_RefreshHudIcon(PlayState* play);
 void MmShield_Unequip(PlayState* play);
+s32 Inventory_GetBtnBItem(struct PlayState* play);
 #endif

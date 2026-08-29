@@ -810,3 +810,4 @@ func_8012F73C = 0x8012F73C;
 Message_StartTextbox = 0x801518b0;
 
 Player_SetModelsForHoldingShield = 0x801239AC;
+Inventory_GetBtnBItem = 0x8012EC80;
