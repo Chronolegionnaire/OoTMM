@@ -1,6 +1,7 @@
 #include <combo.h>
 #include <combo/item.h>
 #include <combo/config.h>
+#include <combo/inventory.h>
 
 static s16 progressiveRutoLetterOot(void)
 {
@@ -161,10 +162,15 @@ static s16 progressiveHookshotMm(s16 gi)
     return gi;
 }
 
-static s16 progressiveSwordGoron(void)
+static s16 progressiveBiggoronSwordOot(void)
 {
-    if (!(gOotSave.info.inventory.equipment.swords & (EQ_OOT_SWORD_KNIFE | EQ_OOT_SWORD_KNIFE_BROKEN)))
+    if (!(gOotSave.info.inventory.equipment.swords &
+          (EQ_OOT_SWORD_KNIFE |
+           EQ_OOT_SWORD_KNIFE_BROKEN)))
+    {
         return GI_OOT_SWORD_KNIFE;
+    }
+
     return GI_OOT_SWORD_BIGGORON;
 }
 
@@ -174,22 +180,36 @@ static s16 progressiveSwordOot(void)
         return GI_OOT_SWORD_KOKIRI;
     if (!(gOotSave.info.inventory.equipment.swords & EQ_OOT_SWORD_MASTER))
         return GI_OOT_SWORD_MASTER;
-    return progressiveSwordGoron();
+    return progressiveBiggoronSwordOot();
+}
+
+static s16 progressiveBiggoronSwordMm(void)
+{
+    MmSword_EnsureState();
+
+    if (MmSword_IsOwned(MM_SWORD_EXT_GIANTS_KNIFE) ||
+        MmSword_IsOwned(MM_SWORD_EXT_BIGGORON))
+    {
+        return GI_MM_SWORD_BIGGORON;
+    }
+
+    return GI_MM_SWORD_KNIFE;
 }
 
 static s16 progressiveSwordMm(void)
 {
-    switch (gMmSave.info.itemEquips.sword)
-    {
-    case 0:
-        return GI_MM_SWORD_KOKIRI;
-    case 1:
-        return GI_MM_SWORD_RAZOR;
-    case 2:
+    MmSword_EnsureState();
+
+    if (MmSword_IsOwned(MM_SWORD_EXT_GILDED))
         return GI_MM_SWORD_GILDED;
-    default:
-        return Config_Flag(CFG_MM_PROGRESSIVE_GFS) ? GI_MM_GREAT_FAIRY_SWORD : GI_MM_SWORD_GILDED;
-    }
+
+    if (MmSword_IsOwned(MM_SWORD_EXT_RAZOR))
+        return GI_MM_SWORD_GILDED;
+
+    if (MmSword_IsOwned(MM_SWORD_EXT_KOKIRI))
+        return GI_MM_SWORD_RAZOR;
+
+    return GI_MM_SWORD_KOKIRI;
 }
 
 /* We use an extra field to know which shields we got from shops */
@@ -204,10 +224,28 @@ static s16 progressiveShieldOot(void)
 
 static s16 progressiveShieldMm(void)
 {
-    if ((Config_Flag(CFG_MM_DEKU_SHIELD) || Config_Flag(CFG_SHARED_SHIELDS)) && !(gSharedCustomSave.mmProgressiveShields & 1))
+    if ((Config_Flag(CFG_MM_DEKU_SHIELD) ||
+         Config_Flag(CFG_SHARED_SHIELDS)) &&
+        !(gSharedCustomSave.mmProgressiveShields &
+          MM_SHIELD_OWNED_BIT(MM_SHIELD_EXT_DEKU)))
+    {
         return GI_MM_PROGRESSIVE_SHIELD_DEKU;
-    if (!(gSharedCustomSave.mmProgressiveShields & 2))
+    }
+
+    if (!(gSharedCustomSave.mmProgressiveShields &
+          MM_SHIELD_OWNED_BIT(MM_SHIELD_EXT_HERO)))
+    {
         return GI_MM_PROGRESSIVE_SHIELD_HERO;
+    }
+
+    if ((Config_Flag(CFG_MM_SHIELD_HYLIAN) ||
+         Config_Flag(CFG_SHARED_SHIELDS)) &&
+        !(gSharedCustomSave.mmProgressiveShields &
+          MM_SHIELD_OWNED_BIT(MM_SHIELD_EXT_HYLIAN)))
+    {
+        return GI_MM_PROGRESSIVE_SHIELD_HYLIAN;
+    }
+
     return GI_MM_SHIELD_MIRROR;
 }
 
@@ -512,10 +550,15 @@ s16 Item_Progressive(s16 gi, int ovflags)
         if (Config_Flag(CFG_OOT_PROGRESSIVE_SWORDS))
             gi = progressiveSwordOot();
         break;
-    case GI_OOT_SWORD_BIGGORON:
     case GI_OOT_SWORD_KNIFE:
-        if (Config_Flag(CFG_OOT_PROGRESSIVE_SWORDS) || Config_Flag(CFG_OOT_PROGRESSIVE_SWORDS_GORON))
-            gi = progressiveSwordGoron();
+    case GI_OOT_SWORD_BIGGORON:
+        if (Config_Flag(CFG_OOT_PROGRESSIVE_BIGGORON_SWORD))
+            gi = progressiveBiggoronSwordOot();
+        break;
+    case GI_MM_SWORD_KNIFE:
+    case GI_MM_SWORD_BIGGORON:
+        if (Config_Flag(CFG_MM_PROGRESSIVE_BIGGORON_SWORD))
+            gi = progressiveBiggoronSwordMm();
         break;
     case GI_OOT_PROGRESSIVE_SHIELD_DEKU:
     case GI_OOT_PROGRESSIVE_SHIELD_HYLIAN:

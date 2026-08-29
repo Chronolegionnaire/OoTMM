@@ -132,7 +132,7 @@
 
 "break_hive": "has_weapon_range"
 
-"has_sword_level(n)": "cond(setting(sharedSwords), has(SHARED_SWORD, n), has(SWORD, n))"
+"has_sword_level(n)": "cond(setting(sharedChildSwords), has(SHARED_SWORD_CHILD, n), has(SWORD, n))"
 "has_b_sword": "has_sword_level(1)"
 "has_sword": "has_b_sword || (has(GREAT_FAIRY_SWORD) || has(SHARED_GREAT_FAIRY_SWORD))"
 "has_weapon": "has_sword || can_hammer"

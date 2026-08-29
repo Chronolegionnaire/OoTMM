@@ -127,7 +127,7 @@ const ITEM_POOL_SCARCE = new Set([
   Items.SHARED_BOMB_BAG,
   Items.SHARED_BOMBCHU_BAG,
   Items.SHARED_MAGIC_UPGRADE,
-  Items.SHARED_SWORD,
+  Items.SHARED_SWORD_CHILD,
 ]);
 
 const ITEM_POOL_SCARCE_NOLIMIT = new Set([
@@ -179,7 +179,7 @@ const ITEM_POOL_PLENTIFUL = new Set([
   Items.OOT_SPELL_WIND,
   Items.OOT_SPELL_LOVE,
   Items.OOT_STRENGTH,
-  Items.SHARED_SWORD,
+  Items.SHARED_SWORD_CHILD,
   Items.OOT_SWORD,
   Items.OOT_SWORD_GORON,
   Items.OOT_SWORD_KOKIRI,
@@ -720,11 +720,62 @@ class LogicPassWorldTransform {
   private setupSharedItems() {
     const { settings } = this.state;
 
-    if (settings.sharedSwords) {
+    if (settings.masterSwordMm) {
+      this.addItem(Items.MM_SWORD_MASTER);
+    }
+
+    if (settings.biggoronSwordMm) {
+      this.addItem(Items.MM_SWORD_KNIFE);
+      this.addItem(Items.MM_SWORD_BIGGORON);
+    }
+
+    if (settings.sharedMasterSword) {
+      this.shareItems(
+          SharedItemGroups.MASTER_SWORD,
+          'max'
+      );
+    }
+
+    if (settings.sharedBiggoronSword) {
+      if (
+          settings.progressiveBiggoronSwordShared ===
+          'progressive'
+      ) {
+        this.replaceItem(
+            Items.OOT_SWORD_KNIFE,
+            Items.OOT_SWORD_GORON
+        );
+        this.replaceItem(
+            Items.OOT_SWORD_BIGGORON,
+            Items.OOT_SWORD_GORON
+        );
+
+        this.replaceItem(
+            Items.MM_SWORD_KNIFE,
+            Items.MM_SWORD_GORON
+        );
+        this.replaceItem(
+            Items.MM_SWORD_BIGGORON,
+            Items.MM_SWORD_GORON
+        );
+
+        this.shareItems(
+            SharedItemGroups.BIGGORON_SWORD_PROGRESSIVE,
+            'max'
+        );
+      } else {
+        this.shareItems(
+            SharedItemGroups.BIGGORON_SWORDS,
+            'max'
+        );
+      }
+    }
+
+    if (settings.sharedChildSwords) {
       /* Swords */
-      this.replaceItem(Items.OOT_SWORD, Items.SHARED_SWORD);
-      this.replaceItem(Items.MM_SWORD, Items.SHARED_SWORD);
-      this.removeItem(Items.SHARED_SWORD, 3);
+      this.replaceItem(Items.OOT_SWORD, Items.SHARED_SWORD_CHILD);
+      this.replaceItem(Items.MM_SWORD, Items.SHARED_SWORD_CHILD);
+      this.removeItem(Items.SHARED_SWORD_CHILD, 3);
     }
 
     if (settings.sharedBows) {
@@ -1230,6 +1281,9 @@ class LogicPassWorldTransform {
       this.shareItems(SharedItemGroups.SHIELDS, 'max');
       this.replaceItem(Items.OOT_SHIELD_HYLIAN, Items.SHARED_SHIELD_HYLIAN);
       this.replaceItem(Items.MM_SHIELD_HERO,    Items.SHARED_SHIELD_HYLIAN);
+      if (settings.hylianShieldMm) {
+        this.replaceItem(Items.MM_SHIELD_HYLIAN, Items.SHARED_SHIELD_HYLIAN);
+      }
       if (settings.dekuShieldMm) {
         this.replaceItem(Items.OOT_SHIELD_DEKU, Items.SHARED_SHIELD_DEKU);
         this.replaceItem(Items.MM_SHIELD_DEKU, Items.SHARED_SHIELD_DEKU);
@@ -1775,7 +1829,10 @@ class LogicPassWorldTransform {
       this.replaceItem(Items.MM_SHIELD_MIRROR, Items.MM_SHIELD);
       this.addItem(Items.MM_SHIELD);
       this.removeItem(Items.MM_SHIELD_HERO);
-
+      if (settings.hylianShieldMm) {
+        this.addItem(Items.MM_SHIELD);
+        this.removeItem(Items.MM_SHIELD_HYLIAN);
+      }
       if (settings.dekuShieldMm) {
         this.addItem(Items.MM_SHIELD);
         this.removeItem(Items.MM_SHIELD_DEKU);
@@ -1783,6 +1840,10 @@ class LogicPassWorldTransform {
     }
     else if (settings.dekuShieldMm) {
       this.addItem(Items.MM_SHIELD_DEKU, 3);
+    }
+
+    if (settings.hylianShieldMm) {
+      this.addItem(Items.MM_SHIELD_HYLIAN, 3);
     }
 
     if (settings.extraChildSwordsOot) {
@@ -1917,14 +1978,22 @@ class LogicPassWorldTransform {
       this.replaceItem(Items.OOT_SWORD_MASTER,    Items.OOT_SWORD);
       this.replaceItem(Items.OOT_SWORD_KNIFE,     Items.OOT_SWORD);
       this.replaceItem(Items.OOT_SWORD_BIGGORON,  Items.OOT_SWORD);
-    } else if (settings.progressiveSwordsOot === 'goron') {
-      this.replaceItem(Items.OOT_SWORD_KNIFE,     Items.OOT_SWORD_GORON);
-      this.replaceItem(Items.OOT_SWORD_BIGGORON,  Items.OOT_SWORD_GORON);
+    }
+    if (!settings.sharedBiggoronSword && settings.progressiveBiggoronSwordOot === 'progressive')
+    {
+      this.replaceItem(Items.OOT_SWORD_KNIFE, Items.OOT_SWORD_GORON);
+      this.replaceItem(Items.OOT_SWORD_BIGGORON, Items.OOT_SWORD_GORON);
     }
 
     /* Handle MM Swords */
     if (settings.progressiveGFS === 'progressive') {
       this.replaceItem(Items.MM_GREAT_FAIRY_SWORD, Items.MM_SWORD);
+    }
+
+    if (settings.biggoronSwordMm && !settings.sharedBiggoronSword && settings.progressiveBiggoronSwordMm === 'progressive')
+    {
+      this.replaceItem(Items.MM_SWORD_KNIFE, Items.MM_SWORD_GORON);
+      this.replaceItem(Items.MM_SWORD_BIGGORON, Items.MM_SWORD_GORON);
     }
 
     if (settings.progressiveGoronLullabyMm === 'single') {
