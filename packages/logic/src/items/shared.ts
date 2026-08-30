@@ -141,8 +141,6 @@ const BOTTLES: ItemSharedDef[] = [
   { shared: Items.SHARED_FISH, oot: Items.OOT_FISH, mm: Items.MM_FISH },
 ]
 
-export const SharedItemGroups = { SOULS_ENEMY, SOULS_NPC, SOULS_ANIMAL, SOULS_MISC, SKELETON_KEY, PLATINUM_TOKEN, OCARINA_BUTTONS, SHIELDS, BOTTLES, SHOVEL };
-
 const MASTER_SWORD: ItemSharedDef[] = [
   {
     shared: Items.SHARED_SWORD_MASTER,
