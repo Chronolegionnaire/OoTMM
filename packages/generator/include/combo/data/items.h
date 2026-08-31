@@ -488,7 +488,10 @@
 #define ITEM_MM_SEEDS_30                    0xbe
 #define ITEM_MM_BULLET_BAG2                 0xbf
 #define ITEM_MM_BULLET_BAG3                 0xc0
-#define ITEM_MM_CUSTOM_MAX                  0xc1
+#define ITEM_MM_SWORD_MASTER                0xc1
+#define ITEM_MM_SWORD_GIANTS_KNIFE          0xc2
+#define ITEM_MM_SWORD_BIGGORON              0xc3
+#define ITEM_MM_CUSTOM_MAX                  0xc4
 
 /* Setting values above ITEM_MM_CUSTOM_MAX without updating this will cause magic arrow issues */
 

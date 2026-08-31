@@ -479,3 +479,14 @@ PATCH_END
 PATCH_START 0x8081CB72
   .short ITEM_MM_CUSTOM_MAX + 3
 PATCH_END
+
+/*
+==================================================================================================
+ Quest Status - extended rendering
+==================================================================================================
+*/
+
+PATCH_START 0x80821AD4
+  j     KaleidoScope_DrawTexQuadRGBA32Custom
+   nop
+PATCH_END
