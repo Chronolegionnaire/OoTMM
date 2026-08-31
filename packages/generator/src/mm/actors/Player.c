@@ -180,9 +180,36 @@ static s32 Player_MaskUsesSpecialBAction(Player* player)
     }
 }
 
-static void Player_SyncCustomSwordSpecialMaskB(Player* player)
+static u8 sCustomSwordHudDirty;
+
+static s32 Player_IsRidingHorse(Player* player)
+{
+    return player->rideActor != NULL;
+}
+
+static s32 Player_IsTemporaryMinigameBItem(u8 item)
+{
+    switch (item)
+    {
+        case ITEM_MM_BOW:
+        case ITEM_MM_BOMB:
+        case ITEM_MM_BOMBCHU:
+            return 1;
+
+        default:
+            return 0;
+    }
+}
+
+static void Player_SyncCustomSwordSpecialMaskB(
+    Player* player,
+    PlayState* play,
+    s32 allowHudRefresh)
 {
     u8 extendedSwordItem;
+    u8 desiredItem;
+    u8 currentItem;
+
     if (player->transformation != MM_PLAYER_FORM_HUMAN)
         return;
 
@@ -192,17 +219,41 @@ static void Player_SyncCustomSwordSpecialMaskB(Player* player)
     extendedSwordItem = Player_GetCustomSwordBItem();
 
     if (extendedSwordItem == ITEM_NONE)
+    {
+        sCustomSwordHudDirty = 0;
         return;
+    }
+    if (Player_IsRidingHorse(player))
+    {
+        sCustomSwordHudDirty = 1;
+        return;
+    }
+
+    currentItem =
+        gMmSave.info.itemEquips.buttonItems[0][EQUIP_SLOT_B];
+    if (Player_IsTemporaryMinigameBItem(currentItem))
+    {
+        sCustomSwordHudDirty = 1;
+        return;
+    }
 
     if (Player_MaskUsesSpecialBAction(player))
-    {
-        gMmSave.info.itemEquips.buttonItems[0][EQUIP_SLOT_B] =
-            ITEM_MM_SWORD_GILDED;
-    }
+        desiredItem = ITEM_MM_SWORD_GILDED;
     else
+        desiredItem = extendedSwordItem;
+
+    if (currentItem != desiredItem)
     {
         gMmSave.info.itemEquips.buttonItems[0][EQUIP_SLOT_B] =
-            extendedSwordItem;
+            desiredItem;
+    }
+
+    if (allowHudRefresh &&
+        sCustomSwordHudDirty &&
+        desiredItem == extendedSwordItem)
+    {
+        MmSword_RefreshHudIcon(play);
+        sCustomSwordHudDirty = 0;
     }
 }
 
@@ -212,7 +263,7 @@ void Player_UpdateWrapper(Player* this, PlayState* play)
     Player_HandleBurningDekuShield(this, play);
     Player_ClearCustomMaskSpoofBeforeUpdate(this);
     Player_RefreshMaskObjectForAge(this);
-    Player_SyncCustomSwordSpecialMaskB(this);
+    Player_SyncCustomSwordSpecialMaskB(this, play, 0);
     Player_Update(this, play);
     if (this->transformation == MM_PLAYER_FORM_HUMAN)
     {
@@ -225,6 +276,7 @@ void Player_UpdateWrapper(Player* this, PlayState* play)
         }
     }
     Player_UpdateCustomMaskBehavior(this);
+    Player_SyncCustomSwordSpecialMaskB(this, play, 1);
     Player_HandleBronzeScale(this, play);
     Dpad_Update(play);
     Ocarina_HandleWarp(this, play);
