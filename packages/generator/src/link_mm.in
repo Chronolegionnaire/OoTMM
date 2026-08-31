@@ -328,6 +328,7 @@ Matrix_Push = 0x8018019c;
 Matrix_Pop = 0x801801cc;
 
 _AddRupees = 0x801159ec;
+Rupees_ChangeBy = 0x801159EC;
 Inventory_ChangeAmmo = 0x80115a14;
 
 PlayStoreFlags = 0x80169d40;
