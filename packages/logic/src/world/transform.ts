@@ -1823,17 +1823,14 @@ class LogicPassWorldTransform {
     }
 
     /* Add MM sword extensions. */
-    /* Master Sword sharing is separate unless it is part of full OoT sword progression. */
-    if (settings.sharedMasterSword) {
-      if (settings.progressiveSwordsOot === 'progressive') {
-        this.replaceItem(Items.SHARED_SWORD_MASTER, Items.OOT_SWORD);
-        this.removeItem(Items.MM_SWORD_MASTER);
-      } else if (mustStartWithMasterSword(settings)) {
-        this.removeItem(Items.SHARED_SWORD_MASTER);
-        this.removeItem(Items.MM_SWORD_MASTER);
-      } else {
-        this.shareItems(SharedItemGroups.MASTER_SWORD, 'max');
-      }
+    if (
+        settings.masterSwordMm &&
+        !(
+            settings.sharedMasterSword &&
+            (settings.progressiveSwordsOot === 'progressive' || mustStartWithMasterSword(settings))
+        )
+    ) {
+      this.addItem(Items.MM_SWORD_MASTER);
     }
 
     if (settings.goronSwordsMm) {
@@ -2017,7 +2014,7 @@ class LogicPassWorldTransform {
     if (
         settings.goronSwordsMm &&
         !settings.sharedGoronSwords &&
-        settings.progressiveGoronSwordsMm
+        settings.progressiveGoronSwordsMm === 'progressive'
     ) {
       this.replaceItem(Items.MM_SWORD_KNIFE, Items.MM_SWORD_GORON);
     }
