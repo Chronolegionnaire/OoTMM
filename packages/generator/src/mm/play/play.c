@@ -543,6 +543,19 @@ static void Play_AfterInit(PlayState* play)
         comboClearCustomRespawn(CUSTOM_RESPAWN_MODE_DUNGEON_ENTRANCE);
         break;
     }
+    MmSword_RefreshNativeEquip(gSaveContext.save.playerForm == MM_PLAYER_FORM_HUMAN ? play : NULL);
+    MmShield_RefreshNativeEquip(gSaveContext.save.playerForm == MM_PLAYER_FORM_HUMAN ? play : NULL);
+}
+
+static void MmEquipment_PrimeNativeEquips(void)
+{
+    if (gSaveContext.save.playerForm != MM_PLAYER_FORM_HUMAN)
+        return;
+
+    MmSword_EnsureState();
+    MmShield_EnsureState();
+    MmSword_RefreshNativeEquip(NULL);
+    MmShield_RefreshNativeEquip(NULL);
 }
 
 u32 gGameEntrance;
@@ -673,6 +686,7 @@ void hookPlay_Init(PlayState* play)
     MM_SET_EVENT_WEEK(EV_MM_WEEK_TINGLE_TALKED);
 
     Play_FixupSpawnTime();
+    MmEquipment_PrimeNativeEquips();
     Play_Init(play);
     Play_AfterInit(play);
 

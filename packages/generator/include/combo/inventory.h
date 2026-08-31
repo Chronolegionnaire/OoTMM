@@ -26,4 +26,60 @@ void Inventory_SaveLotteryCodeGuess(PlayState* play);
 
     void Inventory_ReobtainProgressiveShields(void);
 
+typedef enum
+{
+    MM_SWORD_NONE = 0,
+    MM_SWORD_KOKIRI,
+    MM_SWORD_RAZOR,
+    MM_SWORD_GILDED,
+    MM_SWORD_MASTER,
+    MM_SWORD_GIANTS_KNIFE,
+    MM_SWORD_BIGGORON,
+    MM_SWORD_MAX,
+}
+MmSwordId;
+
+s32 MmSword_IsOwned(MmSwordId sword);
+void MmSword_EnsureState(void);
+
+MmSwordId MmSword_GetSelected(void);
+MmSwordId MmSword_GetEquipped(void);
+MmSwordId MmSword_GetNextOwned(MmSwordId sword);
+
+void MmSword_SetSelected(MmSwordId sword);
+void MmSword_Equip(PlayState* play, MmSwordId sword);
+
+u16 MmSword_GetGiantsKnifeHealth(void);
+void MmSword_SetGiantsKnifeHealth(u16 health);
+
+void MmSword_RefreshNativeEquip(PlayState* play);
+void MmSword_RefreshHudIcon(PlayState* play);
+
+typedef enum
+{
+    MM_SHIELD_NONE = 0,
+    MM_SHIELD_DEKU,
+    MM_SHIELD_HERO,
+    MM_SHIELD_HYLIAN,
+    MM_SHIELD_MIRROR,
+    MM_SHIELD_MAX,
+}
+MmShieldId;
+
+s32 MmShield_IsOwned(MmShieldId shield);
+void MmShield_EnsureState(void);
+
+MmShieldId MmShield_GetSelected(void);
+MmShieldId MmShield_GetEquipped(void);
+MmShieldId MmShield_GetLost(void);
+MmShieldId MmShield_GetNextOwned(MmShieldId shield);
+
+void MmShield_SetSelected(MmShieldId shield);
+void MmShield_Equip(PlayState* play, MmShieldId shield);
+void MmShield_Lose(PlayState* play, MmShieldId shield);
+void MmShield_Unequip(PlayState* play);
+void MmShield_RefreshNativeEquip(PlayState* play);
+
+s32 Inventory_GetBtnBItem(struct PlayState* play);
+
 #endif

@@ -728,4 +728,13 @@ bool func_800B715C(struct PlayState* play);
 
 void func_8012301C(Actor* thisx, struct PlayState* play2);
 
+void Player_SetModelsForHoldingShield(Player*);
+
+static Vec3f sChildHylianShieldQuad[4] = {
+    { -3000.0f, -3000.0f, -900.0f },
+    {  3000.0f, -3000.0f, -900.0f },
+    { -3000.0f,  3000.0f, -900.0f },
+    {  3000.0f,  3000.0f, -900.0f },
+};
+
 #endif

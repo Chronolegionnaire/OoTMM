@@ -78,8 +78,22 @@ static void Age_SwapEquipmentMm(void)
         curAge->buttonItems[i] = gMmSave.info.itemEquips.buttonItems[0][i];
         curAge->cButtonSlots[i] = gMmSave.info.itemEquips.cButtonSlots[0][i];
     }
+
     curAge->boots = gMmSave.info.itemEquips.boots;
     curAge->tunic = gMmSave.info.itemEquips.tunic;
+
+    /* Validate new age logical equipment */
+    if (newAge->sword != MM_SWORD_NONE &&
+        !MmSword_IsOwned((MmSwordId)newAge->sword))
+    {
+        newAge->sword = MM_SWORD_NONE;
+    }
+
+    if (newAge->shield != MM_SHIELD_NONE &&
+        !MmShield_IsOwned((MmShieldId)newAge->shield))
+    {
+        newAge->shield = MM_SHIELD_NONE;
+    }
 
     /* Load new equips */
     for (int i = EQUIP_SLOT_C_LEFT; i <= EQUIP_SLOT_C_RIGHT; ++i)
@@ -87,6 +101,7 @@ static void Age_SwapEquipmentMm(void)
         gMmSave.info.itemEquips.buttonItems[0][i] = newAge->buttonItems[i];
         gMmSave.info.itemEquips.cButtonSlots[0][i] = newAge->cButtonSlots[i];
     }
+
     gMmSave.info.itemEquips.boots = newAge->boots;
     gMmSave.info.itemEquips.tunic = newAge->tunic;
 
@@ -94,8 +109,10 @@ static void Age_SwapEquipmentMm(void)
     for (int i = EQUIP_SLOT_C_LEFT; i <= EQUIP_SLOT_C_RIGHT; ++i)
     {
         u8 slot = gMmSave.info.itemEquips.cButtonSlots[0][i];
+
         if (slot >= ITS_MM_BOTTLE && slot <= ITS_MM_BOTTLE6)
-            gMmSave.info.itemEquips.buttonItems[0][i] = gMmSave.info.inventory.items[slot];
+            gMmSave.info.itemEquips.buttonItems[0][i] =
+                gMmSave.info.inventory.items[slot];
     }
 }
 
@@ -139,6 +156,9 @@ void Age_SetRawMm(PlayState* play, int age)
 
     Age_OnChangeMm();
     gMmSave.linkAge = age;
+
+    MmSword_RefreshNativeEquip(NULL);
+    MmShield_RefreshNativeEquip(NULL);
 }
 
 void Age_SetOot(PlayState* play, int age)
