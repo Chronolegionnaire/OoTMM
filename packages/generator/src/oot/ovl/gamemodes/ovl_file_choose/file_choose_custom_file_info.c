@@ -494,7 +494,7 @@ static void FileSelect_CustomFileInfoPrepareOotEquips(FileSelectState* this, Gfx
 
         if (dekuNut == 1) {
             change_hsv((Color_RGBA8*)nutTex, 0x1000 / sizeof(Color_RGBA8),
-                       0.0f, 0.0f, 0.0f);
+                       1.0f, 1.0f, 1.0f);
         } else if (dekuNut == 2) {
             change_hsv((Color_RGBA8*)nutTex, 0x1000 / sizeof(Color_RGBA8),
                        0.0f, 0.15f, 1.6f);
@@ -562,6 +562,8 @@ static void FileSelect_CustomFileInfoPrepareMmEquips(FileSelectState* this, Gfx*
     u16 iconBulletBag;
     u16 iconWallet;
     s32 hasSword;
+    u16 iconSwordKnife;
+    s32 hasSwordKnife;
 
     iconMagic = 0x12;
     iconStrength = ITEM_OOT_GORON_BRACELET;
@@ -570,6 +572,8 @@ static void FileSelect_CustomFileInfoPrepareMmEquips(FileSelectState* this, Gfx*
     iconBombBag = ITEM_MM_BOMB_BAG | ICONF_MM;
     iconBulletBag = ITEM_OOT_BULLET_BAG;
     iconWallet = ITEM_MM_WALLET2 | ICONF_MM;
+    iconSwordKnife = ITEM_OOT_SWORD_KNIFE_BIGGORON;
+    hasSwordKnife = 0;
     hasSword = 0;
     if (gMmSave.info.playerData.isDoubleMagicAcquired)
         iconMagic = 0x13;
@@ -669,10 +673,23 @@ static void FileSelect_CustomFileInfoPrepareMmEquips(FileSelectState* this, Gfx*
         x += drawItemIcon(list, end, x, y, iconStrength, gMmSave.info.inventory.upgrades.strength);
     //x += drawItemIcon(list, end, x, y, ITEM_MM_BOMBER_NOTEBOOK | ICONF_MM, gMmSave.info.inventory.quest.notebook);
     // Disabled, not working
+
+    if (MmSword_IsOwned(MM_SWORD_BIGGORON)) {
+        iconSwordKnife = ITEM_OOT_SWORD_KNIFE_BIGGORON;
+        hasSwordKnife = 1;
+    } else if (MmSword_IsOwned(MM_SWORD_GIANTS_KNIFE)) {
+        if (MmSword_GetGiantsKnifeHealth() == 0) {
+            iconSwordKnife = ITEM_OOT_SWORD_KNIFE_BROKEN;
+        } else {
+            iconSwordKnife = ITEM_OOT_SWORD_KNIFE_BIGGORON;
+        }
+
+        hasSwordKnife = 1;
+    }
+
     x += drawItemIcon(list, end, x, y, iconSword, hasSword);
-    x += drawItemIcon(list, end, x, y, ITEM_MM_SWORD_MASTER | ICONF_MM, MmSword_IsOwned(MM_SWORD_MASTER));
-    x += drawItemIcon(list, end, x, y, ITEM_MM_SWORD_GIANTS_KNIFE | ICONF_MM, MmSword_IsOwned(MM_SWORD_GIANTS_KNIFE));
-    x += drawItemIcon(list, end, x, y, ITEM_MM_SWORD_BIGGORON | ICONF_MM, MmSword_IsOwned(MM_SWORD_BIGGORON));
+    x += drawItemIcon(list, end, x, y, ITEM_OOT_SWORD_MASTER, MmSword_IsOwned(MM_SWORD_MASTER));
+    x += drawItemIcon(list, end, x, y, iconSwordKnife, hasSwordKnife);
 
     if (Config_Flag(CFG_MM_DEKU_SHIELD))
         x += drawItemIcon(list, end, x, y, ITEM_OOT_SHIELD_DEKU, MmShield_IsOwned(MM_SHIELD_DEKU));

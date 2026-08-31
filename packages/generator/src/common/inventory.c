@@ -107,12 +107,44 @@ u16 MmSword_GetGiantsKnifeHealth(void)
     return gSharedCustomSave.mm.mmGiantsKnifeHealth;
 }
 
+static void SyncOotGiantsKnifeEquip(OotItemEquips* equips, u16 health)
+{
+    if (health == 0)
+    {
+        if (equips->buttonItems[0] == ITEM_OOT_SWORD_KNIFE_BIGGORON)
+            equips->buttonItems[0] = ITEM_OOT_SWORD_KNIFE_BROKEN;
+    }
+    else
+    {
+        if (equips->buttonItems[0] == ITEM_OOT_SWORD_KNIFE_BROKEN)
+            equips->buttonItems[0] = ITEM_OOT_SWORD_KNIFE_BIGGORON;
+    }
+}
+
 void MmSword_SetGiantsKnifeHealth(u16 health)
 {
     if (Config_Flag(CFG_SHARED_GORON_SWORDS))
+    {
         gOotSave.info.playerData.swordHealth = health;
-    else
-        gSharedCustomSave.mm.mmGiantsKnifeHealth = (u8)health;
+
+        if (health == 0)
+        {
+            gOotSave.info.inventory.equipment.swords |=
+                EQ_OOT_SWORD_KNIFE_BROKEN;
+        }
+        else
+        {
+            gOotSave.info.inventory.equipment.swords &=
+                ~EQ_OOT_SWORD_KNIFE_BROKEN;
+        }
+        SyncOotGiantsKnifeEquip(&gOotSave.info.equips, health);
+        SyncOotGiantsKnifeEquip(&gOotSave.info.adultEquips, health);
+        SyncOotGiantsKnifeEquip(&gOotSave.info.childEquips, health);
+
+        return;
+    }
+
+    gSharedCustomSave.mm.mmGiantsKnifeHealth = health;
 }
 
 void MmSword_Equip(PlayState* play, MmSwordId sword)
