@@ -284,7 +284,12 @@ void MmShield_RefreshNativeEquip(PlayState* play)
 
 #if defined(GAME_MM)
     if (play)
-        UpdateEquipment(play, GET_PLAYER(play));
+    {
+        Player* player = GET_PLAYER(play);
+
+        if (player)
+            UpdateEquipment(play, player);
+    }
 #endif
 }
 
@@ -336,8 +341,13 @@ void MmSword_RefreshNativeEquip(PlayState* play)
 #if defined(GAME_MM)
     if (play)
     {
-        UpdateEquipment(play, GET_PLAYER(play));
-        Interface_LoadItemIconImpl(play, EQUIP_SLOT_B);
+        Player* player = GET_PLAYER(play);
+
+        if (player)
+        {
+            UpdateEquipment(play, player);
+            Interface_LoadItemIconImpl(play, EQUIP_SLOT_B);
+        }
     }
 #endif
 }
