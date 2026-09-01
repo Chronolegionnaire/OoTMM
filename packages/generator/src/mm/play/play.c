@@ -453,6 +453,7 @@ static void Play_CheckItemRestrictions()
 
 static void Play_AfterInit(PlayState* play)
 {
+    Player* player;
     DrawGiSystem_Reset(play);
     gLastEntrance = gSave.entrance;
     g.inGrotto = (play->sceneId == SCE_MM_GROTTOS);
@@ -543,8 +544,18 @@ static void Play_AfterInit(PlayState* play)
         comboClearCustomRespawn(CUSTOM_RESPAWN_MODE_DUNGEON_ENTRANCE);
         break;
     }
-    MmSword_RefreshNativeEquip(gSaveContext.save.playerForm == MM_PLAYER_FORM_HUMAN ? play : NULL);
-    MmShield_RefreshNativeEquip(gSaveContext.save.playerForm == MM_PLAYER_FORM_HUMAN ? play : NULL);
+    player = GET_PLAYER(play);
+
+    if (gSaveContext.save.playerForm == MM_PLAYER_FORM_HUMAN && player)
+    {
+        MmSword_RefreshNativeEquip(play);
+        MmShield_RefreshNativeEquip(play);
+    }
+    else
+    {
+        MmSword_RefreshNativeEquip(NULL);
+        MmShield_RefreshNativeEquip(NULL);
+    }
 }
 
 static void MmEquipment_PrimeNativeEquips(void)
@@ -739,7 +750,9 @@ void Play_MainWrapper(PlayState* play)
     comboCacheGarbageCollect();
     comboObjectsGC();
     link = GET_PLAYER(play);
-    Player_TryUpdateForm(link, play);
+
+    if (link)
+        Player_TryUpdateForm(link, play);
 
     if (gSaveContext.gameMode == GAMEMODE_NORMAL)
         Multi_Update(play);
