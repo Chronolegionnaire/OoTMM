@@ -491,7 +491,8 @@
 #define ITEM_MM_SWORD_MASTER                0xc1
 #define ITEM_MM_SWORD_GIANTS_KNIFE          0xc2
 #define ITEM_MM_SWORD_BIGGORON              0xc3
-#define ITEM_MM_CUSTOM_MAX                  0xc4
+#define ITEM_MM_SHIELD_HYLIAN               0xc4
+#define ITEM_MM_CUSTOM_MAX                  0xc5
 
 /* Setting values above ITEM_MM_CUSTOM_MAX without updating this will cause magic arrow issues */
 

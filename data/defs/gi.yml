@@ -564,7 +564,7 @@
 - { id: MM_SHIELD_DEKU, type: NORMAL, add: [MM_SHIELD, 1], flags: 0xa0, draw: [OOT_SHIELD_DEKU, 0], object: [oot, 0x00cb], name: "the <C1>Deku Shield" }
 - { id: MM_SHIELD_HERO, item: MM_SHIELD_HERO, type: NORMAL, add: [MM_SHIELD, 2], flags: 0xa0, draw: [MM_SHIELD_HERO, 0], object: [mm, 0x00b3], name: "the <C1>Hero's Shield" }
 - { id: MM_SHIELD_MIRROR, item: MM_SHIELD_MIRROR, type: MAJOR, add: [MM_SHIELD, 4], flags: 0xa0, draw: MM_SHIELD_MIRROR, object: [mm, 0x00c3], name: "the <C1>Mirror Shield" }
-- { id: MM_SHIELD_HYLIAN, item: OOT_SHIELD_HYLIAN, type: NORMAL, add: [MM_SHIELD, 3], flags: 0xa0, draw: [OOT_SHIELD_HYLIAN, 0], object: [oot, 0x00dc], name: "the <C1>Hylian Shield" }
+- { id: MM_SHIELD_HYLIAN, item: MM_SHIELD_HYLIAN, type: NORMAL, add: [MM_SHIELD, 3], flags: 0xa0, draw: [OOT_SHIELD_HYLIAN, 0], object: [oot, 0x00dc], name: "the <C1>Hylian Shield" }
 - { id: MM_PROGRESSIVE_SHIELD_HYLIAN, type: MAJOR, add: [MM_SHIELD, 0x103], flags: 0xa0, draw: [OOT_SHIELD_HYLIAN, 1], object: [oot, 0x00dc], name: "the <C1>Progressive Hylian Shield" }
 - { id: MM_PROGRESSIVE_SHIELD_DEKU, type: MAJOR, add: [MM_SHIELD, 0x101], flags: 0xa0, draw: [OOT_SHIELD_DEKU, 1], object: [oot, 0x00cb], name: "the <C1>Progressive Deku Shield" }
 - { id: MM_PROGRESSIVE_SHIELD_HERO, type: MAJOR, add: [MM_SHIELD, 0x102], flags: 0xa0, draw: [MM_SHIELD_HERO, 1], object: [mm, 0x00b3], name: "the <C1>Progressive Hero's Shield" }
