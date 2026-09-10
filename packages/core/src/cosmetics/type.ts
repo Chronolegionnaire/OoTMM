@@ -28,7 +28,6 @@ type InputToShape<T> = T extends CosmeticsDataColor ? { [K in T['key']]: ColorAr
   : never;
 
 type CosmeticsDataEntry = typeof COSMETICS[number];
-
 type CosmeticsShapes = InputToShape<CosmeticsDataEntry>;
 
 type UnionToIntersection<U> =
@@ -36,4 +35,7 @@ type UnionToIntersection<U> =
 
 type CosmeticsBase = UnionToIntersection<CosmeticsShapes>;
 
-export type Cosmetics = CosmeticsBase;
+export type Cosmetics = CosmeticsBase & {
+  equipmentOot: BufferPath[];
+  equipmentMm: BufferPath[];
+};

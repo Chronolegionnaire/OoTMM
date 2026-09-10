@@ -19,35 +19,64 @@
 
 void ArrowCycle_Handle(Player* link, PlayState* play);
 
-#define MM_AUDIO_CONTEXT_ADDR               0x80200c70u
-#define MM_AUDIO_CONTEXT_SEQ_PLAYERS_OFFSET 0x4460u
-#define MM_SEQUENCE_PLAYER_SIZE             0x0160u
-#define MM_SEQUENCE_PLAYER_SFX              2u
-#define MM_HUMAN_VOICE_POINTER_BYTES        0x40u
+#define MM_AUDIO_CONTEXT_ADDR                  0x80200c70u
+#define MM_AUDIO_CONTEXT_SEQ_PLAYERS_OFFSET    0x4460u
+#define MM_SEQUENCE_PLAYER_SIZE                0x0160u
+#define MM_SEQUENCE_PLAYER_SFX                 2u
+#define MM_SEQUENCE_PLAYER_SEQ_ID_OFFSET       0x0004u
+#define MM_SEQUENCE_PLAYER_SEQ_DATA_OFFSET     0x0018u
+#define MM_HUMAN_VOICE_POINTER_COUNT           0x20u
+#define MM_HUMAN_VOICE_POINTER_BYTES           (MM_HUMAN_VOICE_POINTER_COUNT * 2u)
+
+static u8* PlayerVoice_GetSfxSequenceData(void)
+{
+    u8* seqPlayer;
+
+    seqPlayer = (u8*)(
+        MM_AUDIO_CONTEXT_ADDR +
+        MM_AUDIO_CONTEXT_SEQ_PLAYERS_OFFSET +
+        MM_SEQUENCE_PLAYER_SFX * MM_SEQUENCE_PLAYER_SIZE
+    );
+
+    if (seqPlayer[MM_SEQUENCE_PLAYER_SEQ_ID_OFFSET] != 0)
+        return NULL;
+
+    return *(u8**)(seqPlayer + MM_SEQUENCE_PLAYER_SEQ_DATA_OFFSET);
+}
+
+static s32 PlayerVoice_PointerTableEquals(const u8* a, const u8* b)
+{
+    u32 i;
+
+    for (i = 0; i < MM_HUMAN_VOICE_POINTER_BYTES; ++i)
+    {
+        if (a[i] != b[i])
+            return 0;
+    }
+
+    return 1;
+}
 
 static void PlayerVoice_UpdateHumanAgeRouting(Player* player)
 {
-    u8* seqPlayer;
     u8* seqData;
     u8* dst;
     const u8* src;
-
     if (!player || player->transformation != MM_PLAYER_FORM_HUMAN)
         return;
 
-    seqPlayer = (u8*)(MM_AUDIO_CONTEXT_ADDR + MM_AUDIO_CONTEXT_SEQ_PLAYERS_OFFSET + MM_SEQUENCE_PLAYER_SFX * MM_SEQUENCE_PLAYER_SIZE);
-    if (seqPlayer[4] != 0)
-        return;
-
-    seqData = *(u8**)(seqPlayer + 0x18);
+    seqData = PlayerVoice_GetSfxSequenceData();
     if (!seqData)
         return;
 
     dst = seqData + CUSTOM_MM_HUMAN_VOICE_POINTER_TABLE_OFFSET;
-    src = seqData + (
-        comboIsLinkAdult() ? CUSTOM_MM_ADULT_VOICE_POINTER_TABLE_OFFSET : CUSTOM_MM_CHILD_VOICE_POINTER_TABLE_OFFSET);
 
-    if (memcmp(dst, src, MM_HUMAN_VOICE_POINTER_BYTES))
+    if (comboIsLinkAdult())
+        src = seqData + CUSTOM_MM_ADULT_VOICE_POINTER_TABLE_OFFSET;
+    else
+        src = seqData + CUSTOM_MM_CHILD_VOICE_POINTER_TABLE_OFFSET;
+
+    if (!PlayerVoice_PointerTableEquals(dst, src))
         memcpy(dst, src, MM_HUMAN_VOICE_POINTER_BYTES);
 }
 
@@ -302,6 +331,7 @@ void Player_UpdateWrapper(Player* this, PlayState* play)
     Player_HandleBurningDekuShield(this, play);
     Player_ClearCustomMaskSpoofBeforeUpdate(this);
     Player_RefreshMaskObjectForAge(this);
+    PlayerVoice_UpdateHumanAgeRouting(this);
     Player_UpdateHumanStrengthRestrictions();
     Player_SyncCustomSwordSpecialMaskB(this, play, 0);
     Player_Update(this, play);
@@ -2165,6 +2195,35 @@ void Player_SkelAnime_DrawFlexLod(PlayState* play, void** skeleton, Vec3s* joint
     }
 
     sPlayerOverrideLimb = overrideLimbDraw;
+    if (player->transformation == MM_PLAYER_FORM_HUMAN && comboIsLinkAdult())
+    {
+        s32 objectSlot = player->actor.objectSlot;
+
+        if (objectSlot >= 0 &&
+            objectSlot < ARRAY_COUNT(play->objectCtx.slots))
+        {
+            u8* objectSegment = play->objectCtx.slots[objectSlot].segment;
+
+            if (objectSegment != NULL)
+            {
+                u32 tableAddr;
+                gSegments[6] = OS_K0_TO_PHYSICAL(objectSegment);
+                gSPSegment(POLY_OPA_DISP++, 0x06, objectSegment);
+                gSPSegment(POLY_XLU_DISP++, 0x06, objectSegment);
+                tableAddr =
+                    ((u32)objectSegment[0x5420] << 24) |
+                    ((u32)objectSegment[0x5421] << 16) |
+                    ((u32)objectSegment[0x5422] << 8) |
+                    ((u32)objectSegment[0x5423]);
+
+                if ((tableAddr & 0xff000000) == 0x06000000)
+                {
+                    u32 tableOffset = tableAddr & 0x00ffffff;
+                    skeleton = (void**)(objectSegment + tableOffset);
+                }
+            }
+        }
+    }
     SkelAnime_DrawFlexLod(play, skeleton, jointTable, dListCount, Player_OverrideLimbWrapper, postLimbDraw, &player->actor, lod);
 
     if (overrideLimbDraw != Player_OverrideLimbDrawGameplayFirstPerson && gSaveContext.gameMode != GAMEMODE_END_CREDITS)
@@ -3751,3 +3810,4 @@ s32 Player_SetCsActionHook(PlayState *play, Actor *csActor, u8 csAction)
         return false;
     return _Player_SetCsAction(play, csActor, csAction);
 }
+

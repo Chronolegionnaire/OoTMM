@@ -21,7 +21,8 @@ export class ObjectEditor {
   private bbMax = [-Infinity, -Infinity, -Infinity];
 
   constructor(
-    private readonly segOut: number,
+      private readonly segOut: number,
+      private readonly outBase: number = 0,
   ) {
   }
 
@@ -117,7 +118,7 @@ export class ObjectEditor {
       }
     }
 
-    const outAddr = this.outSize | (this.segOut << 24);
+    const outAddr = (this.outBase + this.outSize) | (this.segOut << 24);
     this.outSize += size;
     this.out.push(list);
     if (this.outSize % 16) {
@@ -131,7 +132,7 @@ export class ObjectEditor {
   }
 
   private emitData(data: Uint8Array) {
-    const newAddr = this.outSize | (this.segOut << 24);
+    const newAddr = (this.outBase + this.outSize) | (this.segOut << 24);
     this.outSize += data.length;
     this.out.push(data);
     if (this.outSize % 16) {
@@ -440,7 +441,11 @@ export class ObjectEditor {
     if (seenAddr !== undefined) {
       return seenAddr;
     }
-    const newAddr = this.outSize | (this.segOut << 24);
+    /* copy() must use the same append base as processList()/emitData().
+     * Equipment cosmetics append imported texture/palette/matrix data to an
+     * existing Link object; without outBase here, those commands point near
+     * the beginning of the object instead of at the appended bytes. */
+    const newAddr = (this.outBase + this.outSize) | (this.segOut << 24);
     this.outSize += sub.length;
     this.out.push(sub);
     this.seen.set(addr, newAddr);
