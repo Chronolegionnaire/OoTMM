@@ -8,8 +8,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@ootmm/data": "workspace:*",
+    "@audio/decode-aiff": "^1.3.0",
+    "@audio/decode-vorbis": "^1.3.2",
+    "@audio/decode-wav": "^1.5.0",
     "@ootmm/core": "workspace:*",
+    "@ootmm/data": "workspace:*",
     "@ootmm/logic": "workspace:*",
     "@ootmm/tools": "workspace:*",
     "crc-32": "^1.2.2",
@@ -24,9 +27,9 @@
   "devDependencies": {
     "@types/lodash-es": "catalog:",
     "@types/pngjs": "^6.0.5",
-    "type-fest": "catalog:",
     "fast-xml-parser": "catalog:",
     "gl-matrix": "^3.4.4",
+    "type-fest": "catalog:",
     "yaml": "catalog:"
   },
   "files": [

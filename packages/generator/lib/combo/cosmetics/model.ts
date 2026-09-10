@@ -1,7 +1,7 @@
 import { RomBuilder } from '../rom-builder';
 import { bufWriteU16BE, bufWriteU32BE } from '../util/buffer';
 
-const OOT_LINK_CHILD_OFFSETS = {
+export const OOT_LINK_CHILD_OFFSETS = {
   LUT_DL_SHIELD_DEKU: 0x060050D0,
   LUT_DL_WAIST: 0x060050D8,
   LUT_DL_RTHIGH: 0x060050E0,
@@ -78,7 +78,7 @@ const OOT_LINK_CHILD_OFFSETS = {
   HIERARCHY: 0x060053A8,
 };
 
-const OOT_LINK_ADULT_OFFSETS = {
+export const OOT_LINK_ADULT_OFFSETS = {
   LUT_DL_WAIST: 0x06005090,
   LUT_DL_RTHIGH: 0x06005098,
   LUT_DL_RSHIN: 0x060050A0,
@@ -421,6 +421,7 @@ export function enableModelOotLinkAdult(builder: RomBuilder, dfAddr: number) {
   patchPtrLo(fileArmsHook.data, 0xa76, OOT_LINK_ADULT_OFFSETS.LUT_DL_HOOKSHOT_HOOK);
   patchPtrHi(fileArmsHook.data, 0xb66, OOT_LINK_ADULT_OFFSETS.LUT_DL_HOOKSHOT_CHAIN);
   patchPtrLo(fileArmsHook.data, 0xb6a, OOT_LINK_ADULT_OFFSETS.LUT_DL_HOOKSHOT_CHAIN);
+  patchPtr16(fileArmsHook.data, 0xba8, 0x0014);
 
   patchPtr(fileEffStick.data, 0x32C, OOT_LINK_ADULT_OFFSETS.LUT_DL_BLADEBREAK);
   patchPtr16(fileEffStick.data, 0x328, 0x0014);

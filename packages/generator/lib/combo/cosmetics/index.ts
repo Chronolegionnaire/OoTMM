@@ -7,11 +7,36 @@ import { COLORS, Monitor, Random, randString, sample } from '@ootmm/core';
 import { recolorImage } from '../image';
 import { RomBuilder } from '../rom-builder';
 import { png } from '../util/png';
-import { toU32Buffer } from '../util';
 import { enableModelOotLinkAdult, enableModelOotLinkChild } from './model';
 import { randomizeMusic } from './music';
 import { LogWriter } from '../util/log-writer';
-import { bufReadU32BE } from '../util/buffer';
+import { bufReadU32BE, bufWriteU32BE } from '../util/buffer';
+import {
+  compactOotPlayerModel,
+  OOT_ADULT_MODEL_SIZE,
+  OOT_CHILD_MODEL_SIZE,
+  prepareOotModel,
+} from './oot-model-loader.ts';
+import {
+  compactMmPlayerModel,
+  patchMmAdultModelTables,
+  patchMmChildModelTables,
+  prepareMmModel,
+} from './mm-model-loader.ts';
+import { mergePlayerModelInputs, resolvePlayerModelInput } from './model-input';
+import type { ResolvedPlayerModel } from './model-input';
+import { mergePlayerVoiceInputs, resolvePlayerVoiceInput } from './voice-input';
+import { patchPlayerVoices } from './voice';
+import {toU32Buffer} from "../util.ts";
+import {
+  applyEquipmentOverridesToMmGameplayKeep,
+  applyEquipmentOverridesToMmModel,
+  applyEquipmentOverridesToOotModel,
+  applyEquipmentOverridesToPreparedMmModel,
+  applyEquipmentOverridesToPreparedOotModel,
+  resolveEquipmentInput,
+  type EquipmentResolvedOverride,
+} from './equipment-input';
 
 export async function cosmeticsAssets() {
   return {
@@ -44,14 +69,14 @@ function brightness(color: number, bright: number): number {
 
 function resolveColor(random: Random, c: ColorArg, auto?: () => number | null): number | null {
   switch (c) {
-  case 'default':
-    return null;
-  case 'random':
-    return sample(random, Object.values(COLORS)).value;
-  case 'auto':
-    return auto ? auto() : null;
-  default:
-    return COLORS[c].value;
+    case 'default':
+      return null;
+    case 'random':
+      return sample(random, Object.values(COLORS)).value;
+    case 'auto':
+      return auto ? auto() : null;
+    default:
+      return COLORS[c].value;
   }
 }
 
@@ -60,10 +85,10 @@ class CosmeticsPass {
   private logWriter: LogWriter;
 
   constructor(
-    private monitor: Monitor,
-    private opts: Options,
-    private builder: RomBuilder,
-    private symbols: Record<Game, Map<string, number[]>>,
+      private monitor: Monitor,
+      private opts: Options,
+      private builder: RomBuilder,
+      private symbols: Record<Game, Map<string, number[]>>,
   ) {
     this.assetsPromise = null;
     this.logWriter = new LogWriter();
@@ -263,6 +288,32 @@ class CosmeticsPass {
     }
   }
 
+  private equipmentInputName(path: BufferPath, index: number) {
+    if (typeof path === 'string') return path;
+    if (typeof File !== 'undefined' && path instanceof File) return path.name;
+    return `equipment-${index + 1}`;
+  }
+
+  private async resolveEquipmentCosmetics(game: 'oot' | 'mm', paths: BufferPath[]): Promise<Map<string, EquipmentResolvedOverride>> {
+    const winners = new Map<string, EquipmentResolvedOverride>();
+
+    for (let i = 0; i < paths.length; ++i) {
+      const data = await this.getPathBuffer(paths[i]);
+      if (!data) continue;
+      const sourceName = this.equipmentInputName(paths[i], i);
+      const overrides = await resolveEquipmentInput(data, sourceName);
+      for (let j = 0; j < overrides.length; ++j) {
+        const override = overrides[j];
+        if (!override.targetId.startsWith(`${game}:`)) {
+          throw new Error(`${sourceName}: configured for ${override.targetId.startsWith('oot:') ? 'OoT' : 'MM'} but was placed in the ${game === 'oot' ? 'OoT' : 'MM'} equipment list`);
+        }
+        winners.set(override.targetId, { ...override, stackOrder: i * 0x1000 + j });
+      }
+    }
+
+    return winners;
+  }
+
   private validateModel(data: Uint8Array) {
     const magic = new TextEncoder().encode('MODLOADER64');
     const index = data.findIndex((v, i) => {
@@ -295,50 +346,133 @@ class CosmeticsPass {
     throw new Error('Failed to find empty list offset');
   }
 
-  private async patchOotChildModel() {
-    const model = await this.getPathBuffer(this.opts.cosmetics.modelOotChildLink);
-    if (model) {
-      this.validateModel(model);
-
-      /* Inject the new model */
-      const code = this.builder.fileByNameRequired('oot/code');
-      const objEntryOffset = 0xe7f58 + 8 * 0x15;
-      const obj = this.addNewFile(model);
-      const objBuffer = toU32Buffer(obj);
-      code.data.set(objBuffer, objEntryOffset);
-
-      /* Enable the PlayAs hooks */
-      const dfAddr = this.findEmptyListOffset(model);
-      enableModelOotLinkChild(this.builder, dfAddr);
-
-      /* Delete the original */
-      const original = this.builder.fileByNameRequired('oot/objects/object_link_child');
-      original.type = 'dummy';
-      original.data = new Uint8Array(0);
-    }
+  private logCompaction(game: 'OoT' | 'MM', age: 'adult' | 'child', before: number, used: number, replaced: string[]) {
+    const fallback = replaced.length > 0
+        ? `; forced vanilla equipment: ${replaced.join(', ')}`
+        : '';
+    this.monitor.log(
+        `${game} ${age} player model compacted: ` +
+        `0x${before.toString(16)} -> 0x${used.toString(16)}${fallback}`
+    );
   }
 
-  private async patchOotAdultModel() {
-    const model = await this.getPathBuffer(this.opts.cosmetics.modelOotAdultLink);
-    if (model) {
-      this.validateModel(model);
+  private async patchOotChildModel(modelInput: ResolvedPlayerModel | null, equipment: Map<string, EquipmentResolvedOverride>) {
+    const original = this.builder.fileByNameRequired('oot/objects/object_link_child');
 
-      /* Inject the new model */
-      const code = this.builder.fileByNameRequired('oot/code');
-      const objEntryOffset = 0xe7f58 + 8 * 0x14;
-      const obj = this.addNewFile(model);
-      const objBuffer = toU32Buffer(obj);
-      code.data.set(objBuffer, objEntryOffset);
-
-      /* Enable the PlayAs hooks */
-      const dfAddr = this.findEmptyListOffset(model);
-      enableModelOotLinkAdult(this.builder, dfAddr);
-
-      /* Delete the original */
-      const original = this.builder.fileByNameRequired('oot/objects/object_link_boy');
-      original.type = 'dummy';
-      original.data = new Uint8Array(0);
+    if (!modelInput) {
+      const patched = applyEquipmentOverridesToOotModel(original.data, 'child', equipment.values());
+      if (patched === original.data || patched.length === original.data.length) {
+        original.data = patched;
+      } else {
+        const code = this.builder.fileByNameRequired('oot/code');
+        const object = this.addNewFile(patched);
+        code.data.set(toU32Buffer(object), 0xe7f58 + 8 * 0x15);
+      }
+      return;
     }
+
+    const crossGame = modelInput.sourceGame !== null && modelInput.sourceGame !== 'oot';
+    let model = prepareOotModel(modelInput.data, original.data, 'child', crossGame);
+
+    const equipmentResult = applyEquipmentOverridesToPreparedOotModel(
+        model.data, 'child', equipment.values());
+    model = { ...model, data: equipmentResult.data };
+
+    const before = model.data.length;
+    model = compactOotPlayerModel(
+        model, original.data, 'child', OOT_CHILD_MODEL_SIZE,
+        equipmentResult.preservedPieces);
+    if (model.compaction) {
+      this.logCompaction('OoT', 'child', before, model.compaction.usedSize, model.compaction.replacedPieces);
+      if (equipmentResult.preservedPieces.length > 0) {
+        this.monitor.log(`OoT child custom equipment kept in final compacted Link object: ${equipmentResult.preservedPieces.join(', ')}.`);
+      }
+    }
+
+    if (model.data.length <= original.data.length) {
+      original.data = model.data;
+    } else {
+      const code = this.builder.fileByNameRequired('oot/code');
+      const object = this.addNewFile(model.data);
+      code.data.set(toU32Buffer(object), 0xe7f58 + 8 * 0x15);
+      this.monitor.log(`OoT child final player model/equipment relocated at 0x${model.data.length.toString(16)} bytes after compaction.`);
+    }
+    enableModelOotLinkChild(this.builder, model.dfAddr);
+  }
+
+  private async patchOotAdultModel(modelInput: ResolvedPlayerModel | null, equipment: Map<string, EquipmentResolvedOverride>) {
+    const original = this.builder.fileByNameRequired('oot/objects/object_link_boy');
+
+    if (!modelInput) {
+      const patched = applyEquipmentOverridesToOotModel(original.data, 'adult', equipment.values());
+      if (patched === original.data || patched.length === original.data.length) {
+        original.data = patched;
+      } else {
+        const code = this.builder.fileByNameRequired('oot/code');
+        const object = this.addNewFile(patched);
+        code.data.set(toU32Buffer(object), 0xe7f58 + 8 * 0x14);
+      }
+      return;
+    }
+
+    const crossGame = modelInput.sourceGame !== null && modelInput.sourceGame !== 'oot';
+    let model = prepareOotModel(modelInput.data, original.data, 'adult', crossGame);
+    const equipmentResult = applyEquipmentOverridesToPreparedOotModel(
+        model.data, 'adult', equipment.values());
+    model = { ...model, data: equipmentResult.data };
+
+    const before = model.data.length;
+    model = compactOotPlayerModel(
+        model, original.data, 'adult', OOT_ADULT_MODEL_SIZE,
+        equipmentResult.preservedPieces);
+    if (model.compaction) {
+      this.logCompaction('OoT', 'adult', before, model.compaction.usedSize, model.compaction.replacedPieces);
+      if (equipmentResult.preservedPieces.length > 0) {
+        this.monitor.log(`OoT adult custom equipment kept in final compacted Link object: ${equipmentResult.preservedPieces.join(', ')}.`);
+      }
+    }
+
+    if (model.data.length <= original.data.length) {
+      original.data = model.data;
+    } else {
+      const code = this.builder.fileByNameRequired('oot/code');
+      const object = this.addNewFile(model.data);
+      code.data.set(toU32Buffer(object), 0xe7f58 + 8 * 0x14);
+      this.monitor.log(`OoT adult final player model/equipment relocated at 0x${model.data.length.toString(16)} bytes after compaction.`);
+    }
+    enableModelOotLinkAdult(this.builder, model.dfAddr);
+  }
+
+  private replaceCustomObject(name: string, data: Uint8Array) {
+    const original = this.builder.fileByNameRequired(name);
+    const objectTable = this.builder.fileByNameRequired('custom/object_table');
+
+    if (original.vaddr === undefined) {
+      throw new Error(`Custom object ${name} has no VROM address`);
+    }
+
+    const oldStart = original.vaddr;
+    const oldEnd = oldStart + original.data.length;
+    let tableOffset = -1;
+
+    for (let offset = 0; offset + 8 <= objectTable.data.length; offset += 8) {
+      const start = bufReadU32BE(objectTable.data, offset);
+      const end = bufReadU32BE(objectTable.data, offset + 4);
+
+      if (start === oldStart && end === oldEnd) {
+        tableOffset = offset;
+        break;
+      }
+    }
+
+    if (tableOffset === -1) {
+      throw new Error(`Failed to find custom object table entry for ${name}`);
+    }
+
+    const [start] = this.addNewFile(data);
+
+    bufWriteU32BE(objectTable.data, tableOffset, start);
+    bufWriteU32BE(objectTable.data, tableOffset + 4, start + data.length);
   }
 
   patchFileSelect(color: number) {
@@ -350,6 +484,95 @@ class CosmeticsPass {
     /* Patch the file select color */
     this.patchSymbol('COLOR_FILE_SELECT', colorBufferRGB(color));
     this.patchSymbol('COLOR_FILE_SELECT_HIGHLIGHT', colorBufferRGB(brightness(color, 1.2)));
+  }
+
+  private async patchMmChildModel(modelInput: ResolvedPlayerModel | null, equipment: Map<string, EquipmentResolvedOverride>) {
+    const original = this.builder.fileByNameRequired('mm/objects/object_link_child');
+    const code = this.builder.fileByNameRequired('mm/code');
+
+    if (!modelInput) {
+      const patched = applyEquipmentOverridesToMmModel(original.data, equipment.values());
+      if (patched.length <= original.data.length) {
+        original.data = patched;
+      } else {
+        const object = this.addNewFile(patched);
+        code.data.set(toU32Buffer(object), 0x11cc80 + 8 * 0x11);
+      }
+      return;
+    }
+
+    const childTables = this.builder.fileByNameRequired('custom/mm_age_model_child_tables');
+    const crossGame = modelInput.sourceGame !== null && modelInput.sourceGame !== 'mm';
+    let model = prepareMmModel(modelInput.data, original.data, code.data, 'child', crossGame);
+    const equipmentResult = applyEquipmentOverridesToPreparedMmModel(model.data, equipment.values());
+    model = { ...model, data: equipmentResult.data };
+    const before = model.data.length;
+    model = compactMmPlayerModel(model, original.data, 'child', undefined, equipmentResult.preservedPieces);
+    if (model.compaction) {
+      this.logCompaction('MM', 'child', before, model.compaction.usedSize, model.compaction.replacedPieces);
+      if (equipmentResult.preservedPieces.length > 0) {
+        this.monitor.log(`MM child custom equipment kept in final compacted Link object: ${equipmentResult.preservedPieces.join(', ')}.`);
+      }
+    }
+
+    patchMmChildModelTables(childTables.data, code.data);
+    if (model.data.length <= original.data.length) {
+      original.data = model.data;
+    } else {
+      const object = this.addNewFile(model.data);
+      code.data.set(toU32Buffer(object), 0x11cc80 + 8 * 0x11);
+    }
+  }
+
+  private async patchMmAdultModel(modelInput: ResolvedPlayerModel | null, equipment: Map<string, EquipmentResolvedOverride>) {
+    const vanilla = this.builder.fileByNameRequired('mm/objects/object_link_child');
+    const adultTemplate = this.builder.fileByNameRequired('custom/mm_adult_link');
+    const code = this.builder.fileByNameRequired('mm/code');
+    const adultTables = this.builder.fileByNameRequired('custom/mm_age_model_tables');
+
+    if (!modelInput) {
+      const hasPlayerEquipment = [...equipment.keys()].some((id) => id.startsWith('mm:') && id !== 'mm:sword:kokiri' && id !== 'mm:sword:razor');
+      if (!hasPlayerEquipment) return;
+      let model = prepareMmModel(adultTemplate.data, vanilla.data, code.data, 'adult', false, adultTemplate.data);
+      const equipmentResult = applyEquipmentOverridesToPreparedMmModel(model.data, equipment.values());
+      model = { ...model, data: equipmentResult.data };
+      const before = model.data.length;
+      model = compactMmPlayerModel(model, vanilla.data, 'adult', undefined, equipmentResult.preservedPieces);
+      if (model.compaction) {
+        this.logCompaction('MM', 'adult', before, model.compaction.usedSize, model.compaction.replacedPieces);
+        if (equipmentResult.preservedPieces.length > 0) {
+          this.monitor.log(`MM adult custom equipment kept in final compacted Link object: ${equipmentResult.preservedPieces.join(', ')}.`);
+        }
+      }
+      patchMmAdultModelTables(adultTables.data);
+      this.replaceCustomObject('custom/mm_adult_link', model.data);
+      return;
+    }
+
+    const crossGame = modelInput.sourceGame !== null && modelInput.sourceGame !== 'mm';
+    let model = prepareMmModel(modelInput.data, vanilla.data, code.data, 'adult', crossGame, adultTemplate.data);
+    const equipmentResult = applyEquipmentOverridesToPreparedMmModel(model.data, equipment.values());
+    model = { ...model, data: equipmentResult.data };
+    const before = model.data.length;
+    model = compactMmPlayerModel(model, vanilla.data, 'adult', undefined, equipmentResult.preservedPieces);
+    if (model.compaction) {
+      this.logCompaction('MM', 'adult', before, model.compaction.usedSize, model.compaction.replacedPieces);
+      if (equipmentResult.preservedPieces.length > 0) {
+        this.monitor.log(`MM adult custom equipment kept in final compacted Link object: ${equipmentResult.preservedPieces.join(', ')}.`);
+      }
+    }
+
+    patchMmAdultModelTables(adultTables.data);
+    this.replaceCustomObject('custom/mm_adult_link', model.data);
+  }
+
+  private patchMmGameplayKeepEquipment(equipment: Map<string, EquipmentResolvedOverride>) {
+    const keep = this.builder.fileByNameRequired('mm/objects/gameplay_keep');
+    const patched = applyEquipmentOverridesToMmGameplayKeep(keep.data, equipment.values());
+    if (patched === keep.data) return;
+    const code = this.builder.fileByNameRequired('mm/code');
+    const object = this.addNewFile(patched);
+    code.data.set(toU32Buffer(object), 0x11cc80 + 8 * 0x01);
   }
 
   async run(): Promise<string | null> {
@@ -416,9 +639,89 @@ class CosmeticsPass {
       this.patchSymbol('NIGHT_BGM', new Uint8Array([0x01]));
     }
 
-    /* Patch models */
-    await this.patchOotChildModel();
-    await this.patchOotAdultModel();
+    const [equipmentOot, equipmentMm] = await Promise.all([
+      this.resolveEquipmentCosmetics('oot', c.equipmentOot),
+      this.resolveEquipmentCosmetics('mm', c.equipmentMm),
+    ]);
+    const equipment = new Map<string, EquipmentResolvedOverride>([...equipmentOot, ...equipmentMm]);
+    if (equipment.size > 0) {
+      this.monitor.log(`Resolved ${equipmentOot.size} OoT and ${equipmentMm.size} MM equipment cosmetic target(s); lower files won conflicts after remapping in each game.`);
+    }
+
+    const ootChildInput = await resolvePlayerModelInput(
+        await this.getPathBuffer(c.modelOotChildLink),
+        'oot',
+        'child'
+    );
+
+    const ootAdultInput = await resolvePlayerModelInput(
+        await this.getPathBuffer(c.modelOotAdultLink),
+        'oot',
+        'adult'
+    );
+
+    const mmChildInput = await resolvePlayerModelInput(
+        await this.getPathBuffer(c.modelMmChildLink),
+        'mm',
+        'child'
+    );
+
+    const mmAdultInput = await resolvePlayerModelInput(
+        await this.getPathBuffer(c.modelMmAdultLink),
+        'mm',
+        'adult'
+    );
+
+    const ootModels = mergePlayerModelInputs(
+        ootChildInput,
+        ootAdultInput
+    );
+
+    const mmModels = mergePlayerModelInputs(
+        mmChildInput,
+        mmAdultInput
+    );
+    await this.patchOotChildModel(ootModels.child, equipment);
+    await this.patchOotAdultModel(ootModels.adult, equipment);
+    await this.patchMmAdultModel(mmModels.adult, equipment);
+    await this.patchMmChildModel(mmModels.child, equipment);
+    this.patchMmGameplayKeepEquipment(equipment);
+
+    const ootChildVoiceInput = await resolvePlayerVoiceInput(
+        await this.getPathBuffer(c.voiceOotChildLink),
+        'child'
+    );
+
+    const ootAdultVoiceInput = await resolvePlayerVoiceInput(
+        await this.getPathBuffer(c.voiceOotAdultLink),
+        'adult'
+    );
+
+    const mmChildVoiceInput = await resolvePlayerVoiceInput(
+        await this.getPathBuffer(c.voiceMmChildLink),
+        'child'
+    );
+
+    const mmAdultVoiceInput = await resolvePlayerVoiceInput(
+        await this.getPathBuffer(c.voiceMmAdultLink),
+        'adult'
+    );
+
+    const ootVoices = mergePlayerVoiceInputs(
+        ootChildVoiceInput,
+        ootAdultVoiceInput
+    );
+
+    const mmVoices = mergePlayerVoiceInputs(
+        mmChildVoiceInput,
+        mmAdultVoiceInput
+    );
+
+    await patchPlayerVoices(
+        this.builder,
+        ootVoices,
+        mmVoices
+    );
 
     /* Custom music */
     if (c.music) {

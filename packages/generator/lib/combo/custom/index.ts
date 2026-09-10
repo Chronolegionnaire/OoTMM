@@ -246,6 +246,30 @@ const OOT_ADULT_EFFECTS: readonly number[] = [
   ...Array.from({ length: 28 }, (_, i) => i),
   55, 56, 60, 61, 67, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 134];
 
+const MM_CHILD_NATIVE_PRIVATE_EFFECTS: readonly number[] = [
+  0x14,
+  0x1c, 0x1d, 0x1e, 0x1f, 0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27,
+  0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f, 0x30, 0x31, 0x32, 0x33,
+  0x34, 0x35, 0x36, 0x3f, 0x87,
+];
+const MM_CHILD_PRIVATE_EFFECT_SLOTS: ReadonlyMap<number, number> = new Map([
+  [0x01, 0x01],
+  [0x02, 0x02],
+  [0x03, 0x03],
+  [0x05, 0x04],
+  [0x06, 0x05],
+  [0x07, 0x06],
+  [0x08, 0x07],
+  [0x09, 0x08],
+  [0x0a, 0x09],
+  [0x0b, 0x0a],
+  [0x0c, 0x0b],
+]);
+
+const MM_CHILD_ALIAS_SOURCE_EFFECT = 0x03;
+const MM_CHILD_ALIAS_EVENT = 0x13;
+const MM_CHILD_ALIAS_SLOT = 0x00;
+
 const adultEffectSlot = (effect: number) => OOT_ADULT_EFFECTS.indexOf(effect);
 const readU16BE = (data: Uint8Array, off: number) => (data[off] << 8) | data[off + 1];
 
@@ -335,7 +359,8 @@ const buildMmAdultVoiceHybridBank = async (roms: DecompressedRoms, mmBankTable: 
 
   sampleBankIds[targetSampleSelector] = foreignSampleBank;
 
-  const adultEffectBase = alignUp(mm.numSfx, 0x40);
+  const childEffectBase = alignUp(mm.numSfx, 0x40);
+  const adultEffectBase = childEffectBase + 0x40;
   const newNumSfx = adultEffectBase + OOT_ADULT_EFFECTS.length;
   const out = new MutableBinary(mmFont);
   const newSfxTable = out.alloc(newNumSfx * 8, 0x10);
@@ -347,6 +372,86 @@ const buildMmAdultVoiceHybridBank = async (roms: DecompressedRoms, mmBankTable: 
     out.write(newSfxTable + i * 8, mmEffect0);
 
   out.writeU32BE(4, newSfxTable);
+
+  const cloneMmSfxSampleMetadata = (srcSample: number): number => {
+    if (!srcSample || srcSample + 0x10 > mmFont.length)
+      throw new Error('MM Human Child source sample is invalid');
+
+    const dstSample = out.append(
+        mmFont.subarray(srcSample, srcSample + 0x10),
+        0x10
+    );
+
+    const srcLoop = bufReadU32BE(mmFont, srcSample + 8);
+    if (srcLoop) {
+      if (srcLoop + 0x10 > mmFont.length)
+        throw new Error('MM SFX sample has an invalid loop pointer');
+
+      const loopSize = bufReadU32BE(mmFont, srcLoop + 8) ? 0x30 : 0x10;
+      if (srcLoop + loopSize > mmFont.length)
+        throw new Error('MM SFX sample loop extends past Soundfont 0');
+
+      const dstLoop = out.append(
+          mmFont.subarray(srcLoop, srcLoop + loopSize),
+          8
+      );
+      out.writeU32BE(dstSample + 8, dstLoop);
+    }
+
+    return dstSample;
+  };
+
+  for (const effect of MM_CHILD_NATIVE_PRIVATE_EFFECTS) {
+    if (effect >= mm.numSfx)
+      continue;
+
+    const sourceEntry = mmSfxTable + effect * 8;
+    const sourceSample = bufReadU32BE(mmFont, sourceEntry);
+
+    if (!sourceSample)
+      continue;
+
+    out.writeU32BE(
+        newSfxTable + effect * 8,
+        cloneMmSfxSampleMetadata(sourceSample)
+    );
+  }
+
+  const cloneMmEffectIntoChildPage = (sourceEffect: number, slot: number) => {
+    if (sourceEffect >= mm.numSfx)
+      throw new Error(
+          `MM Human Child source effect 0x${sourceEffect.toString(16)} is out of range`
+      );
+    if (slot < 0 || slot >= 0x40)
+      throw new Error(`MM Human Child private slot ${slot} is out of range`);
+
+    const sourceEntry = mmSfxTable + sourceEffect * 8;
+    const sourceSample = bufReadU32BE(mmFont, sourceEntry);
+    if (!sourceSample)
+      throw new Error(
+          `MM Human Child source effect 0x${sourceEffect.toString(16)} has no sample`
+      );
+
+    const destinationEntry =
+        newSfxTable + (childEffectBase + slot) * 8;
+
+    out.writeU32BE(
+        destinationEntry,
+        cloneMmSfxSampleMetadata(sourceSample)
+    );
+    out.write(
+        destinationEntry + 4,
+        mmFont.subarray(sourceEntry + 4, sourceEntry + 8)
+    );
+  };
+
+  for (const [sourceEffect, slot] of MM_CHILD_PRIVATE_EFFECT_SLOTS)
+    cloneMmEffectIntoChildPage(sourceEffect, slot);
+
+  cloneMmEffectIntoChildPage(
+      MM_CHILD_ALIAS_SOURCE_EFFECT,
+      MM_CHILD_ALIAS_SLOT
+  );
 
   const sampleMap = new Map<number, number>();
   const loopMap = new Map<number, number>();
@@ -451,7 +556,17 @@ class AseqAppendBuilder {
 
 type AdultNote = readonly [effect: number, ...args: number[]];
 
-function patchMmAdultVoiceSequence(seq: Uint8Array, adultEffectBase: number): Uint8Array {
+type MmAdultVoiceSequencePatch = {
+  data: Uint8Array;
+  humanPointerTableOffset: number;
+  childPointerTableOffset: number;
+  adultPointerTableOffset: number;
+};
+
+function patchMmAdultVoiceSequence(
+    seq: Uint8Array,
+    adultEffectBase: number
+): MmAdultVoiceSequencePatch {
   const adultBlock = adultEffectBase >>> 6;
   const b = new AseqAppendBuilder(seq.length);
 
@@ -571,6 +686,20 @@ function patchMmAdultVoiceSequence(seq: Uint8Array, adultEffectBase: number): Ui
   b.label('adultAutoJumpN'); b.u8(0x40, 0x00);
   b.label('adultAutoJumpW'); b.u8(0x50, 0xFF);
 
+  const childAliasEffectBase = adultEffectBase - 0x40;
+  const childAliasBlock = childAliasEffectBase >>> 6;
+
+  b.label('childGroanAlias');
+  b.opPtr(0x88, 'childGroanAliasL');
+  b.u8(0xFF);
+  b.label('childGroanAliasL');
+  b.u8(
+      0xC2, childAliasBlock,
+      0x40 + MM_CHILD_ALIAS_SLOT,
+      0x00, 50,
+      0xFF
+  );
+
   const adultVoiceTargets = [
     'adultSwordN', 'adultSwordL', 'adultLash', 'adultHang', 'adultClimbEnd', 'adultDamageS', 'adultFreeze', 'adultFallS',
     'adultFallL', 'adultBreathRest', 'adultBreathDrink', 'adultDown', 'adultTakenAway', 'adultDamageS', 'adultSneeze', 'adultSweat',
@@ -578,10 +707,53 @@ function patchMmAdultVoiceSequence(seq: Uint8Array, adultEffectBase: number): Ui
     'adultPush', 'adultHookshotHang', 'adultLandDamage', 'adultNull1B', 'adultMagicAttack', 'adultFallL', 'adultDemoDamage', 'adultSwordN',
   ] as const;
 
-  const out = concatUint8Arrays([seq, b.finish()]);
-  adultVoiceTargets.forEach((target, i) => writeU16BE(out, 0xB30E + i * 2, b.getLabel(target)));
+  const body = b.finish();
 
-  return out;
+  const humanPointerTableOffset = 0xB34E;
+  const pointerTableBytes = 0x20 * 2;
+  const childPointerTable = new Uint8Array(
+      seq.subarray(
+          humanPointerTableOffset,
+          humanPointerTableOffset + pointerTableBytes
+      )
+  );
+
+  if (childPointerTable.length !== pointerTableBytes) {
+    throw new Error('MM sequence 0 is too small for the Human voice table');
+  }
+
+  /* Preserve every vanilla Child pointer except the one 0x03 alias. */
+  writeU16BE(
+      childPointerTable,
+      MM_CHILD_ALIAS_EVENT * 2,
+      b.getLabel('childGroanAlias')
+  );
+
+  const adultPointerTable = new Uint8Array(pointerTableBytes);
+  adultVoiceTargets.forEach((target, i) => {
+    writeU16BE(adultPointerTable, i * 2, b.getLabel(target));
+  });
+
+  const childPointerTableOffset = seq.length + body.length;
+  const adultPointerTableOffset = childPointerTableOffset + pointerTableBytes;
+  const data = concatUint8Arrays([
+    seq,
+    body,
+    childPointerTable,
+    adultPointerTable,
+  ]);
+
+  data.set(
+      childPointerTable,
+      humanPointerTableOffset
+  );
+
+  return {
+    data,
+    humanPointerTableOffset,
+    childPointerTableOffset,
+    adultPointerTableOffset,
+  };
 }
 
 class CustomAssetsBuilder {
@@ -590,11 +762,12 @@ class CustomAssetsBuilder {
   private vrom: number;
   private objectId: number;
   private objectVroms: ObjectRef[];
+  private mmAudioPermanentGrowth: number;
 
   constructor(
-    private monitor: Monitor,
-    private roms: DecompressedRoms,
-    private patch: Patchfile,
+      private monitor: Monitor,
+      private roms: DecompressedRoms,
+      private patch: Patchfile,
   ) {
     this.defines = new Map();
     const cgPath = process.env.__IS_BROWSER__ ? '' : path.resolve('include', 'combo', 'custom.h');
@@ -602,6 +775,7 @@ class CustomAssetsBuilder {
     this.vrom = 0x08000000;
     this.objectId = 0x2000;
     this.objectVroms = [];
+    this.mmAudioPermanentGrowth = 0;
   }
 
   addObjectEntry(vstart: number, size: number) {
@@ -649,6 +823,56 @@ class CustomAssetsBuilder {
     bufWriteU32BE(data, 0, a);
     bufWriteU32BE(data, 4, b);
     return data;
+  }
+
+  private async patchMmAudioPermanentPool() {
+    const growth = this.mmAudioPermanentGrowth;
+    if (growth <= 0) return;
+
+    const MM_AUDIO_HEAP_INIT_SIZES_OFFSET = 0x13B644;
+    const sizes = await extractRaw(
+        this.roms,
+        'mm',
+        'code',
+        MM_AUDIO_HEAP_INIT_SIZES_OFFSET,
+        0x0C
+    );
+
+    const heapSize = bufReadU32BE(sizes, 0x00);
+    const initPoolSize = bufReadU32BE(sizes, 0x04);
+    const permanentPoolSize = bufReadU32BE(sizes, 0x08);
+
+    const newInitPoolSize = alignUp(initPoolSize + growth, 0x10);
+    const newPermanentPoolSize = alignUp(permanentPoolSize + growth, 0x10);
+
+    if (newInitPoolSize >= heapSize) {
+      throw new Error(
+          `MM custom SFX assets exceed the audio heap: ` +
+          `heap=0x${heapSize.toString(16)}, ` +
+          `init=0x${initPoolSize.toString(16)}, ` +
+          `growth=0x${growth.toString(16)}, ` +
+          `newInit=0x${newInitPoolSize.toString(16)}`
+      );
+    }
+
+    const patched = new Uint8Array(sizes);
+    bufWriteU32BE(patched, 0x04, newInitPoolSize);
+    bufWriteU32BE(patched, 0x08, newPermanentPoolSize);
+
+    this.patch.addPatch(
+        'mm/code',
+        MM_AUDIO_HEAP_INIT_SIZES_OFFSET,
+        patched
+    );
+
+    this.cg.define('CUSTOM_MM_AUDIO_PERMANENT_GROWTH', growth);
+
+    this.monitor.log(
+        `MM audio permanent pool growth: ` +
+        `+0x${growth.toString(16)} ` +
+        `(init 0x${initPoolSize.toString(16)} -> 0x${newInitPoolSize.toString(16)}, ` +
+        `permanent 0x${permanentPoolSize.toString(16)} -> 0x${newPermanentPoolSize.toString(16)})`
+    );
   }
 
   async addHumanAgeProperties() {
@@ -764,7 +988,7 @@ class CustomAssetsBuilder {
     ]);
 
     /* Adult voice, human surface sounds. */
-    writeU16(0x92, 0x0000);
+    writeU16(0x92, 0x0020);
     writeU16(0x94, 0x0080);
 
     writeF32(0x98, 22.0);
@@ -934,7 +1158,11 @@ class CustomAssetsBuilder {
         extractRaw(this.roms, 'mm', 'code', 0x13B6D0, 0x29 * 0x10),
       ]);
       mmAudioseq = audioseq;
-      adultEffectBase = alignUp(readSoundfont0(mmBankTable).numSfx, 0x40);
+      const childEffectBase = alignUp(
+          readSoundfont0(mmBankTable).numSfx,
+          0x40
+      );
+      adultEffectBase = childEffectBase + 0x40;
     }
 
     for (let i = 0; i < count; ++i) {
@@ -946,10 +1174,28 @@ class CustomAssetsBuilder {
       }
 
       if (game === 'mm' && i === 0) {
+        const originalSize = size;
         const seq = mmAudioseq!.slice(addr, addr + size);
-        const data = patchMmAdultVoiceSequence(seq, adultEffectBase);
-        addr = this.addRawData('mm/seq_0_oot_adult_voice', data, false);
-        size = data.length;
+        const patched = patchMmAdultVoiceSequence(seq, adultEffectBase);
+        addr = this.addRawData('mm/seq_0_oot_adult_voice', patched.data, false);
+        size = patched.data.length;
+
+        this.mmAudioPermanentGrowth +=
+            alignUp(size, 0x10) -
+            alignUp(originalSize, 0x10);
+
+        this.cg.define(
+            'CUSTOM_MM_HUMAN_VOICE_POINTER_TABLE_OFFSET',
+            patched.humanPointerTableOffset
+        );
+        this.cg.define(
+            'CUSTOM_MM_CHILD_VOICE_POINTER_TABLE_OFFSET',
+            patched.childPointerTableOffset
+        );
+        this.cg.define(
+            'CUSTOM_MM_ADULT_VOICE_POINTER_TABLE_OFFSET',
+            patched.adultPointerTableOffset
+        );
       } else
         addr += romOffset;
       bufWriteU32BE(seqTableDataPatched, i * 0x10, addr);
@@ -1003,7 +1249,13 @@ class CustomAssetsBuilder {
     }
 
     if (game === 'mm') {
+      const originalFont0Size = bufReadU32BE(dataOrig, 0x04);
       const hybrid = await buildMmAdultVoiceHybridBank(this.roms, dataOrig);
+
+      this.mmAudioPermanentGrowth +=
+          alignUp(hybrid.data.length, 0x10) -
+          alignUp(originalFont0Size, 0x10);
+
       const hybridVrom = this.addRawData('mm/bank_0_oot_adult_voice', hybrid.data, false);
       bufWriteU32BE(dataPatched, 0x00, hybridVrom);
       bufWriteU32BE(dataPatched, 0x04, hybrid.data.length);
@@ -1055,6 +1307,8 @@ class CustomAssetsBuilder {
 
     await this.extractBankTable('oot', 0x26, 0x1026b0, 0xd390);
     await this.extractBankTable('mm',  0x29, 0x13b6d0, 0x20700 + mmBase);
+    await this.patchMmAudioPermanentPool();
+
     await this.extractCustomBankTable();
 
     await this.extractAudioTable('oot', 0x07, 0x1031d0, 0x79470);
@@ -1128,9 +1382,20 @@ class CustomAssetsBuilder {
     await this.addObjectFile('MASK_ADULT_TRANSFORM_PLAYER', 'object_mask_adult.zobj', [0x0a000900,]);
     await this.addObjectFile('ADULT_MASK_EQUIPMENT', 'adult_mask_equipment_standalone.zobj', [0x0a000920,]);
 
+    {
+      const rootCount = 40;
+      const data = new Uint8Array(rootCount * 8);
+      const offsets: number[] = [];
+      for (let i = 0; i < rootCount; ++i) {
+        data[i * 8] = 0xdf;
+        offsets.push(0x0a000000 | (i * 8));
+      }
+      await this.addCustomObject('EQ_COSMETICS_OOT', data, offsets);
+    }
+
     /* Add the object table */
     const objectTableBuffer = toU32Buffer(this.objectVroms.map(o => [o.vstart, o.vend]).flat());
-    const objectTableVrom = this.addRawData(null, objectTableBuffer, true);
+    const objectTableVrom = this.addRawData('custom/object_table', objectTableBuffer, true);
     this.cg.define('CUSTOM_OBJECT_TABLE_VROM', objectTableVrom);
     this.cg.define('CUSTOM_OBJECT_TABLE_SIZE', this.objectVroms.length);
 
@@ -1146,3 +1411,4 @@ export function custom(monitor: Monitor, roms: DecompressedRoms, patch: Patchfil
   const builder = new CustomAssetsBuilder(monitor, roms, patch);
   return builder.run();
 }
+
