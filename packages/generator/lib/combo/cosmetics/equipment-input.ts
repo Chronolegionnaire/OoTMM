@@ -2,6 +2,7 @@ import { ObjectEditor } from '../custom/object-editor';
 import { bufReadU32BE, bufWriteU32BE } from '../util/buffer';
 import { OOT_LINK_ADULT_OFFSETS, OOT_LINK_CHILD_OFFSETS } from './model';
 import { MM_LINK_OFFSETS } from './mm-model-loader';
+import { PlayerModelGraphCompactor } from './player-model-compactor';
 import { classifyPlayerModel, isPlayerModelPak, readPakZobjs } from './model-pak';
 
 const encoder = new TextEncoder();
@@ -374,9 +375,77 @@ function detectDedicated(data: Uint8Array, part: string) {
   } satisfies EquipmentSourceItem];
 }
 
+function preparedLutRoot(data: Uint8Array, lut: number | undefined) {
+  if (lut === undefined) return null;
+  const offset = lut & 0x00ffffff;
+  if (offset < 0 || offset + 8 > data.length) return null;
+
+  const command = bufReadU32BE(data, offset);
+  const pointer = bufReadU32BE(data, offset + 4);
+  const opcode = command >>> 24;
+  const rootOffset = pointer & 0x00ffffff;
+
+  if (opcode !== 0xde || (pointer >>> 24) !== SEG_SOURCE || rootOffset >= data.length)
+    return null;
+  if (rootOffset + 8 <= data.length && data[rootOffset] === 0xdf)
+    return null;
+
+
+  return pointer;
+}
+
+function detectPreparedPlayerModel(data: Uint8Array, part: string): EquipmentSourceItem[] {
+  if (!preparedPlayerModel(data)) return [];
+
+  const classified = classifyPlayerModel(data);
+  if (classified.game !== 'oot' && classified.game !== 'mm') return [];
+
+  const patches = classified.game === 'oot' ? OOT_PATCHES : MM_PLAYER_PATCHES;
+  const grouped = new Map<string, EquipmentSourceItem>();
+
+  for (const patch of patches) {
+    if (patch.game !== classified.game) continue;
+    if (patch.age && classified.age && patch.age !== classified.age) continue;
+
+    const target = TARGET_BY_ID.get(patch.id);
+    if (!target) continue;
+
+    let item = grouped.get(patch.id);
+    if (!item) {
+      item = {
+        sourceId: `${part}::prepared-${patch.id.replace(/:/g, '-')}`,
+        label: target.label,
+        family: target.family,
+        semantic: target.semantic,
+        nativeGame: classified.game,
+        sourceData: data,
+        roles: {},
+      };
+      grouped.set(patch.id, item);
+    }
+
+    for (const slot of patch.slots) {
+      const root = preparedLutRoot(data, slot.lut);
+      if (root === null) continue;
+      const list = item.roles[slot.role] ?? [];
+      if (!list.includes(root)) list.push(root);
+      item.roles[slot.role] = list;
+    }
+  }
+
+  return [...grouped.values()].filter((item) =>
+      Object.values(item.roles).some((list) => list.length > 0)
+  );
+}
+
 async function detectZobj(data: Uint8Array, part: string) {
   const dedicated = detectDedicated(data, part);
-  return dedicated.length ? dedicated : detectPlayAs(data, part);
+  if (dedicated.length) return dedicated;
+
+  const playAs = detectPlayAs(data, part);
+  if (playAs.length) return playAs;
+
+  return detectPreparedPlayerModel(data, part);
 }
 
 export function targetsForSourceItem(item: Pick<EquipmentSourceItem, 'family' | 'semantic'>, game: EquipmentGame) {
@@ -441,85 +510,85 @@ type TargetPatch = { id: string; game: EquipmentGame; age?: EquipmentAge; slots:
 
 const OOT_PATCHES: TargetPatch[] = [
   { id: 'oot:sword:kokiri', game: 'oot', age: 'child', slots: [
-    { role: 'hilt', piece: 'Hilt.1', lut: OOT_LINK_CHILD_OFFSETS.LUT_DL_SWORD_HILT, raw: 0x14048 },
-    { role: 'blade', piece: 'Blade.1', lut: OOT_LINK_CHILD_OFFSETS.LUT_DL_SWORD_BLADE, raw: 0x14110 },
-  ] },
+      { role: 'hilt', piece: 'Hilt.1', lut: OOT_LINK_CHILD_OFFSETS.LUT_DL_SWORD_HILT, raw: 0x14048 },
+      { role: 'blade', piece: 'Blade.1', lut: OOT_LINK_CHILD_OFFSETS.LUT_DL_SWORD_BLADE, raw: 0x14110 },
+    ] },
   { id: 'oot:sword:master', game: 'oot', age: 'adult', slots: [
-    { role: 'hilt', piece: 'Hilt.2', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_SWORD_HILT, raw: 0x22060 },
-    { role: 'blade', piece: 'Blade.2', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_SWORD_BLADE, raw: 0x21f78 },
-  ] },
+      { role: 'hilt', piece: 'Hilt.2', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_SWORD_HILT, raw: 0x22060 },
+      { role: 'blade', piece: 'Blade.2', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_SWORD_BLADE, raw: 0x21f78 },
+    ] },
   { id: 'oot:sword:master', game: 'oot', age: 'child', slots: [
-    { role: 'main', piece: 'Blade.2', lut: OOT_LINK_CHILD_OFFSETS.LUT_DL_MASTER_SWORD, raw: 0x15698 },
-  ] },
+      { role: 'main', piece: 'Blade.2', lut: OOT_LINK_CHILD_OFFSETS.LUT_DL_MASTER_SWORD, raw: 0x15698 },
+    ] },
   { id: 'oot:sword:biggoron', game: 'oot', age: 'adult', slots: [
-    { role: 'hilt', piece: 'Hilt.3', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_LONGSWORD_HILT, raw: 0x238c8 },
-    { role: 'blade', piece: 'Blade.3', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_LONGSWORD_BLADE, raw: 0x23a28 },
-  ] },
+      { role: 'hilt', piece: 'Hilt.3', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_LONGSWORD_HILT, raw: 0x238c8 },
+      { role: 'blade', piece: 'Blade.3', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_LONGSWORD_BLADE, raw: 0x23a28 },
+    ] },
   { id: 'oot:sword:biggoron-broken', game: 'oot', age: 'adult', slots: [
-    { role: 'hilt', piece: 'Hilt.3', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_LONGSWORD_HILT, raw: 0x238c8 },
-    { role: 'blade', piece: 'Broken.Blade.3', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_LONGSWORD_BROKEN, raw: 0x23eb0 },
-  ] },
+      { role: 'hilt', piece: 'Hilt.3', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_LONGSWORD_HILT, raw: 0x238c8 },
+      { role: 'blade', piece: 'Broken.Blade.3', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_LONGSWORD_BROKEN, raw: 0x23eb0 },
+    ] },
   { id: 'oot:shield:deku', game: 'oot', age: 'child', slots: [
-    { role: 'main', piece: 'Shield.1', lut: OOT_LINK_CHILD_OFFSETS.LUT_DL_SHIELD_DEKU, raw: 0x14440 },
-  ] },
+      { role: 'main', piece: 'Shield.1', lut: OOT_LINK_CHILD_OFFSETS.LUT_DL_SHIELD_DEKU, raw: 0x14440 },
+    ] },
   { id: 'oot:shield:hylian', game: 'oot', age: 'adult', slots: [
-    { role: 'main', piece: 'Shield.2', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_SHIELD_HYLIAN, raw: 0x22970 },
-  ] },
+      { role: 'main', piece: 'Shield.2', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_SHIELD_HYLIAN, raw: 0x22970 },
+    ] },
   { id: 'oot:shield:hylian', game: 'oot', age: 'child', slots: [
-    { role: 'main', piece: 'Shield.2', lut: OOT_LINK_CHILD_OFFSETS.LUT_DL_SHIELD_HYLIAN_BACK, raw: 0x14c30 },
-  ] },
+      { role: 'main', piece: 'Shield.2', lut: OOT_LINK_CHILD_OFFSETS.LUT_DL_SHIELD_HYLIAN_BACK, raw: 0x14c30 },
+    ] },
   { id: 'oot:shield:mirror', game: 'oot', age: 'adult', slots: [
-    { role: 'main', piece: 'Shield.3', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_SHIELD_MIRROR, raw: 0x241c0 },
-  ] },
+      { role: 'main', piece: 'Shield.3', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_SHIELD_MIRROR, raw: 0x241c0 },
+    ] },
   { id: 'oot:hammer', game: 'oot', age: 'adult', slots: [
-    { role: 'main', piece: 'Hammer', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_HAMMER, raw: 0x233e0 },
-  ] },
+      { role: 'main', piece: 'Hammer', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_HAMMER, raw: 0x233e0 },
+    ] },
   { id: 'oot:bow', game: 'oot', age: 'adult', slots: [
-    { role: 'main', piece: 'Bow', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_BOW, raw: 0x22da8 },
-    { role: 'string', piece: 'Bow.String', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_BOW_STRING, raw: 0x2b108 },
-  ] },
+      { role: 'main', piece: 'Bow', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_BOW, raw: 0x22da8 },
+      { role: 'string', piece: 'Bow.String', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_BOW_STRING, raw: 0x2b108 },
+    ] },
   { id: 'oot:hookshot', game: 'oot', age: 'adult', slots: [
-    { role: 'main', piece: 'Hookshot', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_HOOKSHOT, raw: 0x24d70 },
-    { role: 'spike', piece: 'Hookshot.Spike', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_HOOKSHOT_HOOK, raw: 0x2b288 },
-    { role: 'chain', piece: 'Hookshot.Chain', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_HOOKSHOT_CHAIN, raw: 0x2aff0 },
-    { role: 'reticle', piece: 'Hookshot.Aiming.Reticule', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_HOOKSHOT_AIM, raw: 0x2cb48 },
-    { role: 'fps', piece: 'FPS.Hookshot', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_FPS_HOOKSHOT, raw: 0x2a738 },
-  ] },
+      { role: 'main', piece: 'Hookshot', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_HOOKSHOT, raw: 0x24d70 },
+      { role: 'spike', piece: 'Hookshot.Spike', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_HOOKSHOT_HOOK, raw: 0x2b288 },
+      { role: 'chain', piece: 'Hookshot.Chain', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_HOOKSHOT_CHAIN, raw: 0x2aff0 },
+      { role: 'reticle', piece: 'Hookshot.Aiming.Reticule', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_HOOKSHOT_AIM, raw: 0x2cb48 },
+      { role: 'fps', piece: 'FPS.Hookshot', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_FPS_HOOKSHOT, raw: 0x2a738 },
+    ] },
   { id: 'oot:slingshot', game: 'oot', age: 'child', slots: [
-    { role: 'main', piece: 'Slingshot', lut: OOT_LINK_CHILD_OFFSETS.LUT_DL_SLINGSHOT, raw: 0x15f08 },
-    { role: 'string', piece: 'Slingshot.String', lut: OOT_LINK_CHILD_OFFSETS.LUT_DL_SLINGSHOT_STRING, raw: 0x221a8 },
-  ] },
+      { role: 'main', piece: 'Slingshot', lut: OOT_LINK_CHILD_OFFSETS.LUT_DL_SLINGSHOT, raw: 0x15f08 },
+      { role: 'string', piece: 'Slingshot.String', lut: OOT_LINK_CHILD_OFFSETS.LUT_DL_SLINGSHOT_STRING, raw: 0x221a8 },
+    ] },
   { id: 'oot:boomerang', game: 'oot', age: 'child', slots: [
-    { role: 'main', piece: 'Boomerang', lut: OOT_LINK_CHILD_OFFSETS.LUT_DL_BOOMERANG, raw: 0x14660 },
-  ] },
+      { role: 'main', piece: 'Boomerang', lut: OOT_LINK_CHILD_OFFSETS.LUT_DL_BOOMERANG, raw: 0x14660 },
+    ] },
   { id: 'oot:ocarina-fairy', game: 'oot', age: 'child', slots: [
-    { role: 'main', piece: 'Ocarina.1', lut: OOT_LINK_CHILD_OFFSETS.LUT_DL_OCARINA_FAIRY, raw: 0x15ba8 },
-  ] },
+      { role: 'main', piece: 'Ocarina.1', lut: OOT_LINK_CHILD_OFFSETS.LUT_DL_OCARINA_FAIRY, raw: 0x15ba8 },
+    ] },
   { id: 'oot:ocarina-time', game: 'oot', age: 'child', slots: [
-    { role: 'main', piece: 'Ocarina.2', lut: OOT_LINK_CHILD_OFFSETS.LUT_DL_OCARINA_TIME, raw: 0x15ab8 },
-  ] },
+      { role: 'main', piece: 'Ocarina.2', lut: OOT_LINK_CHILD_OFFSETS.LUT_DL_OCARINA_TIME, raw: 0x15ab8 },
+    ] },
   { id: 'oot:ocarina-time', game: 'oot', age: 'adult', slots: [
-    { role: 'main', piece: 'Ocarina.2', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_OCARINA_TIME, raw: 0x248d8 },
-  ] },
+      { role: 'main', piece: 'Ocarina.2', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_OCARINA_TIME, raw: 0x248d8 },
+    ] },
   { id: 'oot:deku-stick', game: 'oot', age: 'child', slots: [
-    { role: 'main', piece: 'DekuStick', lut: OOT_LINK_CHILD_OFFSETS.LUT_DL_DEKU_STICK, raw: 0x06cc0 },
-  ] },
+      { role: 'main', piece: 'DekuStick', lut: OOT_LINK_CHILD_OFFSETS.LUT_DL_DEKU_STICK, raw: 0x06cc0 },
+    ] },
   { id: 'oot:boots-iron', game: 'oot', age: 'adult', slots: [
-    { role: 'left', piece: 'Foot.2.L', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_BOOT_LIRON, raw: 0x25918 },
-    { role: 'right', piece: 'Foot.2.R', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_BOOT_RIRON, raw: 0x25a60 },
-  ] },
+      { role: 'left', piece: 'Foot.2.L', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_BOOT_LIRON, raw: 0x25918 },
+      { role: 'right', piece: 'Foot.2.R', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_BOOT_RIRON, raw: 0x25a60 },
+    ] },
   { id: 'oot:boots-hover', game: 'oot', age: 'adult', slots: [
-    { role: 'left', piece: 'Foot.3.L', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_BOOT_LHOVER, raw: 0x25ba8 },
-    { role: 'right', piece: 'Foot.3.R', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_BOOT_RHOVER, raw: 0x25db0 },
-  ] },
+      { role: 'left', piece: 'Foot.3.L', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_BOOT_LHOVER, raw: 0x25ba8 },
+      { role: 'right', piece: 'Foot.3.R', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_BOOT_RHOVER, raw: 0x25db0 },
+    ] },
   { id: 'oot:gauntlets', game: 'oot', age: 'adult', slots: [
-    { role: 'lforearm', piece: 'Gauntlet.Forearm.L', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_UPGRADE_LFOREARM, raw: 0x25218 },
-    { role: 'lhand', piece: 'Gauntlet.Hand.L', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_UPGRADE_LHAND, raw: 0x252d8 },
-    { role: 'lfist', piece: 'Gauntlet.Fist.L', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_UPGRADE_LFIST, raw: 0x25438 },
-    { role: 'rforearm', piece: 'Gauntlet.Forearm.R', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_UPGRADE_RFOREARM, raw: 0x25598 },
-    { role: 'rhand', piece: 'Gauntlet.Hand.R', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_UPGRADE_RHAND, raw: 0x25658 },
-    { role: 'rfist', piece: 'Gauntlet.Fist.R', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_UPGRADE_RFIST, raw: 0x257b8 },
-  ] },
+      { role: 'lforearm', piece: 'Gauntlet.Forearm.L', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_UPGRADE_LFOREARM, raw: 0x25218 },
+      { role: 'lhand', piece: 'Gauntlet.Hand.L', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_UPGRADE_LHAND, raw: 0x252d8 },
+      { role: 'lfist', piece: 'Gauntlet.Fist.L', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_UPGRADE_LFIST, raw: 0x25438 },
+      { role: 'rforearm', piece: 'Gauntlet.Forearm.R', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_UPGRADE_RFOREARM, raw: 0x25598 },
+      { role: 'rhand', piece: 'Gauntlet.Hand.R', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_UPGRADE_RHAND, raw: 0x25658 },
+      { role: 'rfist', piece: 'Gauntlet.Fist.R', lut: OOT_LINK_ADULT_OFFSETS.LUT_DL_UPGRADE_RFIST, raw: 0x257b8 },
+    ] },
   ...([
     ['oot:mask-bunny', OOT_LINK_CHILD_OFFSETS.LUT_DL_MASK_BUNNY, 0x2ca38, 'Mask.Bunny'],
     ['oot:mask-skull', OOT_LINK_CHILD_OFFSETS.LUT_DL_MASK_SKULL, 0x2ad40, 'Mask.Skull'],
@@ -536,30 +605,30 @@ const OOT_PATCHES: TargetPatch[] = [
 
 const MM_PLAYER_PATCHES: TargetPatch[] = [
   { id: 'mm:sword:gilded', game: 'mm', slots: [
-    { role: 'hilt', piece: 'Hilt.3', lut: MM_LINK_OFFSETS.LUT_DL_HILT_GILDED, raw: 0x017058 },
-    { role: 'blade', piece: 'Blade.3', lut: MM_LINK_OFFSETS.LUT_DL_BLADE_GILDED, raw: 0x017310 },
-  ] },
+      { role: 'hilt', piece: 'Hilt.3', lut: MM_LINK_OFFSETS.LUT_DL_HILT_GILDED, raw: 0x017058 },
+      { role: 'blade', piece: 'Blade.3', lut: MM_LINK_OFFSETS.LUT_DL_BLADE_GILDED, raw: 0x017310 },
+    ] },
   { id: 'mm:sword:great-fairy', game: 'mm', slots: [
-    { role: 'main', piece: 'Sword.4', lut: MM_LINK_OFFSETS.LUT_DL_BLADE_GFSWORD_RAW, raw: 0x016898 },
-  ] },
+      { role: 'main', piece: 'Sword.4', lut: MM_LINK_OFFSETS.LUT_DL_BLADE_GFSWORD_RAW, raw: 0x016898 },
+    ] },
   { id: 'mm:shield:hero', game: 'mm', slots: [
-    { role: 'main', piece: 'Shield.1', lut: MM_LINK_OFFSETS.LUT_DL_SHIELD_HERO, raw: 0x017458 },
-  ] },
+      { role: 'main', piece: 'Shield.1', lut: MM_LINK_OFFSETS.LUT_DL_SHIELD_HERO, raw: 0x017458 },
+    ] },
   { id: 'mm:shield:mirror', game: 'mm', slots: [
-    { role: 'body', piece: 'Shield.2', lut: MM_LINK_OFFSETS.LUT_DL_SHIELD_MIRROR, raw: 0x016480 },
-    { role: 'face', piece: 'Shield.2.Face', lut: MM_LINK_OFFSETS.LUT_DL_SHIELD_MIRROR_FACE, raw: 0x015f98 },
-  ] },
+      { role: 'body', piece: 'Shield.2', lut: MM_LINK_OFFSETS.LUT_DL_SHIELD_MIRROR, raw: 0x016480 },
+      { role: 'face', piece: 'Shield.2.Face', lut: MM_LINK_OFFSETS.LUT_DL_SHIELD_MIRROR_FACE, raw: 0x015f98 },
+    ] },
   { id: 'mm:bow', game: 'mm', slots: [
-    { role: 'main', piece: 'Bow', lut: MM_LINK_OFFSETS.LUT_DL_BOW, raw: 0x0181c8 },
-    { role: 'string', piece: 'Bow.String', lut: MM_LINK_OFFSETS.LUT_DL_BOW_STRING, raw: 0x017818 },
-  ] },
+      { role: 'main', piece: 'Bow', lut: MM_LINK_OFFSETS.LUT_DL_BOW, raw: 0x0181c8 },
+      { role: 'string', piece: 'Bow.String', lut: MM_LINK_OFFSETS.LUT_DL_BOW_STRING, raw: 0x017818 },
+    ] },
   { id: 'mm:hookshot', game: 'mm', slots: [
-    { role: 'main', piece: 'Hookshot', lut: MM_LINK_OFFSETS.LUT_DL_HOOKSHOT, raw: 0x017858 },
-    { role: 'spike', piece: 'Hookshot.Spike', lut: MM_LINK_OFFSETS.LUT_DL_HOOKSHOT_SPIKE, raw: 0x01d960 },
-  ] },
+      { role: 'main', piece: 'Hookshot', lut: MM_LINK_OFFSETS.LUT_DL_HOOKSHOT, raw: 0x017858 },
+      { role: 'spike', piece: 'Hookshot.Spike', lut: MM_LINK_OFFSETS.LUT_DL_HOOKSHOT_SPIKE, raw: 0x01d960 },
+    ] },
   { id: 'mm:ocarina-time', game: 'mm', slots: [
-    { role: 'main', piece: 'Ocarina.2', lut: MM_LINK_OFFSETS.LUT_DL_OCARINA_TIME, raw: 0x010448 },
-  ] },
+      { role: 'main', piece: 'Ocarina.2', lut: MM_LINK_OFFSETS.LUT_DL_OCARINA_TIME, raw: 0x010448 },
+    ] },
 ];
 
 const MM_KEEP_PATCHES: TargetPatch[] = [
@@ -740,10 +809,65 @@ export function applyEquipmentOverridesToMmModel(
   return applyActionsGrouped(data, collectActions('mm', undefined, overrides, MM_PLAYER_PATCHES), SEG_PLAYER, processed).data;
 }
 
+function compactMmGameplayKeepTail(
+    source: Uint8Array,
+    preserveBefore: number,
+    actions: SlotAction[],
+): Uint8Array {
+  if (source.length <= preserveBefore || actions.length === 0) return source;
+
+  const graph = new PlayerModelGraphCompactor(source, preserveBefore, {
+    segment: SEG_MM_KEEP,
+    quantizeCi8ToCi4: true,
+    reduceIntensityTextures: false,
+    downsampleTextureLevels: 0,
+    deduplicate: true,
+    packIntoPreservedHoles: false,
+    reservedPreservedRanges: [{ start: 0, end: preserveBefore }],
+  });
+
+  const roots: { slot: Slot; address: number }[] = [];
+  for (const action of actions) {
+    const raw = action.slot.raw;
+    if (raw === undefined || raw < 0 || raw + 8 > source.length) continue;
+    const address = bufReadU32BE(source, raw + 4);
+    if (address !== 0 && (address >>> 24) === SEG_MM_KEEP) {
+      graph.addDisplayListRoot(address);
+      roots.push({ slot: action.slot, address });
+    }
+  }
+
+  if (roots.length === 0) return source;
+
+  const packed = graph.build(preserveBefore);
+  const usedSize = align16(preserveBefore + packed.data.length);
+  const output = new Uint8Array(usedSize);
+  output.set(source.subarray(0, preserveBefore), 0);
+  output.set(packed.data, preserveBefore);
+
+  for (const patch of packed.fixedDataPatches) {
+    output.set(patch.data, patch.offset);
+  }
+  for (const patch of packed.fixedPointerPatches) {
+    bufWriteU32BE(output, patch.offset, patch.value);
+  }
+  for (const { slot, address } of roots) {
+    if (slot.raw !== undefined) {
+      bufWriteU32BE(output, slot.raw + 4, packed.mapAddress(address));
+    }
+  }
+
+  return output;
+}
+
 export function applyEquipmentOverridesToMmGameplayKeep(
     data: Uint8Array,
     overrides: Iterable<EquipmentResolvedOverride>,
 ): Uint8Array {
   const actions = collectActions('mm', undefined, overrides, MM_KEEP_PATCHES);
-  return applyActionsGrouped(data, actions, SEG_MM_KEEP, false).data;
+  if (actions.length === 0) return data;
+
+  const preserveBefore = data.length;
+  const applied = applyActionsGrouped(data, actions, SEG_MM_KEEP, false).data;
+  return compactMmGameplayKeepTail(applied, preserveBefore, actions);
 }

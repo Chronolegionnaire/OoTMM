@@ -80,6 +80,11 @@ function resolveColor(random: Random, c: ColorArg, auto?: () => number | null): 
   }
 }
 
+const MM_ADULT_BASE_OBJECT_BUDGET = 0x00040000;
+const MM_OBJECT_BANK_EXPANSION = 0x00020000;
+const MM_OBJECT_BANK_SAFETY = 0x00008000;
+const MM_COSMETIC_SHARED_EXPANSION = MM_OBJECT_BANK_EXPANSION - MM_OBJECT_BANK_SAFETY;
+
 class CosmeticsPass {
   private assetsPromise: Promise<Assets> | null;
   private logWriter: LogWriter;
@@ -524,11 +529,28 @@ class CosmeticsPass {
     }
   }
 
-  private async patchMmAdultModel(modelInput: ResolvedPlayerModel | null, equipment: Map<string, EquipmentResolvedOverride>) {
+  private async patchMmAdultModel(modelInput: ResolvedPlayerModel | null, equipment: Map<string, EquipmentResolvedOverride>, persistentFootprintGrowth = 0) {
     const vanilla = this.builder.fileByNameRequired('mm/objects/object_link_child');
     const adultTemplate = this.builder.fileByNameRequired('custom/mm_adult_link');
     const code = this.builder.fileByNameRequired('mm/code');
     const adultTables = this.builder.fileByNameRequired('custom/mm_age_model_tables');
+
+    if (persistentFootprintGrowth > MM_COSMETIC_SHARED_EXPANSION) {
+      throw new Error(
+        `MM gameplay_keep equipment growth alone exceeds the V8.3 cosmetic expansion budget: ` +
+        `0x${persistentFootprintGrowth.toString(16)} > 0x${MM_COSMETIC_SHARED_EXPANSION.toString(16)}`
+      );
+    }
+
+    const adultExpansion = MM_COSMETIC_SHARED_EXPANSION - persistentFootprintGrowth;
+    const adultObjectBudget = MM_ADULT_BASE_OBJECT_BUDGET + adultExpansion;
+    const stockAdultFootprint = (adultTemplate.data.length + 0x0f) & ~0x0f;
+    this.monitor.log(
+      `MM adult V8.3 budget: stock reference 0x${stockAdultFootprint.toString(16)}, ` +
+      `gameplay_keep growth 0x${persistentFootprintGrowth.toString(16)}, ` +
+      `Adult Link cap 0x${adultObjectBudget.toString(16)} ` +
+      `(base 0x${MM_ADULT_BASE_OBJECT_BUDGET.toString(16)} + shared extra 0x${adultExpansion.toString(16)}).`
+    );
 
     if (!modelInput) {
       const hasPlayerEquipment = [...equipment.keys()].some((id) => id.startsWith('mm:') && id !== 'mm:sword:kokiri' && id !== 'mm:sword:razor');
@@ -537,7 +559,7 @@ class CosmeticsPass {
       const equipmentResult = applyEquipmentOverridesToPreparedMmModel(model.data, equipment.values());
       model = { ...model, data: equipmentResult.data };
       const before = model.data.length;
-      model = compactMmPlayerModel(model, vanilla.data, 'adult', undefined, equipmentResult.preservedPieces);
+      model = compactMmPlayerModel(model, vanilla.data, 'adult', adultObjectBudget, equipmentResult.preservedPieces);
       if (model.compaction) {
         this.logCompaction('MM', 'adult', before, model.compaction.usedSize, model.compaction.replacedPieces);
         if (equipmentResult.preservedPieces.length > 0) {
@@ -554,7 +576,7 @@ class CosmeticsPass {
     const equipmentResult = applyEquipmentOverridesToPreparedMmModel(model.data, equipment.values());
     model = { ...model, data: equipmentResult.data };
     const before = model.data.length;
-    model = compactMmPlayerModel(model, vanilla.data, 'adult', undefined, equipmentResult.preservedPieces);
+    model = compactMmPlayerModel(model, vanilla.data, 'adult', adultObjectBudget, equipmentResult.preservedPieces);
     if (model.compaction) {
       this.logCompaction('MM', 'adult', before, model.compaction.usedSize, model.compaction.replacedPieces);
       if (equipmentResult.preservedPieces.length > 0) {
@@ -566,13 +588,24 @@ class CosmeticsPass {
     this.replaceCustomObject('custom/mm_adult_link', model.data);
   }
 
-  private patchMmGameplayKeepEquipment(equipment: Map<string, EquipmentResolvedOverride>) {
+  private patchMmGameplayKeepEquipment(equipment: Map<string, EquipmentResolvedOverride>): number {
     const keep = this.builder.fileByNameRequired('mm/objects/gameplay_keep');
     const patched = applyEquipmentOverridesToMmGameplayKeep(keep.data, equipment.values());
-    if (patched === keep.data) return;
+    if (patched === keep.data) return 0;
+
+    const originalFootprint = (keep.data.length + 0x0f) & ~0x0f;
+    const patchedFootprint = (patched.length + 0x0f) & ~0x0f;
+    const growth = Math.max(0, patchedFootprint - originalFootprint);
+
     const code = this.builder.fileByNameRequired('mm/code');
     const object = this.addNewFile(patched);
     code.data.set(toU32Buffer(object), 0x11cc80 + 8 * 0x01);
+
+    this.monitor.log(
+      `MM gameplay_keep equipment footprint: 0x${originalFootprint.toString(16)} -> ` +
+      `0x${patchedFootprint.toString(16)} (growth 0x${growth.toString(16)}).`
+    );
+    return growth;
   }
 
   async run(): Promise<string | null> {
@@ -683,9 +716,9 @@ class CosmeticsPass {
     );
     await this.patchOotChildModel(ootModels.child, equipment);
     await this.patchOotAdultModel(ootModels.adult, equipment);
-    await this.patchMmAdultModel(mmModels.adult, equipment);
+    const mmGameplayKeepGrowth = this.patchMmGameplayKeepEquipment(equipment);
+    await this.patchMmAdultModel(mmModels.adult, equipment, mmGameplayKeepGrowth);
     await this.patchMmChildModel(mmModels.child, equipment);
-    this.patchMmGameplayKeepEquipment(equipment);
 
     const ootChildVoiceInput = await resolvePlayerVoiceInput(
         await this.getPathBuffer(c.voiceOotChildLink),

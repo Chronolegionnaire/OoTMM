@@ -17,6 +17,7 @@ const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 const PAK_MAGIC = encoder.encode('ModLoader64\0');
 const PLAYAS_MAGIC = encoder.encode('!PlayAsManifest0');
+const MODEL_MAGIC = encoder.encode('MODLOADER64');
 const EQUIP_MAGIC = encoder.encode('EQUIPMANIFEST');
 const EQUIP_CATEGORY_MAGIC = encoder.encode('EQUIPMENTCAT');
 const CONFIG_MAGIC = encoder.encode('OOTMMEQCFG1');
@@ -229,18 +230,114 @@ async function pakZobjs(data: Uint8Array) {
   return out;
 }
 
+type PreparedKind = { game: EquipmentGame; age: 'adult' | 'child' | null };
+
+function classifyPrepared(data: Uint8Array): PreparedKind | null {
+  if (data.length < 0x5010 || !bytesEqual(data, 0x5000, MODEL_MAGIC)) return null;
+
+  const type = data[0x500b];
+  const hierarchy = readU32(data, 0x500c);
+
+  if (type === 0x00) return { game: 'oot', age: 'adult' };
+  if (type === 0x01) return { game: 'oot', age: 'child' };
+  if (type === 0x04) return { game: 'mm', age: 'child' };
+  if (type === 0x68) return { game: 'mm', age: 'adult' };
+
+  if (hierarchy === 0x06005380) return { game: 'oot', age: 'adult' };
+  if (hierarchy === 0x060053a8) return { game: 'oot', age: 'child' };
+  if (hierarchy === 0x06005420) return { game: 'mm', age: null };
+  return null;
+}
+
+function preparedLutPresent(data: Uint8Array, offset: number) {
+  if (offset < 0 || offset + 8 > data.length) return false;
+  const command = readU32(data, offset);
+  const pointer = readU32(data, offset + 4);
+  const root = pointer & 0x00ffffff;
+  if ((command >>> 24) !== 0xde || (pointer >>> 24) !== 0x06 || root >= data.length) return false;
+  return !(root + 8 <= data.length && data[root] === 0xdf);
+}
+
+const PREPARED_EQUIPMENT: Record<string, {
+  adult?: number[];
+  child?: number[];
+  any?: number[];
+}> = {
+  'oot:sword:kokiri': { child: [0x5180, 0x5188] },
+  'oot:sword:master': { adult: [0x5138, 0x5140], child: [0x51c8] },
+  'oot:sword:biggoron': { adult: [0x5148, 0x5150] },
+  'oot:sword:biggoron-broken': { adult: [0x5148, 0x5158] },
+  'oot:shield:deku': { child: [0x50d0] },
+  'oot:shield:hylian': { adult: [0x5160], child: [0x51b8] },
+  'oot:shield:mirror': { adult: [0x5168] },
+  'oot:hammer': { adult: [0x5170] },
+  'oot:bow': { adult: [0x5180, 0x5228] },
+  'oot:hookshot': { adult: [0x5190, 0x5208, 0x5210, 0x5218, 0x5220] },
+  'oot:slingshot': { child: [0x5190, 0x51e0] },
+  'oot:boomerang': { child: [0x51b0] },
+  'oot:ocarina-fairy': { child: [0x5198] },
+  'oot:ocarina-time': { adult: [0x5188], child: [0x51a0] },
+  'oot:deku-stick': { child: [0x51a8] },
+  'oot:boots-iron': { adult: [0x51c8, 0x51d0] },
+  'oot:boots-hover': { adult: [0x51d8, 0x51e0] },
+  'oot:gauntlets': { adult: [0x5198, 0x51a0, 0x51a8, 0x51b0, 0x51b8, 0x51c0] },
+  'oot:mask-bunny': { child: [0x51e8] },
+  'oot:mask-gerudo': { child: [0x51f0] },
+  'oot:mask-goron': { child: [0x51f8] },
+  'oot:mask-keaton': { child: [0x5200] },
+  'oot:mask-spooky': { child: [0x5208] },
+  'oot:mask-truth': { child: [0x5210] },
+  'oot:mask-zora': { child: [0x5218] },
+  'oot:mask-skull': { child: [0x5220] },
+
+  'mm:sword:gilded': { any: [0x51d0, 0x51d8] },
+  'mm:sword:great-fairy': { any: [0x51c0] },
+  'mm:shield:hero': { any: [0x51e8] },
+  'mm:shield:mirror': { any: [0x51b0, 0x51b8] },
+  'mm:bow': { any: [0x5200, 0x5220] },
+  'mm:hookshot': { any: [0x51f8, 0x5208] },
+  'mm:ocarina-time': { any: [0x5210] },
+};
+
+function inspectPrepared(data: Uint8Array, part: string) {
+  const kind = classifyPrepared(data);
+  if (!kind) return [];
+
+  const out: EquipmentDetectedItem[] = [];
+  for (const target of EQUIPMENT_TARGETS) {
+    if (target.game !== kind.game) continue;
+    const def = PREPARED_EQUIPMENT[target.id];
+    if (!def) continue;
+    const luts = kind.age ? (def[kind.age] ?? def.any ?? []) : (def.any ?? []);
+    if (!luts.some((offset) => preparedLutPresent(data, offset))) continue;
+
+    out.push({
+      sourceId: `${part}::prepared-${target.id.replace(/:/g, '-')}`,
+      label: target.label,
+      family: target.family,
+      semantic: target.semantic,
+      nativeGame: kind.game,
+    });
+  }
+  return out;
+}
+
+function inspectZobj(data: Uint8Array, part: string) {
+  const dedicated = inspectDedicated(data, part);
+  if (dedicated.length) return dedicated;
+  const playAs = inspectPlayAs(data, part);
+  if (playAs.length) return playAs;
+  return inspectPrepared(data, part);
+}
+
 async function inspectRaw(data: Uint8Array) {
   const entries = await pakZobjs(data);
   if (entries) {
     const out: EquipmentDetectedItem[] = [];
-    for (const zobj of entries) {
-      const dedicated = inspectDedicated(zobj.data, zobj.name);
-      out.push(...(dedicated.length ? dedicated : inspectPlayAs(zobj.data, zobj.name)));
-    }
+    for (const zobj of entries) out.push(...inspectZobj(zobj.data, zobj.name));
     return out;
   }
-  const dedicated = inspectDedicated(data, 'asset');
-  return dedicated.length ? dedicated : inspectPlayAs(data, 'asset');
+  return inspectZobj(data, 'asset');
 }
 
 export function targetsForItem(item: Pick<EquipmentDetectedItem, 'family' | 'semantic'>, game: EquipmentGame) {

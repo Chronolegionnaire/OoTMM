@@ -3,7 +3,7 @@ import { OOT_LINK_ADULT_OFFSETS, OOT_LINK_CHILD_OFFSETS } from './model';
 import { ObjectEditor } from '../custom/object-editor';
 import { PlayerModelGraphCompactor } from './player-model-compactor';
 import { crossGamePieceDefaultLimb, isCrossGamePlayerPiece } from './player-model-compat.ts';
-import { readPlayerSkeletonTranslations, retargetPlayerModelBindPose, type RetargetExtraList } from './player-model-retarget';
+import { readPlayerSkeletonMatrixSlotLimbs, readPlayerSkeletonTranslations, retargetPlayerModelBindPose, type RetargetExtraList } from './player-model-retarget';
 
 export type MmModelAge = 'adult' | 'child';
 
@@ -16,6 +16,25 @@ export type MmModelCompactionInfo = {
     originalSize: number;
     usedSize: number;
     replacedPieces: string[];
+    deduplicatedBytes?: number;
+    holePackedBytes?: number;
+    ci4TextureCount?: number;
+    reducedIntensityTextureCount?: number;
+    downsampledTextureCount?: number;
+    downsampleTextureLevels?: number;
+    downsampleMinBytes?: number;
+    downsampleMinDimension?: number;
+    downsampleTargetBytesToSave?: number;
+    textureBytesSaved?: number;
+    vertexBytesSaved?: number;
+    geometryMergedVertexCount?: number;
+    geometryCompactedListCount?: number;
+    geometryPositionStep?: number;
+    aggressiveTextures?: boolean;
+    bodyTexturePolicy?: 'preserve-all' | 'preserve-face' | 'body-only-preserve-face' | 'allow-all';
+    expressionPressure?: 'none' | 'mouth-half-xy' | 'eyes-half-x' | 'eyes-half-x-mouth-half-xy' | 'eyes-half-xy';
+    expressionPoolBytesReleased?: number;
+    targetBudget?: number;
 };
 
 export type PreparedMmModel = {
@@ -28,6 +47,7 @@ const BASE_OFFSET = 0x06000000;
 const LUT_START = 0x00005000;
 const LUT_END = 0x00005800;
 const HIERARCHY = 0x06005420;
+const MM_ADULT_BASE_BUFFER_SIZE = 0x00040000;
 const MM_CODE_VRAM = 0x800a5ac0;
 const MANIFEST_MAGIC = '!PlayAsManifest0';
 
@@ -503,10 +523,394 @@ type CompactedMmSkeleton = {
     count: number;
 };
 
+type MmBodyTexturePolicy =
+    | 'preserve-all'
+    | 'preserve-face'
+    | 'body-only-preserve-face'
+    | 'allow-all';
+
+type MmExpressionPressure =
+    | 'none'
+    | 'mouth-half-xy'
+    | 'eyes-half-x'
+    | 'eyes-half-x-mouth-half-xy'
+    | 'eyes-half-xy';
+
+type MmExpressionPressureResult = {
+    mode: MmExpressionPressure;
+    eyeBytesPerSlot: number;
+    mouthBytesPerSlot: number;
+    bytesReleased: number;
+    dynamicReferencesRewritten: number;
+};
+
+const MM_EYE_COUNT = 8;
+const MM_EYE_WIDTH = 64;
+const MM_EYE_HEIGHT = 32;
+const MM_EYE_SLOT_BYTES = 0x800;
+const MM_MOUTH_COUNT = 4;
+const MM_MOUTH_WIDTH = 32;
+const MM_MOUTH_HEIGHT = 32;
+const MM_MOUTH_BASE = 0x4000;
+const MM_MOUTH_SLOT_BYTES = 0x400;
+
+function mmCalcDxt(width: number, bpp: number) {
+    const words = Math.max(1, Math.floor((width * bpp) / 64));
+    return Math.min(0xfff, Math.floor((0x800 + words - 1) / words));
+}
+
+function mmDownsampleCi8Slot(
+    data: Uint8Array,
+    offset: number,
+    width: number,
+    height: number,
+    shiftS: number,
+    shiftT: number,
+) {
+    const factorS = 1 << shiftS;
+    const factorT = 1 << shiftT;
+    const newWidth = width / factorS;
+    const newHeight = height / factorT;
+    if (!Number.isInteger(newWidth) || !Number.isInteger(newHeight) || newWidth < 1 || newHeight < 1) {
+        throw new Error(`Invalid MM expression texture reduction ${width}x${height} >> ${shiftS},${shiftT}`);
+    }
+
+    const sourceBytes = width * height;
+    const outputBytes = newWidth * newHeight;
+    if (offset < 0 || offset + sourceBytes > data.length) {
+        throw new Error('MM expression texture slot is out of range');
+    }
+
+    const input = new Uint8Array(data.subarray(offset, offset + sourceBytes));
+    const output = new Uint8Array(outputBytes);
+    for (let y = 0; y < newHeight; ++y) {
+        for (let x = 0; x < newWidth; ++x) {
+            output[y * newWidth + x] = input[(y * factorT) * width + (x * factorS)];
+        }
+    }
+    data.set(output, offset);
+    return outputBytes;
+}
+
+function mmShiftDynamicTileAxis(word: number, shiftSBy: number, shiftTBy: number) {
+    const maskT = (word >>> 14) & 0x0f;
+    const shiftT = (word >>> 10) & 0x0f;
+    const maskS = (word >>> 4) & 0x0f;
+    const shiftS = word & 0x0f;
+
+    /* Values above 10 use the RDP's special left-shift encoding. Don't guess. */
+    if (shiftS > 10 - shiftSBy || shiftT > 10 - shiftTBy) {
+        return null;
+    }
+
+    const newMaskT = shiftTBy === 0 || maskT === 0 ? maskT : Math.max(0, maskT - shiftTBy);
+    const newMaskS = shiftSBy === 0 || maskS === 0 ? maskS : Math.max(0, maskS - shiftSBy);
+    const newShiftT = shiftT + shiftTBy;
+    const newShiftS = shiftS + shiftSBy;
+
+    return (
+        (word & ~((0x0f << 14) | (0x0f << 10) | (0x0f << 4) | 0x0f)) |
+        (newMaskT << 14) |
+        (newShiftT << 10) |
+        (newMaskS << 4) |
+        newShiftS
+    ) >>> 0;
+}
+
+function mmRewriteDynamicCi8Uses(
+    data: Uint8Array,
+    segment: number,
+    expectedWidth: number,
+    expectedHeight: number,
+    shiftS: number,
+    shiftT: number,
+) {
+    const expectedAddress = segment << 24;
+    const prefix = [0xfd, 0xf5, 0xe6, 0xf3, 0xe7, 0xf5];
+    let rewritten = 0;
+
+    for (let command = 0; command + prefix.length * 8 <= data.length; command += 8) {
+        if (data[command] !== 0xfd || bufReadU32BE(data, command + 4) !== expectedAddress) {
+            continue;
+        }
+
+        let valid = true;
+        for (let i = 0; i < prefix.length; ++i) {
+            if (data[command + i * 8] !== prefix[i]) {
+                valid = false;
+                break;
+            }
+        }
+        if (!valid) continue;
+
+        const textureWord = bufReadU32BE(data, command);
+        const renderTileCommand = command + 5 * 8;
+        const renderTileWord = bufReadU32BE(data, renderTileCommand);
+        const textureFormat = (textureWord >>> 21) & 7;
+        const textureLoadSize = (textureWord >>> 19) & 3;
+        const renderFormat = (renderTileWord >>> 21) & 7;
+        const renderSize = (renderTileWord >>> 19) & 3;
+
+        if (textureFormat !== 2 || textureLoadSize !== 2 || renderFormat !== 2 || renderSize !== 1) {
+            continue;
+        }
+
+        const loadBlockCommand = command + 3 * 8;
+        const oldLoad = bufReadU32BE(data, loadBlockCommand + 4);
+        const sourceBytes = (((oldLoad >>> 12) & 0xfff) + 1) * 2;
+
+        let tileSizeCommand: number | null = null;
+        let width: number;
+        let height: number;
+        const possibleTileSize = command + 6 * 8;
+        if (possibleTileSize + 8 <= data.length && data[possibleTileSize] === 0xf2) {
+            tileSizeCommand = possibleTileSize;
+            const dimensions = bufReadU32BE(data, tileSizeCommand + 4);
+            const rawWidth = (dimensions >>> 12) & 0xfff;
+            const rawHeight = dimensions & 0xfff;
+            if ((rawWidth & 3) !== 0 || (rawHeight & 3) !== 0) continue;
+            width = (rawWidth >>> 2) + 1;
+            height = (rawHeight >>> 2) + 1;
+        } else {
+            const line = (renderTileWord >>> 9) & 0x1ff;
+            width = line * 8;
+            if (width === 0 || sourceBytes % width !== 0) continue;
+            height = sourceBytes / width;
+        }
+
+        if (width !== expectedWidth || height !== expectedHeight) {
+            continue;
+        }
+
+        const newWidth = width >> shiftS;
+        const newHeight = height >> shiftT;
+        const newBytes = newWidth * newHeight;
+        const oldRender1 = bufReadU32BE(data, renderTileCommand + 4);
+        const shifted = mmShiftDynamicTileAxis(oldRender1, shiftS, shiftT);
+        if (shifted === null) {
+            continue;
+        }
+
+        const loadUnits16 = Math.max(1, Math.ceil(newBytes / 2));
+        bufWriteU32BE(
+            data,
+            loadBlockCommand + 4,
+            (oldLoad & 0xff000000) |
+            (((loadUnits16 - 1) & 0xfff) << 12) |
+            (mmCalcDxt(newWidth, 8) & 0xfff),
+        );
+
+        const line = Math.max(1, Math.ceil((newWidth * 8) / 64)) & 0x1ff;
+        bufWriteU32BE(
+            data,
+            renderTileCommand,
+            (renderTileWord & ~(0x1ff << 9)) | (line << 9),
+        );
+        bufWriteU32BE(data, renderTileCommand + 4, shifted);
+
+        if (tileSizeCommand !== null) {
+            const oldSize1 = bufReadU32BE(data, tileSizeCommand + 4);
+            const rawWidth = ((newWidth - 1) << 2) & 0xfff;
+            const rawHeight = ((newHeight - 1) << 2) & 0xfff;
+            bufWriteU32BE(
+                data,
+                tileSizeCommand + 4,
+                (oldSize1 & 0xff000000) | (rawWidth << 12) | rawHeight,
+            );
+        }
+        rewritten++;
+    }
+
+    return rewritten;
+}
+
+function applyMmExpressionPressure(
+    source: Uint8Array,
+    mode: MmExpressionPressure,
+): MmExpressionPressureResult {
+    if (mode === 'none') {
+        return {
+            mode,
+            eyeBytesPerSlot: MM_EYE_SLOT_BYTES,
+            mouthBytesPerSlot: MM_MOUTH_SLOT_BYTES,
+            bytesReleased: 0,
+            dynamicReferencesRewritten: 0,
+        };
+    }
+
+    const reduceEyesX =
+        mode === 'eyes-half-x' ||
+        mode === 'eyes-half-x-mouth-half-xy' ||
+        mode === 'eyes-half-xy';
+    const reduceEyesY = mode === 'eyes-half-xy';
+    const reduceMouths =
+        mode === 'mouth-half-xy' ||
+        mode === 'eyes-half-x-mouth-half-xy';
+
+    let eyeBytesPerSlot = MM_EYE_SLOT_BYTES;
+    let mouthBytesPerSlot = MM_MOUTH_SLOT_BYTES;
+    let dynamicReferencesRewritten = 0;
+
+    if (reduceEyesX) {
+        eyeBytesPerSlot = mmDownsampleCi8Slot(
+            source,
+            0,
+            MM_EYE_WIDTH,
+            MM_EYE_HEIGHT,
+            1,
+            reduceEyesY ? 1 : 0,
+        );
+        for (let i = 1; i < MM_EYE_COUNT; ++i) {
+            const size = mmDownsampleCi8Slot(
+                source,
+                i * MM_EYE_SLOT_BYTES,
+                MM_EYE_WIDTH,
+                MM_EYE_HEIGHT,
+                1,
+                reduceEyesY ? 1 : 0,
+            );
+            if (size !== eyeBytesPerSlot) {
+                throw new Error('Inconsistent MM eye expression reduction');
+            }
+        }
+        dynamicReferencesRewritten += mmRewriteDynamicCi8Uses(
+            source,
+            0x08,
+            MM_EYE_WIDTH,
+            MM_EYE_HEIGHT,
+            1,
+            reduceEyesY ? 1 : 0,
+        );
+        if (dynamicReferencesRewritten === 0) {
+            throw new Error('Could not find MM dynamic eye CI8 loads for expression-pool compaction');
+        }
+    }
+
+    if (reduceMouths) {
+        for (let i = 0; i < MM_MOUTH_COUNT; ++i) {
+            const size = mmDownsampleCi8Slot(
+                source,
+                MM_MOUTH_BASE + i * MM_MOUTH_SLOT_BYTES,
+                MM_MOUTH_WIDTH,
+                MM_MOUTH_HEIGHT,
+                1,
+                1,
+            );
+            if (i === 0) mouthBytesPerSlot = size;
+            if (size !== mouthBytesPerSlot) {
+                throw new Error('Inconsistent MM mouth expression reduction');
+            }
+        }
+        const before = dynamicReferencesRewritten;
+        dynamicReferencesRewritten += mmRewriteDynamicCi8Uses(
+            source,
+            0x09,
+            MM_MOUTH_WIDTH,
+            MM_MOUTH_HEIGHT,
+            1,
+            1,
+        );
+        if (dynamicReferencesRewritten === before) {
+            throw new Error('Could not find MM dynamic mouth CI8 loads for expression-pool compaction');
+        }
+    }
+
+    return {
+        mode,
+        eyeBytesPerSlot,
+        mouthBytesPerSlot,
+        bytesReleased:
+            MM_EYE_COUNT * (MM_EYE_SLOT_BYTES - eyeBytesPerSlot) +
+            MM_MOUTH_COUNT * (MM_MOUTH_SLOT_BYTES - mouthBytesPerSlot),
+        dynamicReferencesRewritten,
+    };
+}
+
+function mmExpressionReservedRanges(
+    expression: MmExpressionPressureResult,
+    skeletonCount: number,
+) {
+    if (expression.mode === 'none') {
+        return {
+            ranges: [{ start: 0x0000, end: LUT_END }],
+            skeletonStart: null as number | null,
+            tableStart: null as number | null,
+            skeletonEnd: null as number | null,
+        };
+    }
+
+    const eye0FreeStart = expression.eyeBytesPerSlot;
+    const mouth0FreeStart = MM_MOUTH_BASE + expression.mouthBytesPerSlot;
+    const candidates = [
+        { start: eye0FreeStart, end: MM_EYE_SLOT_BYTES },
+        { start: mouth0FreeStart, end: MM_MOUTH_BASE + MM_MOUTH_SLOT_BYTES },
+    ];
+
+    const skeletonBytes = skeletonCount * 0x10;
+    const tableBytes = skeletonCount * 4;
+    let skeletonStart: number | null = null;
+    let tableStart: number | null = null;
+    let skeletonEnd: number | null = null;
+
+    for (const hole of candidates) {
+        const start = alignMm16(hole.start);
+        const table = alignMm16(start + skeletonBytes);
+        const end = alignMm16(table + tableBytes);
+        if (end <= hole.end) {
+            skeletonStart = start;
+            tableStart = table;
+            skeletonEnd = end;
+            break;
+        }
+    }
+
+    const ranges: Array<{ start: number; end: number }> = [];
+
+    for (let i = 0; i < MM_EYE_COUNT; ++i) {
+        const start = i * MM_EYE_SLOT_BYTES;
+        let end = start + expression.eyeBytesPerSlot;
+        if (skeletonStart !== null && skeletonEnd !== null && skeletonStart >= start && skeletonStart < start + MM_EYE_SLOT_BYTES) {
+            end = Math.max(end, skeletonEnd);
+        }
+        ranges.push({ start, end });
+    }
+
+    for (let i = 0; i < MM_MOUTH_COUNT; ++i) {
+        const start = MM_MOUTH_BASE + i * MM_MOUTH_SLOT_BYTES;
+        let end = start + expression.mouthBytesPerSlot;
+        if (skeletonStart !== null && skeletonEnd !== null && skeletonStart >= start && skeletonStart < start + MM_MOUTH_SLOT_BYTES) {
+            end = Math.max(end, skeletonEnd);
+        }
+        ranges.push({ start, end });
+    }
+
+    ranges.push({ start: LUT_START, end: LUT_END });
+
+    return { ranges, skeletonStart, tableStart, skeletonEnd };
+}
+
+function protectMmBodyTextureDimensions(policy: MmBodyTexturePolicy, limbIndex: number) {
+    if (policy === 'preserve-all') return true;
+    if (policy === 'preserve-face' || policy === 'body-only-preserve-face') {
+        /* Head, hat and collar stay completely out of spatial body pressure. */
+        return limbIndex >= 10 && limbIndex <= 12;
+    }
+    return false;
+}
+
+function protectMmBodyPieceDimensions(policy: MmBodyTexturePolicy, name: string) {
+    if (policy === 'preserve-all') return true;
+    if (policy === 'preserve-face' || policy === 'body-only-preserve-face') {
+        return name === 'Limb 10' || name === 'Limb 11' || name === 'Limb 12';
+    }
+    return false;
+}
+
 function collectMmSkeletonForCompaction(
     graph: PlayerModelGraphCompactor,
     data: Uint8Array,
     age: MmModelAge,
+    bodyTexturePolicy: MmBodyTexturePolicy,
 ): CompactedMmSkeleton {
     const hierarchyOffset = HIERARCHY - BASE_OFFSET;
     if (hierarchyOffset < 0 || hierarchyOffset + 0x0c > data.length) {
@@ -542,6 +946,9 @@ function collectMmSkeletonForCompaction(
             if (address !== 0 && (address >>> 24) === 0x06) {
                 graph.addDisplayListRoot(address, {
                     preserveCi8: i >= 10 && i <= 12,
+                    preserveTextureDimensions:
+                        protectMmBodyTextureDimensions(bodyTexturePolicy, i),
+                    preserveGeometry: i >= 10 && i <= 12,
                 });
             }
         }
@@ -562,8 +969,23 @@ function buildMmCompactionAttempt(
     age: MmModelAge,
     maxSize: number | undefined,
     replacedPieces: string[],
+    aggressiveTextures = false,
+    downsampleTextureLevels = 0,
+    downsampleMinBytes = 0x400,
+    downsampleTargetBytesToSave = 0,
+    bodyTexturePolicy: MmBodyTexturePolicy = 'preserve-all',
+    vanillaQuantizeCi8ToCi4 = false,
+    vanillaReduceIntensityTextures = false,
+    vanillaDownsampleTextureLevels = 0,
+    vanillaDownsampleMinBytes = 0x400,
+    vanillaDownsampleTargetBytesToSave = 0,
+    expressionPressure: MmExpressionPressure = 'none',
+    downsampleMinDimension = 8,
+    geometryPositionStep = 0,
+    sourceQuantizeCi8ToCi4 = true,
 ): MmCompactionAttempt {
-    const source = prepared.data;
+    const source = new Uint8Array(prepared.data);
+    const expression = applyMmExpressionPressure(source, expressionPressure);
     const replacements = new Set(replacedPieces);
     if (source.length < LUT_END) {
         throw new Error(`Cannot compact MM ${age} model smaller than the player LUT`);
@@ -572,11 +994,30 @@ function buildMmCompactionAttempt(
         throw new Error(`MM ${age} model budget is smaller than the player LUT`);
     }
 
+    const hierarchyOffsetForLayout = HIERARCHY - BASE_OFFSET;
+    const skeletonCountForLayout = source[hierarchyOffsetForLayout + 4];
+    if (skeletonCountForLayout === 0 || skeletonCountForLayout > 0x40) {
+        throw new Error(`Invalid MM ${age} skeleton count while laying out expression holes`);
+    }
+    const expressionLayout = mmExpressionReservedRanges(expression, skeletonCountForLayout);
+
     const graph = new PlayerModelGraphCompactor(source, LUT_END, {
-        quantizeCi8ToCi4: true,
-        allowProtectedCi4UpToBytes: 0x200,
+        quantizeCi8ToCi4: sourceQuantizeCi8ToCi4,
+        reduceIntensityTextures: aggressiveTextures,
+        downsampleTextureLevels,
+        downsampleMinBytes,
+        downsampleMinDimension,
+        downsampleTargetBytesToSave,
+        geometryPositionStep,
+        allowProtectedCi4UpToBytes:
+            aggressiveTextures && bodyTexturePolicy === 'allow-all'
+                ? Number.MAX_SAFE_INTEGER
+                : 0,
+        deduplicate: true,
+        packIntoPreservedHoles: expression.mode !== 'none',
+        reservedPreservedRanges: expressionLayout.ranges,
     });
-    const skeleton = collectMmSkeletonForCompaction(graph, source, age);
+    const skeleton = collectMmSkeletonForCompaction(graph, source, age, bodyTexturePolicy);
     const sourceTargets = new Map<string, number>();
 
     for (const [name, piece] of Object.entries(MM_PIECES)) {
@@ -590,16 +1031,34 @@ function buildMmCompactionAttempt(
         }
 
         const target = bufReadU32BE(source, entry + 4);
-        graph.addDisplayListRoot(target);
+        const isBodyPiece = isCrossGamePlayerPiece(name);
+        graph.addDisplayListRoot(target, {
+            preserveTextureDimensions:
+                isBodyPiece
+                    ? protectMmBodyPieceDimensions(bodyTexturePolicy, name)
+                    : bodyTexturePolicy === 'body-only-preserve-face',
+            preserveGeometry:
+                isBodyPiece && (name === 'Limb 10' || name === 'Limb 11' || name === 'Limb 12'),
+        });
         sourceTargets.set(name, target);
     }
 
     const packed = graph.build(LUT_END);
-    const skeletonStart = LUT_END + packed.data.length;
-    const tableStart = alignMm16(skeletonStart + skeleton.count * 0x10);
-    const afterSkeleton = alignMm16(tableStart + skeleton.count * 4);
+    const packedTailEnd = alignMm16(LUT_END + packed.data.length);
+    const skeletonStart = expressionLayout.skeletonStart ?? packedTailEnd;
+    const tableStart = expressionLayout.tableStart ?? alignMm16(skeletonStart + skeleton.count * 0x10);
+    const afterSkeleton = expressionLayout.skeletonEnd !== null
+        ? packedTailEnd
+        : alignMm16(tableStart + skeleton.count * 4);
 
-    const vanillaGraph = new PlayerModelGraphCompactor(vanilla, 0);
+    const vanillaGraph = new PlayerModelGraphCompactor(vanilla, 0, {
+        quantizeCi8ToCi4: vanillaQuantizeCi8ToCi4,
+        reduceIntensityTextures: vanillaReduceIntensityTextures,
+        downsampleTextureLevels: vanillaDownsampleTextureLevels,
+        downsampleMinBytes: vanillaDownsampleMinBytes,
+        downsampleTargetBytesToSave: vanillaDownsampleTargetBytesToSave,
+        deduplicate: true,
+    });
     const vanillaTargets = new Map<string, number>();
     for (const name of replacedPieces) {
         const target = BASE_OFFSET | MM_PIECES[name].vanilla;
@@ -619,6 +1078,9 @@ function buildMmCompactionAttempt(
 
     output.set(source.subarray(0, LUT_END), 0);
     output.set(packed.data, LUT_END);
+    for (const patch of packed.fixedDataPatches) {
+        output.set(patch.data, patch.offset);
+    }
     for (const patch of packed.fixedPointerPatches) {
         bufWriteU32BE(output, patch.offset, patch.value);
     }
@@ -669,6 +1131,46 @@ function buildMmCompactionAttempt(
                 originalSize: prepared.data.length,
                 usedSize,
                 replacedPieces: [...replacedPieces],
+                deduplicatedBytes:
+                    packed.stats.deduplicatedBytes +
+                    vanillaPacked.stats.deduplicatedBytes,
+                holePackedBytes:
+                    packed.stats.holePackedBytes +
+                    (expressionLayout.skeletonEnd !== null
+                        ? alignMm16(tableStart + skeleton.count * 4) - skeletonStart
+                        : 0),
+                ci4TextureCount:
+                    packed.stats.ci4TextureCount +
+                    vanillaPacked.stats.ci4TextureCount,
+                reducedIntensityTextureCount:
+                    packed.stats.reducedIntensityTextureCount +
+                    vanillaPacked.stats.reducedIntensityTextureCount,
+                downsampledTextureCount:
+                    packed.stats.downsampledTextureCount +
+                    vanillaPacked.stats.downsampledTextureCount +
+                    (expression.eyeBytesPerSlot < MM_EYE_SLOT_BYTES ? MM_EYE_COUNT : 0) +
+                    (expression.mouthBytesPerSlot < MM_MOUTH_SLOT_BYTES ? MM_MOUTH_COUNT : 0),
+                downsampleTextureLevels,
+                downsampleMinBytes,
+                downsampleMinDimension,
+                downsampleTargetBytesToSave,
+                textureBytesSaved:
+                    packed.stats.textureBytesSaved +
+                    vanillaPacked.stats.textureBytesSaved +
+                    expression.bytesReleased,
+                vertexBytesSaved:
+                    packed.stats.vertexBytesSaved + vanillaPacked.stats.vertexBytesSaved,
+                geometryMergedVertexCount:
+                    packed.stats.geometryMergedVertexCount + vanillaPacked.stats.geometryMergedVertexCount,
+                geometryCompactedListCount:
+                    packed.stats.geometryCompactedListCount + vanillaPacked.stats.geometryCompactedListCount,
+                geometryPositionStep,
+                aggressiveTextures,
+                bodyTexturePolicy,
+                expressionPressure: expression.mode,
+                expressionPoolBytesReleased: expression.bytesReleased,
+                targetBudget: maxSize ??
+                    (age === 'adult' ? MM_ADULT_BASE_BUFFER_SIZE : undefined),
             },
         },
         usedSize,
@@ -679,6 +1181,7 @@ function buildMmBodyOnlyDiagnosticAttempt(
     prepared: PreparedMmModel,
     age: MmModelAge,
     maxSize: number | undefined,
+    aggressiveTextures = false,
 ): MmCompactionAttempt {
     const source = prepared.data;
 
@@ -691,9 +1194,18 @@ function buildMmBodyOnlyDiagnosticAttempt(
 
     const graph = new PlayerModelGraphCompactor(source, LUT_END, {
         quantizeCi8ToCi4: true,
-        allowProtectedCi4UpToBytes: 0x200,
+        reduceIntensityTextures: aggressiveTextures,
+        downsampleTextureLevels: 0,
+        downsampleMinBytes: 0x400,
+        allowProtectedCi4UpToBytes:
+            aggressiveTextures ? Number.MAX_SAFE_INTEGER : 0x200,
+        deduplicate: true,
+        packIntoPreservedHoles: false,
+        reservedPreservedRanges: [
+            { start: 0x0000, end: LUT_END },
+        ],
     });
-    const skeleton = collectMmSkeletonForCompaction(graph, source, age);
+    const skeleton = collectMmSkeletonForCompaction(graph, source, age, 'preserve-all');
     const sourceTargets = new Map<string, number>();
 
     for (const [name, piece] of Object.entries(MM_PIECES)) {
@@ -729,6 +1241,9 @@ function buildMmBodyOnlyDiagnosticAttempt(
     output.set(source.subarray(0, LUT_END), 0);
     output.set(packed.data, LUT_END);
 
+    for (const patch of packed.fixedDataPatches) {
+        output.set(patch.data, patch.offset);
+    }
     for (const patch of packed.fixedPointerPatches) {
         bufWriteU32BE(output, patch.offset, patch.value);
     }
@@ -775,6 +1290,17 @@ function buildMmBodyOnlyDiagnosticAttempt(
                 originalSize: prepared.data.length,
                 usedSize,
                 replacedPieces: mmVanillaEquipmentPieces(),
+                deduplicatedBytes: packed.stats.deduplicatedBytes,
+                holePackedBytes: packed.stats.holePackedBytes,
+                ci4TextureCount: packed.stats.ci4TextureCount,
+                reducedIntensityTextureCount: packed.stats.reducedIntensityTextureCount,
+                downsampledTextureCount: 0,
+                downsampleTextureLevels: 0,
+                downsampleMinBytes: 0,
+                textureBytesSaved: packed.stats.textureBytesSaved,
+                aggressiveTextures,
+                targetBudget:
+                    age === 'adult' ? MM_ADULT_BASE_BUFFER_SIZE : undefined,
             },
         },
         usedSize,
@@ -788,30 +1314,100 @@ export function compactMmPlayerModel(
     maxSize?: number,
     preserveEquipmentPieces: Iterable<string> = [],
 ): PreparedMmModel {
-    const outputBudget = maxSize;
+    const outputBudget =
+        age === 'adult'
+            ? (maxSize ?? MM_ADULT_BASE_BUFFER_SIZE)
+            : maxSize;
+
+    const finishAttempt = (attempt: MmCompactionAttempt) => {
+        if (attempt.model.compaction) {
+            attempt.model.compaction.targetBudget = outputBudget;
+        }
+        return attempt.model;
+    };
 
     const preserve = new Set(preserveEquipmentPieces);
+
     if (prepared.bodyOnlyCrossGameDiagnostic && preserve.size === 0) {
-        return buildMmBodyOnlyDiagnosticAttempt(
+        const diagnostic = buildMmBodyOnlyDiagnosticAttempt(
             prepared,
             age,
-            outputBudget,
-        ).model;
+            undefined,
+            false,
+        );
+        if (outputBudget !== undefined && diagnostic.usedSize > outputBudget) {
+            throw new Error(
+                `MM ${age} body-only player model exceeds the available Adult Link object budget: ` +
+                `0x${diagnostic.usedSize.toString(16)} > 0x${outputBudget.toString(16)}`,
+            );
+        }
+        return finishAttempt(diagnostic);
     }
 
     const vanillaEquipment = mmVanillaEquipmentPieces()
         .filter((name) => !preserve.has(name));
 
-    return buildMmCompactionAttempt(
+    let best = buildMmCompactionAttempt(
         prepared,
         vanilla,
         age,
-        outputBudget,
+        undefined,
         vanillaEquipment,
-    ).model;
+        false,
+        0,
+        0x400,
+        0,
+        'preserve-all',
+        false,
+        false,
+        0,
+        0x400,
+        0,
+        'none',
+        8,
+        0,
+        false,
+    );
+
+    if (outputBudget === undefined || best.usedSize <= outputBudget) {
+        return finishAttempt(best);
+    }
+
+    const paletteAttempt = buildMmCompactionAttempt(
+        prepared,
+        vanilla,
+        age,
+        undefined,
+        vanillaEquipment,
+        false,
+        0,
+        0x400,
+        0,
+        'preserve-all',
+        true,
+        false,
+        0,
+        0x400,
+        0,
+        'none',
+        8,
+        0,
+        true,
+    );
+    if (paletteAttempt.usedSize < best.usedSize) {
+        best = paletteAttempt;
+    }
+
+    if (best.usedSize <= outputBudget) {
+        return finishAttempt(best);
+    }
+
+    throw new Error(
+        `MM ${age} player model exceeds the 0x${outputBudget.toString(16)} ` +
+        `MM object-space budget after quality-preserving compaction: ` +
+        `0x${best.usedSize.toString(16)} > 0x${outputBudget.toString(16)}. `,
+    );
 }
-
-
 function ootProcessedBodyLuts(age: MmModelAge): Record<string, number> {
     const d = age === 'adult' ? OOT_LINK_ADULT_OFFSETS : OOT_LINK_CHILD_OFFSETS;
     return {
@@ -1019,7 +1615,13 @@ export function prepareMmModel(
 
         if (crossGame) {
             const targetSkeleton = readPlayerSkeletonTranslations(skeletonTemplate);
-            data = retargetPlayerModelBindPose(data, targetSkeleton, retargetExtraLists);
+            const targetMatrixSlotLimbs = readPlayerSkeletonMatrixSlotLimbs(skeletonTemplate);
+            data = retargetPlayerModelBindPose(
+                data,
+                targetSkeleton,
+                retargetExtraLists,
+                targetMatrixSlotLimbs,
+            );
         }
 
         writePool(data, age, vanilla, code, pieces);

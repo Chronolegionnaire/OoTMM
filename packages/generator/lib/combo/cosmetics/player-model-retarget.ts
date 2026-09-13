@@ -3,7 +3,6 @@ import { bufReadU16BE, bufReadU32BE, bufWriteU16BE, bufWriteU32BE } from '../uti
 const SEGMENT_MODEL = 0x06;
 const SEGMENT_MATRIX = 0x0d;
 const LIMB_COUNT = 21;
-const DLIST_COUNT = 18;
 
 type Vec3 = [number, number, number];
 
@@ -19,6 +18,7 @@ type Limb = {
 type Skeleton = {
     hierarchyOffset: number;
     limbTableOffset: number;
+    dlistCount: number;
     limbs: Limb[];
 };
 
@@ -41,7 +41,11 @@ function findSkeleton(data: Uint8Array): Skeleton {
         if ((limbTableAddress >>> 24) !== SEGMENT_MODEL) {
             continue;
         }
-        if (data[hierarchyOffset + 4] !== LIMB_COUNT || data[hierarchyOffset + 8] !== DLIST_COUNT) {
+        if (data[hierarchyOffset + 4] !== LIMB_COUNT) {
+            continue;
+        }
+        const headerDlistCount = data[hierarchyOffset + 8];
+        if (headerDlistCount === 0 || headerDlistCount > LIMB_COUNT) {
             continue;
         }
 
@@ -66,6 +70,35 @@ function findSkeleton(data: Uint8Array): Skeleton {
                 break;
             }
 
+            const child = data[recordOffset + 6];
+            const sibling = data[recordOffset + 7];
+            const dlistNear = bufReadU32BE(data, recordOffset + 8);
+            const dlistFar = bufReadU32BE(data, recordOffset + 12);
+
+            if (
+                (child !== 0xff && child >= LIMB_COUNT) ||
+                (sibling !== 0xff && sibling >= LIMB_COUNT)
+            ) {
+                valid = false;
+                break;
+            }
+
+            for (const address of [dlistNear, dlistFar]) {
+                if (
+                    address !== 0 &&
+                    (
+                        (address >>> 24) !== SEGMENT_MODEL ||
+                        (address & 0x00ffffff) >= data.length
+                    )
+                ) {
+                    valid = false;
+                    break;
+                }
+            }
+            if (!valid) {
+                break;
+            }
+
             limbs.push({
                 recordOffset,
                 translation: [
@@ -73,23 +106,33 @@ function findSkeleton(data: Uint8Array): Skeleton {
                     signed16(bufReadU16BE(data, recordOffset + 2)),
                     signed16(bufReadU16BE(data, recordOffset + 4)),
                 ],
-                child: data[recordOffset + 6],
-                sibling: data[recordOffset + 7],
-                dlistNear: bufReadU32BE(data, recordOffset + 8),
-                dlistFar: bufReadU32BE(data, recordOffset + 12),
+                child,
+                sibling,
+                dlistNear,
+                dlistFar,
             });
         }
 
-        if (valid) {
-            return {
-                hierarchyOffset,
-                limbTableOffset,
-                limbs,
-            };
+        if (!valid) {
+            continue;
         }
+
+        const actualDlistCount = limbs.filter(
+            (limb) => limb.dlistNear !== 0 || limb.dlistFar !== 0
+        ).length;
+        if (actualDlistCount === 0 || actualDlistCount > LIMB_COUNT) {
+            continue;
+        }
+
+        return {
+            hierarchyOffset,
+            limbTableOffset,
+            dlistCount: actualDlistCount,
+            limbs,
+        };
     }
 
-    throw new Error('Failed to find 21-limb player skeleton');
+    throw new Error('Failed to find valid 21-limb player flex skeleton');
 }
 
 function makeParents(limbs: Limb[]) {
@@ -149,18 +192,38 @@ function globalTranslations(translations: Vec3[], parents: Array<number | null>)
     return out;
 }
 
-function matrixSlotToLimb(limbs: Limb[]) {
+function matrixSlotToLimb(skeleton: Skeleton) {
     const out: number[] = [];
 
-    for (let i = 0; i < limbs.length; ++i) {
-        const limb = limbs[i];
+    for (let i = 0; i < skeleton.limbs.length; ++i) {
+        const limb = skeleton.limbs[i];
         if (limb.dlistNear !== 0 || limb.dlistFar !== 0) {
             out.push(i);
         }
     }
 
-    if (out.length !== DLIST_COUNT) {
-        throw new Error(`Unexpected player skeleton display-list count: ${out.length}`);
+    if (out.length !== skeleton.dlistCount) {
+        throw new Error(
+            `Unexpected player skeleton display-list count: ` +
+            `${out.length} != ${skeleton.dlistCount}`
+        );
+    }
+
+    return out;
+}
+
+function matrixSlotByLimb(target: ReadonlyArray<number>) {
+    const out = new Map<number, number>();
+
+    for (let slot = 0; slot < target.length; ++slot) {
+        const limb = target[slot];
+        if (!Number.isInteger(limb) || limb < 0 || limb >= LIMB_COUNT) {
+            throw new Error(`Invalid target player matrix-slot limb ${limb}`);
+        }
+        if (out.has(limb)) {
+            throw new Error(`Duplicate target player matrix-slot limb ${limb}`);
+        }
+        out.set(limb, slot);
     }
 
     return out;
@@ -185,20 +248,29 @@ export function readPlayerSkeletonTranslations(data: Uint8Array): Vec3[] {
     return findSkeleton(data).limbs.map((limb) => [...limb.translation] as Vec3);
 }
 
+export function readPlayerSkeletonMatrixSlotLimbs(data: Uint8Array): number[] {
+    return matrixSlotToLimb(findSkeleton(data));
+}
+
 export function retargetPlayerModelBindPose(
     input: Uint8Array,
     targetTranslationsInput: ReadonlyArray<ReadonlyArray<number>>,
     extraLists: RetargetExtraList[] = [],
+    targetMatrixSlotLimbs?: ReadonlyArray<number>,
 ): Uint8Array {
     const source = findSkeleton(input);
     const sourceTranslations = source.limbs.map((limb) => [...limb.translation] as Vec3);
     const targetTranslations = normalizeTargetTranslations(targetTranslationsInput);
     const geometryTargetTranslations = targetTranslations.map((v) => [...v] as Vec3);
+    /* Root motion is not part of zzconvert's per-limb bind compensation. */
     geometryTargetTranslations[0] = [...sourceTranslations[0]] as Vec3;
     const parents = makeParents(source.limbs);
     const sourceGlobals = globalTranslations(sourceTranslations, parents);
     const targetGlobals = globalTranslations(geometryTargetTranslations, parents);
-    const slotToLimb = matrixSlotToLimb(source.limbs);
+    const slotToLimb = matrixSlotToLimb(source);
+    const targetSlotByLimb = targetMatrixSlotLimbs === undefined
+        ? null
+        : matrixSlotByLimb(targetMatrixSlotLimbs);
 
     const shifts: Vec3[] = sourceGlobals.map((sourcePos, limb) => [
         sourcePos[0] - targetGlobals[limb][0],
@@ -215,6 +287,7 @@ export function retargetPlayerModelBindPose(
 
     const vertexUses: VertexUse[] = [];
     const commandUse = new Map<number, string>();
+    const matrixSlotPatches = new Map<number, number>();
     const recursion = new Set<string>();
 
     function processList(address: number, initialLimb: number): number {
@@ -245,6 +318,23 @@ export function retargetPlayerModelBindPose(
                     const slot = matrixOffset >>> 6;
                     if (slot < slotToLimb.length) {
                         currentLimb = slotToLimb[slot];
+                        if (targetSlotByLimb !== null) {
+                            const targetSlot = targetSlotByLimb.get(currentLimb);
+                            if (targetSlot === undefined) {
+                                throw new Error(
+                                    `Target player skeleton has no matrix slot for source limb ${currentLimb}`
+                                );
+                            }
+
+                            const previous = matrixSlotPatches.get(offset);
+                            if (previous !== undefined && previous !== targetSlot) {
+                                throw new Error(
+                                    `Cross-game matrix command 0x${offset.toString(16)} ` +
+                                    `maps to incompatible target slots`
+                                );
+                            }
+                            matrixSlotPatches.set(offset, targetSlot);
+                        }
                     }
                 }
             } else if (op === 0x01 && (target >>> 24) === SEGMENT_MODEL) {
@@ -333,6 +423,14 @@ export function retargetPlayerModelBindPose(
 
     const output = new Uint8Array(outputLength);
     output.set(input);
+
+    for (const [commandOffset, targetSlot] of matrixSlotPatches) {
+        bufWriteU32BE(
+            output,
+            commandOffset + 4,
+            (SEGMENT_MATRIX << 24) | (targetSlot << 6),
+        );
+    }
 
     for (const block of cloneBlocks) {
         output.set(input.subarray(block.sourceOffset, block.sourceOffset + block.length), block.offset);

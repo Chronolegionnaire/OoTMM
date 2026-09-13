@@ -826,5 +826,8 @@ Actor_SetColorFilter = 0x800bcb70;
 Actor_DrawDamageEffects = 0x800be680;
 Matrix_MultVecX = 0x80181b78;
 
+THA_AllocTailAlign16 = 0x80172ac8;
+THA_IsCrash = 0x80172b18;
+
 Player_SetModelsForHoldingShield = 0x801239AC;
 Inventory_GetBtnBItem = 0x8012EC80;

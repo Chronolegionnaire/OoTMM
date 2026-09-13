@@ -2,7 +2,7 @@ import { bufReadU16BE, bufReadU32BE, bufWriteU16BE, bufWriteU32BE } from '../uti
 import { OOT_LINK_ADULT_OFFSETS, OOT_LINK_CHILD_OFFSETS } from './model';
 import { PlayerModelGraphCompactor } from './player-model-compactor.ts';
 import { crossGamePieceDefaultLimb, isCrossGamePlayerPiece } from './player-model-compat.ts';
-import { retargetPlayerModelBindPose, type RetargetExtraList } from './player-model-retarget';
+import { readPlayerSkeletonMatrixSlotLimbs, retargetPlayerModelBindPose, type RetargetExtraList } from './player-model-retarget';
 
 export type OotModelAge = 'adult' | 'child';
 
@@ -14,6 +14,14 @@ export type ModelCompactionInfo = {
     originalSize: number;
     usedSize: number;
     replacedPieces: string[];
+    deduplicatedBytes?: number;
+    ci4TextureCount?: number;
+    reducedIntensityTextureCount?: number;
+    downsampledTextureCount?: number;
+    downsampleTextureLevels?: number;
+    downsampleMinBytes?: number;
+    textureBytesSaved?: number;
+    aggressiveTextures?: boolean;
 };
 
 export type PreparedOotModel = {
@@ -681,7 +689,9 @@ function collectPlayerSkeletonForCompaction(
         for (const pointerOffset of [0x08, 0x0c]) {
             const address = bufReadU32BE(limb, pointerOffset);
             if (address !== 0 && (address >>> 24) === 0x06) {
-                graph.addDisplayListRoot(address);
+                graph.addDisplayListRoot(address, {
+                    preserveCi8: i >= 10 && i <= 12,
+                });
             }
         }
         limbs.push(limb);
@@ -701,6 +711,9 @@ function buildOotCompactionAttempt(
     age: OotModelAge,
     maxSize: number,
     replacedPieces: string[],
+    aggressiveTextures = false,
+    downsampleTextureLevels = 0,
+    downsampleMinBytes = 0x400,
 ): OotCompactionAttempt {
     const source = prepared.data;
     const hierarchy = age === 'adult' ? ADULT_HIERARCHY : CHILD_HIERARCHY;
@@ -715,7 +728,19 @@ function buildOotCompactionAttempt(
         throw new Error(`OoT ${age} model budget is smaller than the player LUT`);
     }
 
-    const graph = new PlayerModelGraphCompactor(source, LUT_END);
+    const graph = new PlayerModelGraphCompactor(source, LUT_END, {
+        quantizeCi8ToCi4: true,
+        reduceIntensityTextures: aggressiveTextures,
+        downsampleTextureLevels,
+        downsampleMinBytes,
+        allowProtectedCi4UpToBytes:
+            aggressiveTextures ? Number.MAX_SAFE_INTEGER : 0x200,
+        deduplicate: true,
+        packIntoPreservedHoles: false,
+        reservedPreservedRanges: [
+            { start: 0x0000, end: LUT_END },
+        ],
+    });
     const skeleton = collectPlayerSkeletonForCompaction(graph, source, hierarchy, age);
     const pieceTargets = new Map<string, { entry: number, target: number }>();
 
@@ -750,6 +775,9 @@ function buildOotCompactionAttempt(
 
     output.set(source.subarray(0, LUT_END), 0);
     output.set(packed.data, LUT_END);
+    for (const patch of packed.fixedDataPatches) {
+        output.set(patch.data, patch.offset);
+    }
     for (const patch of packed.fixedPointerPatches) {
         bufWriteU32BE(output, patch.offset, patch.value);
     }
@@ -806,6 +834,14 @@ function buildOotCompactionAttempt(
                 originalSize: prepared.data.length,
                 usedSize,
                 replacedPieces: [...replacedPieces],
+                deduplicatedBytes: packed.stats.deduplicatedBytes,
+                ci4TextureCount: packed.stats.ci4TextureCount,
+                reducedIntensityTextureCount: packed.stats.reducedIntensityTextureCount,
+                downsampledTextureCount: packed.stats.downsampledTextureCount,
+                downsampleTextureLevels,
+                downsampleMinBytes,
+                textureBytesSaved: packed.stats.textureBytesSaved,
+                aggressiveTextures,
             },
         },
         usedSize,
@@ -823,13 +859,60 @@ export function compactOotPlayerModel(
     const preserve = new Set(preserveEquipmentPieces);
     const vanillaEquipment = ootVanillaEquipmentPieces(age)
         .filter((name) => !preserve.has(name));
-    return buildOotCompactionAttempt(
+    const conservative = buildOotCompactionAttempt(
         prepared,
         vanilla,
         age,
         maxSize,
         vanillaEquipment,
-    ).model;
+        false,
+        0,
+    );
+
+    if (conservative.usedSize <= maxSize) {
+        return conservative.model;
+    }
+    const aggressive = buildOotCompactionAttempt(
+        prepared,
+        vanilla,
+        age,
+        maxSize,
+        vanillaEquipment,
+        true,
+        0,
+    );
+
+    let best = aggressive.usedSize < conservative.usedSize
+        ? aggressive
+        : conservative;
+
+    if (best.usedSize > maxSize) {
+        const pressurePasses = [
+            [1, 0x1000], [1, 0x400], [1, 0x100],
+            [2, 0x1000], [2, 0x400], [2, 0x100],
+        ] as const;
+        for (const [levels, minBytes] of pressurePasses) {
+            const downsampled = buildOotCompactionAttempt(
+                prepared,
+                vanilla,
+                age,
+                maxSize,
+                vanillaEquipment,
+                true,
+                levels,
+                minBytes,
+            );
+            if (downsampled.usedSize < best.usedSize) {
+                best = downsampled;
+            }
+            if (downsampled.usedSize <= maxSize) {
+                best = downsampled;
+                break;
+            }
+        }
+    }
+
+    return best.model;
 }
 
 
@@ -1047,7 +1130,12 @@ export function prepareOotModel(model: Uint8Array, vanilla: Uint8Array, age: Oot
         }
 
         if (crossGame) {
-            data = retargetPlayerModelBindPose(data, skeleton, retargetExtraLists);
+            data = retargetPlayerModelBindPose(
+                data,
+                skeleton,
+                retargetExtraLists,
+                readPlayerSkeletonMatrixSlotLimbs(vanilla),
+            );
         }
 
         for (const item of Object.keys(pieces)) {
