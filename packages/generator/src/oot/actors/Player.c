@@ -13,6 +13,7 @@
 #include <actors/En_Kanban/En_Kanban.h>
 #include <combo/oot/player_action.h>
 #include <actors/Custom_En_Bom/Custom_En_Bom.h>
+#include <combo/inventory.h>
 
 void ArrowCycle_Handle(Player* link, PlayState* play);
 void Ocarina_HandleCustomSongs(Player* link, PlayState* play);
@@ -303,13 +304,84 @@ void comboDrawExtendedMask(void)
     cb(play, link);
 }
 
+u8 gOotChildSwordVariant = 0xff;
+u8 gOotChildSwordEquippedVariant = 0xff;
+u8 gOotChildShieldEquippedVariant = 0xff;
+
+u8 OotChildSword_GetVariant(void)
+{
+    if (gOotChildSwordVariant > gSharedCustomSave.extraSwordsOot)
+        gOotChildSwordVariant = gSharedCustomSave.extraSwordsOot;
+
+    return gOotChildSwordVariant;
+}
+
+u8 OotChildSword_GetEquippedVariant(void)
+{
+    if (gSave.info.equips.equipment.swords != 1)
+        return 0xff;
+
+    if (gOotChildSwordEquippedVariant >
+        gSharedCustomSave.extraSwordsOot)
+    {
+        gOotChildSwordEquippedVariant =
+            OotChildSword_GetVariant();
+    }
+
+    return gOotChildSwordEquippedVariant;
+}
+
+u8 OotChildShield_GetEquippedVariant(void)
+{
+    u8 owned;
+    u8 selected;
+    u8 shield;
+
+    if (gSave.info.equips.equipment.shields != 1)
+        return 0xff;
+
+    owned = gSharedCustomSave.ootChildShields;
+
+    if (gOotChildShieldEquippedVariant >=
+            OOT_CHILD_SHIELD_MAX ||
+        !(owned &
+          (1u << gOotChildShieldEquippedVariant)))
+    {
+        selected = OotChildShield_GetVariant();
+
+        if (selected < OOT_CHILD_SHIELD_MAX &&
+            (owned & (1u << selected)))
+        {
+            gOotChildShieldEquippedVariant = selected;
+        }
+        else
+        {
+            for (shield = 0;
+                 shield < OOT_CHILD_SHIELD_MAX;
+                 shield++)
+            {
+                if (owned & (1u << shield))
+                {
+                    gOotChildShieldEquippedVariant =
+                        shield;
+                    return shield;
+                }
+            }
+
+            return 0xff;
+        }
+    }
+
+    return gOotChildShieldEquippedVariant;
+}
+
 static void updateKokiriSwordLength(void)
 {
     float* dst;
 
     dst = (float*)0x800f7bb8;
 
-    switch (gSharedCustomSave.extraSwordsOot)
+    switch (OotChildSword_GetEquippedVariant())
     {
     case 0: *dst = 3000.f; break;
     case 1: *dst = 3000.f; break;
@@ -702,12 +774,16 @@ static void* Player_CustomPair(void* a, void* b)
     return dlist;
 }
 
-static void Player_OverrideCustomSheath(PlayState* play, Player* this, Gfx** dlist, int isPause)
+static void Player_OverrideCustomSheath(
+    PlayState* play,
+    Player* this,
+    Gfx** dlist,
+    int isPause)
 {
-    void*   shield;
-    void*   sword;
-    u8      swordInUse;
-    u8      shieldOnBack;
+    void* shield;
+    void* sword;
+    u8 swordInUse;
+    u8 shieldOnBack;
 
     shield = NULL;
     sword = NULL;
@@ -725,27 +801,69 @@ static void Player_OverrideCustomSheath(PlayState* play, Player* this, Gfx** dli
     if (isPause)
     {
         shieldOnBack = 0;
-        if (gSave.age == AGE_CHILD && gSave.info.equips.equipment.shields > 1)
+
+        if (gSave.age == AGE_CHILD &&
+            gSave.info.equips.equipment.shields > 1)
+        {
             shieldOnBack = 1;
+        }
     }
     else
-        shieldOnBack = !!(this->rightHandType != PLAYER_MODELTYPE_RH_SHIELD);
+    {
+        shieldOnBack =
+            !!(this->rightHandType != PLAYER_MODELTYPE_RH_SHIELD);
+    }
+
     if (shieldOnBack)
     {
         /* Shield on back */
         switch (gSave.info.equips.equipment.shields)
         {
-        case 1:
-            shield = Player_CustomEq(comboGetObject(CUSTOM_OBJECT_ID_EQ_SHIELD_DEKU), CUSTOM_OBJECT_EQ_SHIELD_DEKU_1);
-            break;
+            case 1:
+            {
+                u8 variant;
+
+                variant = OotChildShield_GetEquippedVariant();
+
+                if (variant == OOT_CHILD_SHIELD_HERO)
+                {
+                    shield = Player_CustomEq(
+                        comboGetObject(
+                            CUSTOM_OBJECT_ID_EQ_SHIELD_HERO),
+                        CUSTOM_OBJECT_EQ_SHIELD_HERO_1);
+                }
+                else
+                {
+                    shield = Player_CustomEq(
+                        comboGetObject(
+                            CUSTOM_OBJECT_ID_EQ_SHIELD_DEKU),
+                        CUSTOM_OBJECT_EQ_SHIELD_DEKU_1);
+                }
+
+                break;
+            }
+
         case 2:
             if (gSave.age == AGE_CHILD)
-                shield = Player_CustomEq(comboGetObject(CUSTOM_OBJECT_ID_EQ_SHEATH_SHIELD_HYLIAN_CHILD), CUSTOM_OBJECT_EQ_SHEATH_SHIELD_HYLIAN_CHILD_0);
+            {
+                shield = Player_CustomEq(
+                    comboGetObject(
+                        CUSTOM_OBJECT_ID_EQ_SHEATH_SHIELD_HYLIAN_CHILD),
+                    CUSTOM_OBJECT_EQ_SHEATH_SHIELD_HYLIAN_CHILD_0);
+            }
             else
-                shield = Player_CustomEq(comboGetObject(CUSTOM_OBJECT_ID_EQ_SHEATH_SHIELD_HYLIAN_ADULT), CUSTOM_OBJECT_EQ_SHEATH_SHIELD_HYLIAN_ADULT_0);
+            {
+                shield = Player_CustomEq(
+                    comboGetObject(
+                        CUSTOM_OBJECT_ID_EQ_SHEATH_SHIELD_HYLIAN_ADULT),
+                    CUSTOM_OBJECT_EQ_SHEATH_SHIELD_HYLIAN_ADULT_0);
+            }
             break;
         case 3:
-            shield = Player_CustomEq(comboGetObject(CUSTOM_OBJECT_ID_EQ_SHEATH_SHIELD_MIRROR), CUSTOM_OBJECT_EQ_SHEATH_SHIELD_MIRROR_0);
+            shield = Player_CustomEq(
+                comboGetObject(
+                    CUSTOM_OBJECT_ID_EQ_SHEATH_SHIELD_MIRROR),
+                CUSTOM_OBJECT_EQ_SHEATH_SHIELD_MIRROR_0);
             break;
         }
     }
@@ -753,32 +871,71 @@ static void Player_OverrideCustomSheath(PlayState* play, Player* this, Gfx** dli
     switch (gSave.info.equips.equipment.swords)
     {
     case 1:
-        switch (gSharedCustomSave.extraSwordsOot)
+        switch (OotChildSword_GetEquippedVariant())
         {
         case 0:
             if (swordInUse)
-                sword = Player_CustomEq(comboGetObject(CUSTOM_OBJECT_ID_EQ_SHEATH_SWORD_OOT_CHILD_EMPTY), CUSTOM_OBJECT_EQ_SHEATH_SWORD_OOT_CHILD_EMPTY_0);
+            {
+                sword = Player_CustomEq(
+                    comboGetObject(
+                        CUSTOM_OBJECT_ID_EQ_SHEATH_SWORD_OOT_CHILD_EMPTY),
+                    CUSTOM_OBJECT_EQ_SHEATH_SWORD_OOT_CHILD_EMPTY_0);
+            }
             else
-                sword = Player_CustomEq(comboGetObject(CUSTOM_OBJECT_ID_EQ_SHEATH_SWORD_OOT_CHILD_FULL), CUSTOM_OBJECT_EQ_SHEATH_SWORD_OOT_CHILD_FULL_0);
+            {
+                sword = Player_CustomEq(
+                    comboGetObject(
+                        CUSTOM_OBJECT_ID_EQ_SHEATH_SWORD_OOT_CHILD_FULL),
+                    CUSTOM_OBJECT_EQ_SHEATH_SWORD_OOT_CHILD_FULL_0);
+            }
             break;
         case 1:
-            sword = Player_CustomEq(comboGetObject(CUSTOM_OBJECT_ID_EQ_SHEATH_SWORD_RAZOR), swordInUse ? CUSTOM_OBJECT_EQ_SHEATH_SWORD_RAZOR_0 : CUSTOM_OBJECT_EQ_SHEATH_SWORD_RAZOR_1);
+            sword = Player_CustomEq(
+                comboGetObject(
+                    CUSTOM_OBJECT_ID_EQ_SHEATH_SWORD_RAZOR),
+                swordInUse
+                    ? CUSTOM_OBJECT_EQ_SHEATH_SWORD_RAZOR_0
+                    : CUSTOM_OBJECT_EQ_SHEATH_SWORD_RAZOR_1);
             break;
         case 2:
-            sword = Player_CustomEq(comboGetObject(CUSTOM_OBJECT_ID_EQ_SHEATH_SWORD_GILDED), swordInUse ? CUSTOM_OBJECT_EQ_SHEATH_SWORD_GILDED_0 : CUSTOM_OBJECT_EQ_SHEATH_SWORD_GILDED_1);
+            sword = Player_CustomEq(
+                comboGetObject(
+                    CUSTOM_OBJECT_ID_EQ_SHEATH_SWORD_GILDED),
+                swordInUse
+                    ? CUSTOM_OBJECT_EQ_SHEATH_SWORD_GILDED_0
+                    : CUSTOM_OBJECT_EQ_SHEATH_SWORD_GILDED_1);
             break;
         }
         break;
     case 2:
     case 3:
         if (swordInUse)
-            sword = Player_CustomEq(comboGetObject(CUSTOM_OBJECT_ID_EQ_SHEATH_SWORD_OOT_ADULT_EMPTY), CUSTOM_OBJECT_EQ_SHEATH_SWORD_OOT_ADULT_EMPTY_0);
+        {
+            sword = Player_CustomEq(
+                comboGetObject(
+                    CUSTOM_OBJECT_ID_EQ_SHEATH_SWORD_OOT_ADULT_EMPTY),
+                CUSTOM_OBJECT_EQ_SHEATH_SWORD_OOT_ADULT_EMPTY_0);
+        }
         else
-            sword = Player_CustomEq(comboGetObject(CUSTOM_OBJECT_ID_EQ_SHEATH_SWORD_OOT_ADULT_FULL), CUSTOM_OBJECT_EQ_SHEATH_SWORD_OOT_ADULT_FULL_0);
+        {
+            sword = Player_CustomEq(
+                comboGetObject(
+                    CUSTOM_OBJECT_ID_EQ_SHEATH_SWORD_OOT_ADULT_FULL),
+                CUSTOM_OBJECT_EQ_SHEATH_SWORD_OOT_ADULT_FULL_0);
+        }
         break;
     }
 
-    *dlist = Player_CustomPair(shield, sword);
+    if (shieldOnBack &&
+    gSave.info.equips.equipment.shields == 1 &&
+    OotChildShield_GetEquippedVariant() == OOT_CHILD_SHIELD_HERO)
+    {
+        *dlist = Player_CustomPair(sword, shield);
+    }
+    else
+    {
+        *dlist = Player_CustomPair(shield, sword);
+    }
 }
 
 static void fixTunicColoLimb(PlayState* play, int limb)
@@ -811,12 +968,29 @@ static void Player_OverrideAdult(PlayState* play, Player* this, int limb, Gfx** 
             *dlist = Player_CustomHandEq(DLIST_ADULT_LHAND_CLOSED, comboGetObject(CUSTOM_OBJECT_ID_EQ_GREAT_FAIRY_SWORD), CUSTOM_OBJECT_EQ_GREAT_FAIRY_SWORD_0);
         if ((this->leftHandType == PLAYER_MODELTYPE_LH_SWORD || isPause) && gSave.info.equips.equipment.swords == 1)
         {
-            if (gSharedCustomSave.extraSwordsOot == 0)
-                *dlist = Player_CustomHandEq(DLIST_ADULT_LHAND_CLOSED, comboGetObject(CUSTOM_OBJECT_ID_EQ_KOKIRI_SWORD), CUSTOM_OBJECT_EQ_KOKIRI_SWORD_0);
-            else if (gSharedCustomSave.extraSwordsOot == 1)
-                *dlist = Player_CustomHandEq(DLIST_ADULT_LHAND_CLOSED, comboGetObject(CUSTOM_OBJECT_ID_EQ_RAZOR_SWORD), CUSTOM_OBJECT_EQ_RAZOR_SWORD_0);
-            else if (gSharedCustomSave.extraSwordsOot == 2)
-                *dlist = Player_CustomHandEq(DLIST_ADULT_LHAND_CLOSED, comboGetObject(CUSTOM_OBJECT_ID_EQ_GILDED_SWORD), CUSTOM_OBJECT_EQ_GILDED_SWORD_0);
+            u8 sword = OotChildSword_GetEquippedVariant();
+
+            if (sword == 0)
+            {
+                *dlist = Player_CustomHandEq(
+                    DLIST_ADULT_LHAND_CLOSED,
+                    comboGetObject(CUSTOM_OBJECT_ID_EQ_KOKIRI_SWORD),
+                    CUSTOM_OBJECT_EQ_KOKIRI_SWORD_0);
+            }
+            else if (sword == 1)
+            {
+                *dlist = Player_CustomHandEq(
+                    DLIST_ADULT_LHAND_CLOSED,
+                    comboGetObject(CUSTOM_OBJECT_ID_EQ_RAZOR_SWORD),
+                    CUSTOM_OBJECT_EQ_RAZOR_SWORD_0);
+            }
+            else if (sword == 2)
+            {
+                *dlist = Player_CustomHandEq(
+                    DLIST_ADULT_LHAND_CLOSED,
+                    comboGetObject(CUSTOM_OBJECT_ID_EQ_GILDED_SWORD),
+                    CUSTOM_OBJECT_EQ_GILDED_SWORD_0);
+            }
         }
 
         if (this->leftHandType == PLAYER_MODELTYPE_LH_BOOMERANG)
@@ -825,23 +999,60 @@ static void Player_OverrideAdult(PlayState* play, Player* this, int limb, Gfx** 
 
     if (limb == PLAYER_LIMB_R_HAND)
     {
-        if ((this->rightHandType == PLAYER_MODELTYPE_RH_SHIELD) && gSave.info.equips.equipment.shields == 1)
-            *dlist = Player_CustomHandEq(DLIST_ADULT_RHAND_CLOSED, comboGetObject(CUSTOM_OBJECT_ID_EQ_SHIELD_DEKU), CUSTOM_OBJECT_EQ_SHIELD_DEKU_0);
+        if (this->rightHandType == PLAYER_MODELTYPE_RH_SHIELD &&
+            gSave.info.equips.equipment.shields == 1)
+        {
+            u8 variant;
+
+            variant = OotChildShield_GetEquippedVariant();
+
+            if (variant == OOT_CHILD_SHIELD_HERO)
+            {
+                *dlist = Player_CustomHandEq(
+                    DLIST_ADULT_RHAND_CLOSED,
+                    comboGetObject(
+                        CUSTOM_OBJECT_ID_EQ_SHIELD_HERO),
+                    CUSTOM_OBJECT_EQ_SHIELD_HERO_0);
+            }
+
+            else
+            {
+                *dlist = Player_CustomHandEq(
+                    DLIST_ADULT_RHAND_CLOSED,
+                    comboGetObject(
+                        CUSTOM_OBJECT_ID_EQ_SHIELD_DEKU),
+                    CUSTOM_OBJECT_EQ_SHIELD_DEKU_0);
+            }
+        }
 
         if (this->rightHandType == PLAYER_MODELTYPE_RH_OCARINA)
-            *dlist = Player_CustomHandEq(DLIST_ADULT_RHAND_OPEN, comboGetObject(CUSTOM_OBJECT_ID_EQ_OCARINA_FAIRY), CUSTOM_OBJECT_EQ_OCARINA_FAIRY_0);
+            *dlist = Player_CustomHandEq(
+                DLIST_ADULT_RHAND_OPEN,
+                comboGetObject(CUSTOM_OBJECT_ID_EQ_OCARINA_FAIRY),
+                CUSTOM_OBJECT_EQ_OCARINA_FAIRY_0);
 
-        if (this->rightHandType == PLAYER_MODELTYPE_RH_BOW_SLINGSHOT || this->rightHandType == PLAYER_MODELTYPE_RH_BOW_SLINGSHOT_2)
+        if (this->rightHandType == PLAYER_MODELTYPE_RH_BOW_SLINGSHOT ||
+            this->rightHandType == PLAYER_MODELTYPE_RH_BOW_SLINGSHOT_2)
         {
             if (this->heldItemAction == 15)
-                *dlist = Player_CustomHandEq(DLIST_ADULT_RHAND_CLOSED, comboGetObject(CUSTOM_OBJECT_ID_EQ_SLINGSHOT), CUSTOM_OBJECT_EQ_SLINGSHOT_2);
+            {
+                *dlist = Player_CustomHandEq(
+                    DLIST_ADULT_RHAND_CLOSED,
+                    comboGetObject(CUSTOM_OBJECT_ID_EQ_SLINGSHOT),
+                    CUSTOM_OBJECT_EQ_SLINGSHOT_2);
+            }
         }
     }
 
     if (limb == PLAYER_LIMB_SHEATH)
     {
-        if (gSave.info.equips.equipment.shields == 1 || gSave.info.equips.equipment.swords <= 1)
+        if (gSave.info.equips.equipment.shields == 1 ||
+            gSave.info.equips.equipment.shields == 3 ||
+            gSave.info.equips.equipment.swords != 1 ||
+            gSharedCustomSave.extraSwordsOot)
+        {
             Player_OverrideCustomSheath(play, this, dlist, isPause);
+        }
     }
 }
 
@@ -851,31 +1062,71 @@ static void Player_OverrideChild(PlayState* play, Player* this, int limb, Gfx** 
 
     if (limb == PLAYER_LIMB_L_HAND)
     {
-        if (this->leftHandType == PLAYER_MODELTYPE_LH_SWORD || this->leftHandType == PLAYER_MODELTYPE_LH_SWORD_2 || isPause)
+        if (this->leftHandType == PLAYER_MODELTYPE_LH_SWORD ||
+            this->leftHandType == PLAYER_MODELTYPE_LH_SWORD_2 ||
+            isPause)
         {
             if (gSave.info.equips.equipment.swords == 1)
             {
-                if (gSharedCustomSave.extraSwordsOot == 1)
-                    *dlist = Player_CustomHandEq(DLIST_CHILD_LHAND_CLOSED, comboGetObject(CUSTOM_OBJECT_ID_EQ_RAZOR_SWORD), CUSTOM_OBJECT_EQ_RAZOR_SWORD_0);
-                else if (gSharedCustomSave.extraSwordsOot == 2)
-                    *dlist = Player_CustomHandEq(DLIST_CHILD_LHAND_CLOSED, comboGetObject(CUSTOM_OBJECT_ID_EQ_GILDED_SWORD), CUSTOM_OBJECT_EQ_GILDED_SWORD_0);
+                u8 sword = OotChildSword_GetEquippedVariant();
+
+                if (sword == 1)
+                {
+                    *dlist = Player_CustomHandEq(
+                        DLIST_CHILD_LHAND_CLOSED,
+                        comboGetObject(CUSTOM_OBJECT_ID_EQ_RAZOR_SWORD),
+                        CUSTOM_OBJECT_EQ_RAZOR_SWORD_0);
+                }
+                else if (sword == 2)
+                {
+                    *dlist = Player_CustomHandEq(
+                        DLIST_CHILD_LHAND_CLOSED,
+                        comboGetObject(CUSTOM_OBJECT_ID_EQ_GILDED_SWORD),
+                        CUSTOM_OBJECT_EQ_GILDED_SWORD_0);
+                }
             }
             else if (gSave.info.equips.equipment.swords == 2)
             {
-                *dlist = Player_CustomHandEq(DLIST_CHILD_LHAND_CLOSED, comboGetObject(CUSTOM_OBJECT_ID_EQ_MASTER_SWORD), CUSTOM_OBJECT_EQ_MASTER_SWORD_0);
+                *dlist = Player_CustomHandEq(
+                    DLIST_CHILD_LHAND_CLOSED,
+                    comboGetObject(CUSTOM_OBJECT_ID_EQ_MASTER_SWORD),
+                    CUSTOM_OBJECT_EQ_MASTER_SWORD_0);
             }
         }
+
         if (this->heldItemAction == PLAYER_CUSTOM_IA_GREAT_FAIRY_SWORD)
-            *dlist = Player_CustomHandEq(DLIST_CHILD_LHAND_CLOSED, comboGetObject(CUSTOM_OBJECT_ID_EQ_GREAT_FAIRY_SWORD), CUSTOM_OBJECT_EQ_GREAT_FAIRY_SWORD_0);
-        else if (this->heldItemId != ITEM_OOT_GREAT_FAIRY_SWORD &&(this->leftHandType == PLAYER_MODELTYPE_LH_BGS || isPause) && gSave.info.equips.equipment.swords == 3)
+        {
+            *dlist = Player_CustomHandEq(
+                DLIST_CHILD_LHAND_CLOSED,
+                comboGetObject(CUSTOM_OBJECT_ID_EQ_GREAT_FAIRY_SWORD),
+                CUSTOM_OBJECT_EQ_GREAT_FAIRY_SWORD_0);
+        }
+        else if (this->heldItemId != ITEM_OOT_GREAT_FAIRY_SWORD &&
+                 (this->leftHandType == PLAYER_MODELTYPE_LH_BGS || isPause) &&
+                 gSave.info.equips.equipment.swords == 3)
         {
             if (gSave.info.playerData.swordHealth)
-                *dlist = Player_CustomHandEq(DLIST_CHILD_LHAND_CLOSED, comboGetObject(CUSTOM_OBJECT_ID_EQ_BIGGORON_SWORD), CUSTOM_OBJECT_EQ_BIGGORON_SWORD_0);
+            {
+                *dlist = Player_CustomHandEq(
+                    DLIST_CHILD_LHAND_CLOSED,
+                    comboGetObject(CUSTOM_OBJECT_ID_EQ_BIGGORON_SWORD),
+                    CUSTOM_OBJECT_EQ_BIGGORON_SWORD_0);
+            }
             else
-                *dlist = Player_CustomHandEq(DLIST_CHILD_LHAND_CLOSED, comboGetObject(CUSTOM_OBJECT_ID_EQ_BIGGORON_SWORD_BROKEN), CUSTOM_OBJECT_EQ_BIGGORON_SWORD_BROKEN_0);
+            {
+                *dlist = Player_CustomHandEq(
+                    DLIST_CHILD_LHAND_CLOSED,
+                    comboGetObject(CUSTOM_OBJECT_ID_EQ_BIGGORON_SWORD_BROKEN),
+                    CUSTOM_OBJECT_EQ_BIGGORON_SWORD_BROKEN_0);
+            }
         }
         else if (this->leftHandType == PLAYER_MODELTYPE_LH_HAMMER)
-            *dlist = Player_CustomHandEq(DLIST_CHILD_LHAND_CLOSED, comboGetObject(CUSTOM_OBJECT_ID_EQ_HAMMER), CUSTOM_OBJECT_EQ_HAMMER_0);
+        {
+            *dlist = Player_CustomHandEq(
+                DLIST_CHILD_LHAND_CLOSED,
+                comboGetObject(CUSTOM_OBJECT_ID_EQ_HAMMER),
+                CUSTOM_OBJECT_EQ_HAMMER_0);
+        }
     }
 
     if (limb == PLAYER_LIMB_R_HAND)
@@ -883,22 +1134,101 @@ static void Player_OverrideChild(PlayState* play, Player* this, int limb, Gfx** 
         if (this->rightHandType == PLAYER_MODELTYPE_RH_HOOKSHOT)
             *dlist = (Gfx*)gDlistHookshotBodyTP;
 
-        if ((this->rightHandType == PLAYER_MODELTYPE_RH_SHIELD) && gSave.info.equips.equipment.shields == 3)
-            *dlist = Player_CustomHandEq(DLIST_CHILD_RHAND_CLOSED, comboGetObject(CUSTOM_OBJECT_ID_EQ_SHIELD_MIRROR), CUSTOM_OBJECT_EQ_SHIELD_MIRROR_0);
+        if ((this->rightHandType == PLAYER_MODELTYPE_RH_SHIELD) &&
+            gSave.info.equips.equipment.shields == 1)
+        {
+            u8 variant;
 
-        if (this->rightHandType == PLAYER_MODELTYPE_RH_BOW_SLINGSHOT || this->rightHandType == PLAYER_MODELTYPE_RH_BOW_SLINGSHOT_2)
+            variant = OotChildShield_GetEquippedVariant();
+
+            if (variant == OOT_CHILD_SHIELD_HERO)
+            {
+                *dlist = Player_CustomHandEq(
+                    DLIST_ADULT_RHAND_CLOSED,
+                    comboGetObject(
+                        CUSTOM_OBJECT_ID_EQ_SHIELD_HERO),
+                    CUSTOM_OBJECT_EQ_SHIELD_HERO_0);
+            }
+            else
+            {
+                *dlist = Player_CustomHandEq(
+                    DLIST_ADULT_RHAND_CLOSED,
+                    comboGetObject(
+                        CUSTOM_OBJECT_ID_EQ_SHIELD_DEKU),
+                    CUSTOM_OBJECT_EQ_SHIELD_DEKU_0);
+            }
+        }
+
+        if (this->rightHandType == PLAYER_MODELTYPE_RH_BOW_SLINGSHOT ||
+            this->rightHandType == PLAYER_MODELTYPE_RH_BOW_SLINGSHOT_2)
         {
             if (this->heldItemAction != 15)
-                *dlist = Player_CustomHandEq(DLIST_CHILD_RHAND_CLOSED, comboGetObject(CUSTOM_OBJECT_ID_EQ_BOW), CUSTOM_OBJECT_EQ_BOW_2);
+            {
+                *dlist = Player_CustomHandEq(
+                    DLIST_CHILD_RHAND_CLOSED,
+                    comboGetObject(CUSTOM_OBJECT_ID_EQ_BOW),
+                    CUSTOM_OBJECT_EQ_BOW_2);
+            }
         }
     }
 
     if (limb == PLAYER_LIMB_SHEATH)
     {
-        if (gSave.info.equips.equipment.shields == 3 || gSave.info.equips.equipment.swords != 1 || gSharedCustomSave.extraSwordsOot)
+        if (gSave.info.equips.equipment.shields == 1 ||
+            gSave.info.equips.equipment.shields == 3 ||
+            gSave.info.equips.equipment.swords != 1 ||
+            gSharedCustomSave.extraSwordsOot)
+        {
             Player_OverrideCustomSheath(play, this, dlist, isPause);
+        }
     }
 }
+
+static void Player_BurnDekuShieldCustom(Player* this, PlayState* play)
+{
+    if (this->currentShield != 1)
+        return;
+
+    if (OotChildShield_GetEquippedVariant() != OOT_CHILD_SHIELD_DEKU)
+        return;
+    Actor_Spawn(
+        &play->actorCtx,
+        play,
+        ACTOR_ITEM_SHIELD,
+        this->actor.world.pos.x,
+        this->actor.world.pos.y,
+        this->actor.world.pos.z,
+        0, 0, 0, 1);
+
+    gSharedCustomSave.ootChildShields &=
+    ~(1u << OOT_CHILD_SHIELD_DEKU);
+
+    gOotChildShieldEquippedVariant = 0xff;
+
+    if (gSharedCustomSave.ootChildShields)
+    {
+        gOotSave.info.inventory.equipment.shields |=
+            EQ_OOT_SHIELD_DEKU;
+
+        gOotChildShieldVariant =
+            OotChildShield_GetNextOwned(
+                OOT_CHILD_SHIELD_DEKU);
+
+        gOotSave.info.equips.equipment.shields = 0;
+    }
+    else
+    {
+        gOotSave.info.inventory.equipment.shields &=
+            ~EQ_OOT_SHIELD_DEKU;
+
+        gOotSave.info.equips.equipment.shields = 0;
+    }
+
+    UpdateEquipment(play, this);
+    Message_StartTextbox(play, 0x305f, NULL);
+}
+
+PATCH_FUNC(0x80836298, Player_BurnDekuShieldCustom);
 
 static void Player_OverrideCustom(PlayState* play, Player* this, int limb, Gfx** dlist, int isPause)
 {
@@ -920,8 +1250,23 @@ int Player_OverrideLimbDrawGameplayDefaultWrapper(PlayState* play, s32 limbIndex
 
 int Player_OverrideLimbDrawPauseWrapper(PlayState* play, s32 limbIndex, Gfx** dList, Vec3f* pos, Vec3s* rot, Player* player)
 {
-    /* Forward */
-    if (Player_OverrideLimbDrawPause(play, limbIndex, dList, pos, rot, player))
+    int ret;
+    ret = Player_OverrideLimbDrawPause(play, limbIndex, dList, pos, rot, player);
+    if (limbIndex == PLAYER_LIMB_R_HAND && gSave.info.equips.equipment.shields == 1)
+    {
+        if (OotChildShield_GetEquippedVariant() == OOT_CHILD_SHIELD_HERO)
+        {
+            *dList = Player_CustomHandEq(gSave.age == AGE_CHILD ? DLIST_CHILD_RHAND_CLOSED : DLIST_ADULT_RHAND_CLOSED,
+                comboGetObject(CUSTOM_OBJECT_ID_EQ_SHIELD_HERO), CUSTOM_OBJECT_EQ_SHIELD_HERO_0);
+            return 0;
+        }
+        if (gSave.age == AGE_ADULT)
+        {
+            *dList = Player_CustomHandEq(DLIST_ADULT_RHAND_CLOSED, comboGetObject(CUSTOM_OBJECT_ID_EQ_SHIELD_DEKU), CUSTOM_OBJECT_EQ_SHIELD_DEKU_0);
+            return 0;
+        }
+    }
+    if (ret)
         return 0;
 
     Player_OverrideCustom(play, player, limbIndex, dList, 1);
