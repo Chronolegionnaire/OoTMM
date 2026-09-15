@@ -3308,6 +3308,8 @@ void Player_SetMeleeWeaponInfo(
 
 PATCH_FUNC(0x8083375C, Player_SetMeleeWeaponInfo)
 
+#define MM_SWORD_HEALTH_INFINITE 0xff
+
 s32 Player_HandleSwordDurability(
     PlayState* play,
     Player* player)
@@ -3317,6 +3319,42 @@ s32 Player_HandleSwordDurability(
     if (player->heldItemAction ==
         PLAYER_IA_SWORD_RAZOR)
     {
+        health =
+            gMmSave.info.playerData.swordHealth;
+
+        if (health == MM_SWORD_HEALTH_INFINITE)
+            return 1;
+
+        if (health != 0)
+        {
+            health--;
+
+            gMmSave.info.playerData.swordHealth =
+                health;
+
+            if (health == 0)
+            {
+                s32 age;
+
+                Player_PlaySfx(
+                    player,
+                    NA_SE_IT_MAJIN_SWORD_BROKEN);
+
+                for (age = 0; age < 2; age++)
+                {
+                    if (gSharedCustomSave.mm.humanAgeLoadouts[age].sword ==
+                        MM_SWORD_RAZOR)
+                    {
+                        gSharedCustomSave.mm.humanAgeLoadouts[age].sword =
+                            MM_SWORD_NONE;
+                    }
+                }
+
+                MmSword_RefreshNativeEquip(
+                    play);
+            }
+        }
+
         return 1;
     }
 
@@ -3335,14 +3373,25 @@ s32 Player_HandleSwordDurability(
     health =
         MmSword_GetGiantsKnifeHealth();
 
+    if (health == MM_SWORD_HEALTH_INFINITE)
+        return 1;
+
     if (health != 0)
     {
         health--;
-        MmSword_SetGiantsKnifeHealth(health);
+
+        MmSword_SetGiantsKnifeHealth(
+            health);
+
         if (health == 0)
         {
-            Player_PlaySfx(player, NA_SE_IT_MAJIN_SWORD_BROKEN);
-            Interface_LoadItemIconImpl(play, EQUIP_SLOT_B);
+            Player_PlaySfx(
+                player,
+                NA_SE_IT_MAJIN_SWORD_BROKEN);
+
+            Interface_LoadItemIconImpl(
+                play,
+                EQUIP_SLOT_B);
         }
     }
 

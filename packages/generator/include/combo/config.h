@@ -51,6 +51,8 @@ typedef struct
     u16             triforceGoal;
     ComboDataHints  hints;
     u16             giZoraSapphire;
+    u8              mmRazorSwordHealth;
+    u8              mmGiantsKnifeHealth;
     s8              staticHintsImportance[21];
     u8              boss[12];
     u8              strayFairyRewardCount;

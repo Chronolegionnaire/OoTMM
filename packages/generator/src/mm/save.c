@@ -127,6 +127,20 @@ void Sram_SaveEndOfCycle(PlayState* play)
         }
     }
 
+    if (!Config_Flag(CFG_SHARED_CHILD_SWORDS) &&
+    gSharedCustomSave.mm.swords.sword >= 2)
+    {
+        gMmSave.info.playerData.swordHealth =
+            gComboConfig.mmRazorSwordHealth;
+    }
+
+    if (!Config_Flag(CFG_SHARED_GORON_SWORDS) &&
+        gSharedCustomSave.mm.swords.giantSword == 1)
+    {
+        MmSword_SetGiantsKnifeHealth(
+            gComboConfig.mmGiantsKnifeHealth);
+    }
+
     /* Reload bottles */
     for (int i = 1; i <= 3; ++i)
     {

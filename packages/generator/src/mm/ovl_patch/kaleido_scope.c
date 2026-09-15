@@ -170,7 +170,9 @@ void KaleidoScope_BeforeUpdateCustomMm(PlayState* play)
         {
             selected = MmSword_GetSelected();
 
-            if (!KaleidoScope_CheckMmItemAgeReq(MmSword_GetItemId(selected)))
+            if (!KaleidoScope_CheckMmItemAgeReq(MmSword_GetItemId(selected)) ||
+    (MmSword_GetItemId(selected) == ITEM_MM_SWORD_RAZOR &&
+     gMmSave.info.playerData.swordHealth == 0))
             {
                 PlaySound(0x4806);
                 play->state.input[0].press.button &= ~A_BUTTON;
@@ -1377,7 +1379,9 @@ static u32 GetItemTexture(u8 item)
 
     if (item < ITEM_MM_CUSTOM_MIN)
     {
-        if (!KaleidoScope_CheckMmItemAgeReq(item))
+        if (!KaleidoScope_CheckMmItemAgeReq(item) ||
+            (item == ITEM_MM_SWORD_RAZOR &&
+             gMmSave.info.playerData.swordHealth == 0))
         {
             for (u32 i = 0;
                  i < ARRAY_COUNT(sNativeQuestAgeIcons);

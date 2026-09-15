@@ -1145,7 +1145,7 @@ static int addItemSwordMm(PlayState* play, u8 itemId, s16 gi, u16 param)
             }
         }
 
-        gMmSave.info.playerData.swordHealth = 100;
+        gMmSave.info.playerData.swordHealth = gComboConfig.mmRazorSwordHealth;
         break;
 
     case MM_SWORD_GILDED:
@@ -1176,7 +1176,7 @@ static int addItemSwordMm(PlayState* play, u8 itemId, s16 gi, u16 param)
             gSharedCustomSave.mm.swords.giantSword = 1;
 
         if (gSharedCustomSave.mm.swords.giantSword == 1)
-            MmSword_SetGiantsKnifeHealth(8);
+            MmSword_SetGiantsKnifeHealth(gComboConfig.mmGiantsKnifeHealth);
         break;
 
     case MM_SWORD_BIGGORON:

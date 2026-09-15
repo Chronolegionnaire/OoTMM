@@ -1805,6 +1805,28 @@ export const SETTINGS = [{
   default: false,
   cond: hasMM,
 }, {
+  key: 'razorSwordHealthMm',
+  name: 'Razor Sword Health (MM)',
+  category: 'main.nologic',
+  type: 'number',
+  description:
+      'Durability of the Razor Sword in MM. Set to 255 for infinite durability.',
+  default: 100,
+  min: 1,
+  max: 255,
+  cond: hasMM,
+}, {
+  key: 'giantsKnifeHealthMm',
+  name: "Giant's Knife Health (MM)",
+  category: 'main.nologic',
+  type: 'number',
+  description:
+      "Durability of the Giant's Knife in MM. Set to 255 for infinite durability.",
+  default: 8,
+  min: 1,
+  max: 255,
+  cond: (s: any) => hasMM(s) && s.goronSwordsMm,
+}, {
   key: 'progressiveShieldsOot',
   name: 'OoT Shields',
   category: 'items.progressive',

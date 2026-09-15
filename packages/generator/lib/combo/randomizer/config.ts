@@ -108,6 +108,7 @@ export class RandomizerPatcherConfig {
     buffers.push(toU16Buffer([this.ctx.settings.triforcePieces, this.ctx.settings.triforceGoal]));
     buffers.push(this.randomizerHints());
     buffers.push(this.zoraSapphireBuffer());
+    buffers.push(Uint8Array.of(this.ctx.settings.razorSwordHealthMm, this.ctx.settings.giantsKnifeHealthMm,));
     buffers.push(toI8Buffer(this.ctx.logic.hints[this.ctx.worldId].staticHintsImportances));
     buffers.push(toU8Buffer(this.world.bossIds));
     buffers.push(toU8Buffer([this.ctx.settings.strayFairyRewardCount]));

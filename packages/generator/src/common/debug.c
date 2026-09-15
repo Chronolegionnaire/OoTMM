@@ -476,7 +476,11 @@ static void cheatAllItems(PlayState* play)
     gSave.info.weekEventReg[72] = 0x7f;
     gSharedCustomSave.mm.swords.sword = 3;
     gSharedCustomSave.mm.swords.masterSword = 1;
-    gSharedCustomSave.mm.swords.giantSword = 2;
+    gSharedCustomSave.mm.swords.giantSword = 1;
+    gMmSave.info.playerData.swordHealth =
+    gComboConfig.mmRazorSwordHealth;
+    MmSword_SetGiantsKnifeHealth(
+        gComboConfig.mmGiantsKnifeHealth);
     gSharedCustomSave.mm.shieldsOwned =
         (1 << (MM_SHIELD_DEKU - 1)) |
         (1 << (MM_SHIELD_HERO - 1)) |
