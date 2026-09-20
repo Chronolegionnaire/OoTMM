@@ -1326,7 +1326,7 @@ class CustomAssetsBuilder {
 
         /* Add the object table */
         const objectTableBuffer = toU32Buffer(this.objectVroms.map(o => [o.vstart, o.vend]).flat());
-        const objectTableVrom = this.addRawData(null, objectTableBuffer, true);
+        const objectTableVrom = this.addRawData('custom/object_table', objectTableBuffer, true);
         this.cg.define('CUSTOM_OBJECT_TABLE_VROM', objectTableVrom);
         this.cg.define('CUSTOM_OBJECT_TABLE_SIZE', this.objectVroms.length);
 
