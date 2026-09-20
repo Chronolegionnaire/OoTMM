@@ -1196,8 +1196,6 @@ static int addItemSwordMm(PlayState* play, u8 itemId, s16 gi, u16 param)
                 }
             }
         }
-
-        gMmSave.info.playerData.swordHealth = 100;
         break;
 
     case MM_SWORD_GILDED:
