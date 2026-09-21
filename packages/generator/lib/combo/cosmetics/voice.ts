@@ -15,6 +15,8 @@ import type {
 const AUDIO_SAMPLE_RATE = 32000;
 const MAX_CUSTOM_VOICE_SAMPLE_RATE = 24000;
 const MIN_POOLED_VOICE_SAMPLE_RATE = 8000;
+const VOICE_ROM_SAFETY_MARGIN = 0x00020000;
+const OOT_HUMAN_VOICE_SAMPLE_BANK_ID = 7;
 const MM_HUMAN_VOICE_SAMPLE_BANK_ID = 3;
 const MM_HUMAN_VOICE_FILE_ALIGNMENT = 0x10;
 const MM_CHILD_ALIAS_EVENT = 0x13;
@@ -213,12 +215,24 @@ type SampleOrigin = {
     capacity: number;
 };
 
+type PrivateVoiceBank = {
+    key: string;
+    fileName: string;
+    audioTable: Uint8Array;
+    bankId: number;
+    baseSize: number;
+    fixedBudgetCost: number;
+    usedEnd: number;
+};
+
 type PatchState = {
     decoded: Map<PlayerVoiceClip, DecodedVoice>;
     sampleBanks: Map<string, SampleBankContext>;
     storagePools: Map<string, SampleBankStoragePool>;
     patchedSamples: Map<string, PatchedSample>;
     sampleOrigins: Map<string, SampleOrigin>;
+    privateVoiceBanks: Map<string, PrivateVoiceBank>;
+    extraStorageBudget: number;
     globalRateCap: number;
 };
 
@@ -562,13 +576,80 @@ function updateSampleMetadata(font: Uint8Array, sample: number, encoded: Encoded
     }
 }
 
-function registerStorageRegion(state: PatchState, region: EffectSampleRegion) {
-    let pool = state.storagePools.get(region.sampleBank.key);
+function registerStorageSpan(
+    state: PatchState,
+    bank: SampleBankContext,
+    start: number,
+    end: number,
+) {
+    let pool = state.storagePools.get(bank.key);
     if (!pool) {
-        pool = { bank: region.sampleBank, spans: [] };
-        state.storagePools.set(region.sampleBank.key, pool);
+        pool = { bank, spans: [] };
+        state.storagePools.set(bank.key, pool);
     }
-    pool.spans.push({ start: region.sampleAddr, end: region.sampleAddr + region.capacity });
+    pool.spans.push({ start, end });
+}
+
+function registerStorageRegion(state: PatchState, region: EffectSampleRegion) {
+    registerStorageSpan(
+        state,
+        region.sampleBank,
+        region.sampleAddr,
+        region.sampleAddr + region.capacity,
+    );
+}
+
+function registerPrivateVoiceBank(
+    state: PatchState,
+    bank: SampleBankContext,
+    fileName: string,
+    audioTable: Uint8Array,
+    bankId: number,
+    baseSize: number,
+    fixedBudgetCost: number,
+) {
+    registerStorageSpan(state, bank, baseSize, bank.data.length);
+    state.privateVoiceBanks.set(bank.key, {
+        key: bank.key,
+        fileName,
+        audioTable,
+        bankId,
+        baseSize,
+        fixedBudgetCost,
+        usedEnd: baseSize,
+    });
+}
+
+function markPrivateVoiceBankUse(state: PatchState, key: string, start: number, size: number) {
+    const bank = state.privateVoiceBanks.get(key);
+    if (!bank) return;
+    bank.usedEnd = Math.max(bank.usedEnd, start + size);
+}
+
+function finalizePrivateVoiceBanks(builder: RomBuilder, state: PatchState) {
+    let totalBudgetCost = 0;
+
+    for (const bank of state.privateVoiceBanks.values()) {
+        const usedSize = alignUp(Math.max(bank.baseSize, bank.usedEnd), MM_HUMAN_VOICE_FILE_ALIGNMENT);
+        const file = builder.fileByNameRequired(bank.fileName);
+        if (usedSize > file.data.length) {
+            throw new Error(`${bank.fileName} voice-storage usage exceeded its reserved capacity`);
+        }
+
+        totalBudgetCost += bank.fixedBudgetCost + Math.max(0, usedSize - bank.baseSize);
+
+        if (usedSize !== file.data.length) {
+            builder.replaceFileData(bank.fileName, file.data.slice(0, usedSize));
+        }
+        bufWriteU32BE(bank.audioTable, bank.bankId * 0x10 + 4, usedSize);
+    }
+
+    if (totalBudgetCost > state.extraStorageBudget) {
+        throw new Error(
+            `Internal voice-storage budget overflow: 0x${totalBudgetCost.toString(16)} > ` +
+            `0x${state.extraStorageBudget.toString(16)}`,
+        );
+    }
 }
 
 function mergeStoragePools(state: PatchState) {
@@ -690,6 +771,7 @@ function allocateVoiceStorage(
     }
 
     const sampleAddr = consumeStorageSpan(pool, spanIndex, encoded.data);
+    markPrivateVoiceBankUse(state, region.sampleBank.key, sampleAddr, encoded.data.length);
     return { encoded, sampleAddr };
 }
 
@@ -922,6 +1004,7 @@ function allocateOrderedVoiceStorage(
     const chunks: EncodedVoiceChunk[] = [];
     for (const item of pending) {
         const sampleAddr = consumeStorageAt(pool, item.candidate.span.start, item.encoded.data);
+        markPrivateVoiceBankUse(state, pool.bank.key, sampleAddr, item.encoded.data.length);
         const patched: PatchedSample = {
             clipKey: clipName,
             encoded: item.encoded,
@@ -1458,7 +1541,7 @@ function writeAudioTableEntry(
     const offset = index * 0x10;
     const templateOffset = templateIndex * 0x10;
     if (offset + 0x10 > table.length || templateOffset + 0x10 > table.length) {
-        throw new Error('MM sample-bank audio-table entry is out of range');
+        throw new Error('Sample-bank audio-table entry is out of range');
     }
 
     table.set(new Uint8Array(table.subarray(templateOffset, templateOffset + 0x10)), offset);
@@ -1466,6 +1549,202 @@ function writeAudioTableEntry(
     bufWriteU32BE(table, offset + 4, size);
     table[offset + 0x08] = 2;
     table[offset + 0x09] = 4;
+}
+
+function walkFontSampleHeaders(context: FontContext, callback: (sample: number) => void) {
+    const font = context.font;
+    const drumsPtr = bufReadU32BE(font, 0);
+    const sfxPtr = bufReadU32BE(font, 4);
+    const numInstruments = Math.min(context.bankTable[0x0c], 126);
+    const numDrums = context.bankTable[0x0d];
+    const numSfx = bufReadU16BE(context.bankTable, 0x0e);
+
+    if (8 + numInstruments * 4 > font.length) {
+        throw new Error('Soundfont 0 instrument pointer table is out of range');
+    }
+
+    for (let i = 0; i < numInstruments; ++i) {
+        const instrument = bufReadU32BE(font, 8 + i * 4);
+        if (!instrument) continue;
+        if (instrument + 0x20 > font.length) {
+            throw new Error(`Soundfont 0 instrument ${i} is out of range`);
+        }
+
+        if (font[instrument + 1]) callback(bufReadU32BE(font, instrument + 0x08));
+        callback(bufReadU32BE(font, instrument + 0x10));
+        if (font[instrument + 2] !== 0x7f) callback(bufReadU32BE(font, instrument + 0x18));
+    }
+
+    if (numDrums) {
+        if (!drumsPtr || drumsPtr + numDrums * 4 > font.length) {
+            throw new Error('Soundfont 0 drum table is out of range');
+        }
+        for (let i = 0; i < numDrums; ++i) {
+            const drum = bufReadU32BE(font, drumsPtr + i * 4);
+            if (!drum) continue;
+            if (drum + 0x10 > font.length) {
+                throw new Error(`Soundfont 0 drum ${i} is out of range`);
+            }
+            callback(bufReadU32BE(font, drum + 4));
+        }
+    }
+
+    if (numSfx) {
+        if (!sfxPtr || sfxPtr + numSfx * 8 > font.length) {
+            throw new Error('Soundfont 0 SFX table is out of range');
+        }
+        for (let i = 0; i < numSfx; ++i) callback(bufReadU32BE(font, sfxPtr + i * 8));
+    }
+}
+
+function mappedVoiceEffects(
+    set: PlayerVoiceSet | null,
+    targets: ReadonlyMap<number, readonly number[]>,
+    orderedGroups: ReadonlyMap<number, readonly number[]> | null,
+) {
+    const effects = new Set<number>();
+    if (!set) return effects;
+
+    for (const [event, clips] of set) {
+        if (!clips.length) continue;
+        const ordered = orderedGroups?.get(event);
+        for (const effect of ordered || targets.get(event) || []) effects.add(effect);
+    }
+    return effects;
+}
+
+function ootPrivateVoiceSelector(
+    context: FontContext,
+    adultSet: PlayerVoiceSet | null,
+    childSet: PlayerVoiceSet | null,
+) {
+    const effects = new Set<number>([
+        ...mappedVoiceEffects(adultSet, OOT_ADULT_TARGETS, OOT_ORDERED_EFFECT_GROUPS.adult),
+        ...mappedVoiceEffects(childSet, CHILD_TARGETS, OOT_ORDERED_EFFECT_GROUPS.child),
+    ]);
+    if (!effects.size) return null;
+
+    const selectors = new Set<number>();
+    for (const effect of effects) {
+        const effectOffset = context.sfxTable + effect * 8;
+        if (effectOffset + 8 > context.font.length) continue;
+        const sample = bufReadU32BE(context.font, effectOffset);
+        if (!sample || sample + 0x10 > context.font.length) continue;
+        if ((context.font[sample] >>> 4) !== 0) continue;
+        const bookPointer = bufReadU32BE(context.font, sample + 0x0c);
+        if (!bookPointer || bookPointer + 8 > context.font.length) continue;
+        const selector = sampleSelector(context.font, sample);
+        if (selector > 1) return null;
+        selectors.add(selector);
+    }
+    if (selectors.size !== 1) return null;
+    return [...selectors][0];
+}
+
+function prepareOotVoiceBank(
+    builder: RomBuilder,
+    state: PatchState,
+    context: FontContext,
+    adultSet: PlayerVoiceSet | null,
+    childSet: PlayerVoiceSet | null,
+) {
+    const selector = ootPrivateVoiceSelector(context, adultSet, childSet);
+    if (selector === null) return false;
+
+    const audioTable = builder.fileByNameRequired('oot/audio_table').data;
+    const targetEntryOffset = OOT_HUMAN_VOICE_SAMPLE_BANK_ID * 0x10;
+    if (targetEntryOffset + 0x10 > audioTable.length) return false;
+    if (bufReadU32BE(audioTable, targetEntryOffset + 4) !== 0) return false;
+
+    const sourceBankId = context.bankTable[0x0a + selector];
+    if (sourceBankId === 0xff || sourceBankId >= 8) return false;
+    const sourceBank = getSampleBank(builder, state, 'oot', context.bankTable, selector);
+
+    const sampleHeaders = new Set<number>();
+    walkFontSampleHeaders(context, sample => {
+        if (!sample || sample + 0x10 > context.font.length) return;
+        if (sampleSelector(context.font, sample) === selector) sampleHeaders.add(sample);
+    });
+    if (!sampleHeaders.size) return false;
+
+    type PrivateSample = {
+        sample: number;
+        compactAddr: number;
+        size: number;
+        sourceAddr: number;
+    };
+
+    const privateSamples: PrivateSample[] = [];
+    const physicalOffsets = new Map<string, number>();
+    let compactSize = 0x10;
+
+    for (const sample of [...sampleHeaders].sort((a, b) => a - b)) {
+        const size = readU24BE(context.font, sample + 1);
+        const sourceAddr = bufReadU32BE(context.font, sample + 4);
+        if (!size || sourceAddr + size > sourceBank.data.length) {
+            throw new Error(`OoT Soundfont 0 sample 0x${sample.toString(16)} has an invalid source range`);
+        }
+
+        const physicalKey = `${sourceAddr}:${size}`;
+        let compactAddr = physicalOffsets.get(physicalKey);
+        if (compactAddr === undefined) {
+            compactSize = alignUp(compactSize, MM_HUMAN_VOICE_FILE_ALIGNMENT);
+            compactAddr = compactSize;
+            physicalOffsets.set(physicalKey, compactAddr);
+            compactSize += size;
+        }
+        privateSamples.push({ sample, compactAddr, size, sourceAddr });
+    }
+
+    const baseSize = alignUp(compactSize, MM_HUMAN_VOICE_FILE_ALIGNMENT);
+    if (baseSize > state.extraStorageBudget) return false;
+
+    const bankData = new Uint8Array(baseSize + state.extraStorageBudget);
+    const copied = new Set<number>();
+    for (const entry of privateSamples) {
+        if (!copied.has(entry.compactAddr)) {
+            copied.add(entry.compactAddr);
+            bankData.set(
+                sourceBank.data.subarray(entry.sourceAddr, entry.sourceAddr + entry.size),
+                entry.compactAddr,
+            );
+        }
+        bufWriteU32BE(context.font, entry.sample + 4, entry.compactAddr);
+    }
+
+    const fileName = 'custom/oot_human_voice_bank';
+    const bankVrom = builder.addFile({
+        name: fileName,
+        game: 'custom',
+        type: 'uncompressed',
+        data: bankData,
+    })!;
+
+    const templateIndex = resolvedTableEntry(audioTable, sourceBankId).index;
+    writeAudioTableEntry(
+        audioTable,
+        OOT_HUMAN_VOICE_SAMPLE_BANK_ID,
+        templateIndex,
+        bankVrom,
+        bankData.length,
+    );
+    context.bankTable[0x0a + selector] = OOT_HUMAN_VOICE_SAMPLE_BANK_ID;
+
+    for (const key of [...state.sampleOrigins.keys()]) {
+        if (key.startsWith('oot:')) state.sampleOrigins.delete(key);
+    }
+
+    const bank = getSampleBank(builder, state, 'oot', context.bankTable, selector);
+    registerPrivateVoiceBank(
+        state,
+        bank,
+        fileName,
+        audioTable,
+        OOT_HUMAN_VOICE_SAMPLE_BANK_ID,
+        baseSize,
+        baseSize,
+    );
+    return true;
 }
 
 function prepareMmVoiceBank(
@@ -1578,7 +1857,8 @@ function prepareMmVoiceBank(
     }
 
     compactSize = alignUp(compactSize, MM_HUMAN_VOICE_FILE_ALIGNMENT);
-    const bankData = new Uint8Array(compactSize);
+    const baseSize = compactSize;
+    const bankData = new Uint8Array(baseSize + state.extraStorageBudget);
 
     for (const entry of privateSamples) {
         bankData.set(
@@ -1630,6 +1910,17 @@ function prepareMmVoiceBank(
             state.sampleBanks.delete(key);
         }
     }
+
+    const privateBank = getSampleBank(builder, state, 'mm', context.bankTable, privateSelector);
+    registerPrivateVoiceBank(
+        state,
+        privateBank,
+        'custom/mm_human_voice_bank',
+        audioTable,
+        MM_HUMAN_VOICE_SAMPLE_BANK_ID,
+        baseSize,
+        baseSize,
+    );
 
     return {
         adultEffectBase,
@@ -1988,6 +2279,12 @@ function globalVoiceRateCheck(
     rateCap: number,
 ): GlobalVoiceRateCheck {
     const simulated = new Map<string, StorageSpan[]>();
+    const privateHighWater = new Map<string, number>();
+    const markPrivateUse = (key: string, start: number, size: number) => {
+        const bank = state.privateVoiceBanks.get(key);
+        if (!bank) return;
+        privateHighWater.set(key, Math.max(privateHighWater.get(key) || bank.baseSize, start + size));
+    };
     for (const [key, pool] of state.storagePools) {
         simulated.set(key, pool.spans.map(span => ({ ...span })));
     }
@@ -2016,6 +2313,7 @@ function globalVoiceRateCheck(
             if (!consumePlannedStorage(spans, plan.candidates[i].span.start, bytes)) {
                 return { ok: false, reason: `Internal ordered storage simulation failed for ${demand.clip.name}` };
             }
+            markPrivateUse(bankKey, plan.candidates[i].span.start, bytes);
         }
     }
 
@@ -2029,7 +2327,8 @@ function globalVoiceRateCheck(
 
     for (const [bankKey, entries] of byBank) {
         const spans = simulated.get(bankKey) || [];
-        if (!tryPackIndependentDemands(entries, spans, rateCap)) {
+        const plan = tryPackIndependentDemands(entries, spans, rateCap);
+        if (!plan) {
             return {
                 ok: false,
                 reason:
@@ -2037,7 +2336,30 @@ function globalVoiceRateCheck(
                     `after the ordered voices are reserved`,
             };
         }
+        for (const bin of plan) {
+            const used = bin.entries.reduce(
+                (sum, entry) => sum + independentDemandSize(entry.demand, rateCap),
+                0,
+            );
+            if (used) markPrivateUse(bankKey, bin.span.start, used);
+        }
     }
+
+    let budgetCost = 0;
+    for (const bank of state.privateVoiceBanks.values()) {
+        const usedEnd = privateHighWater.get(bank.key) || bank.baseSize;
+        const usedSize = alignUp(Math.max(bank.baseSize, usedEnd), MM_HUMAN_VOICE_FILE_ALIGNMENT);
+        budgetCost += bank.fixedBudgetCost + Math.max(0, usedSize - bank.baseSize);
+    }
+    if (budgetCost > state.extraStorageBudget) {
+        return {
+            ok: false,
+            reason:
+                `The common ${rateCap} Hz cap needs 0x${budgetCost.toString(16)} bytes of extra ` +
+                `voice storage, above the 0x${state.extraStorageBudget.toString(16)} available budget`,
+        };
+    }
+
     return { ok: true };
 }
 
@@ -2118,6 +2440,7 @@ async function reserveNonOrderedVoiceStorageLargestFirst(
                     throw new Error(`Voice-storage plan overflow while writing ${entry.demand.clip.name}`);
                 }
                 pool.bank.data.set(encoded.data, cursor);
+                markPrivateVoiceBankUse(state, bankKey, cursor, encoded.data.length);
                 state.patchedSamples.set(entry.key, {
                     clipKey: clipKey(entry.demand.clip),
                     encoded,
@@ -2185,17 +2508,25 @@ export async function patchPlayerVoices(
 
     if (!hasOotAdult && !hasOotChild && !hasMmAdult && !hasMmChild) return false;
 
+    const projectedHeadroom = await builder.projectedHeadroom();
+    const extraStorageBudget = Math.max(0, projectedHeadroom - VOICE_ROM_SAFETY_MARGIN);
+
     const state: PatchState = {
         decoded: new Map(),
         sampleBanks: new Map(),
         storagePools: new Map(),
         patchedSamples: new Map(),
         sampleOrigins: new Map(),
+        privateVoiceBanks: new Map(),
+        extraStorageBudget,
         globalRateCap: MAX_CUSTOM_VOICE_SAMPLE_RATE,
     };
 
     const ootContext = hasOotAdult || hasOotChild ? getFont0(builder, 'oot') : null;
     const ootSequence = ootContext ? getSequence0(builder, 'oot') : null;
+    if (ootContext) {
+        prepareOotVoiceBank(builder, state, ootContext, ootVoices.adult, ootVoices.child);
+    }
 
     const needsMmVoiceBank = hasMmAdult || hasMmChild || hasOotAdult;
     const mmContext = needsMmVoiceBank ? getFont0(builder, 'mm') : null;
@@ -2421,6 +2752,6 @@ export async function patchPlayerVoices(
         );
     }
 
+    finalizePrivateVoiceBanks(builder, state);
     return needsMmVoiceBank;
 }
-

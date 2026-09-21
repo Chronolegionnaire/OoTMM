@@ -6,6 +6,10 @@ import { CONFIG } from './config';
 import { DmaData } from './dma';
 import { bufReadU32BE, bufWriteU32BE } from './util/buffer';
 
+const ROM_SIZE = 64 * 1024 * 1024;
+const ROM_META_SIZE = 0x1000;
+const ROM_DATA_LIMIT = ROM_SIZE - ROM_META_SIZE;
+
 function u32(v: number) {
   return v >>> 0;
 }
@@ -122,6 +126,15 @@ export type RomFile = {
 
 type AddFileArgs = Omit<RomFile, 'injected'>;
 
+export type RomSizeMeasurement = {
+  files: number;
+  extraDma: number;
+  total: number;
+  headroom: number;
+};
+
+type HeadroomEstimator = () => Promise<number>;
+
 export class RomBuilder {
   private files: RomFile[];
   private out: Uint8Array;
@@ -129,10 +142,11 @@ export class RomBuilder {
   private vaddr: number;
   private dma: { oot: DmaData; mm: DmaData; };
   private extraDma: DmaDataRecord[];
+  private headroomEstimator: HeadroomEstimator | null;
 
   constructor() {
     this.files = [];
-    this.out = new Uint8Array(64 * 1024 * 1024);
+    this.out = new Uint8Array(ROM_SIZE);
     this.paddr = 0;
     this.vaddr = 0xc0000000;
     this.dma = {
@@ -140,6 +154,7 @@ export class RomBuilder {
       mm: new DmaData(new Uint8Array(CONFIG.mm.dmaCount * 0x10)),
     };
     this.extraDma = [];
+    this.headroomEstimator = null;
   }
 
   currentPaddr() {
@@ -150,10 +165,86 @@ export class RomBuilder {
     return this.files;
   }
 
+  setHeadroomEstimator(estimator: HeadroomEstimator | null) {
+    this.headroomEstimator = estimator;
+  }
+
+  async projectedHeadroom() {
+    if (!this.headroomEstimator)
+      return 0;
+    return Math.max(0, await this.headroomEstimator());
+  }
+
+  cloneForPlanning() {
+    for (const file of this.files) {
+      if (file.injected || file.paddr !== undefined || file.dma !== undefined) {
+        throw new Error('Cannot clone RomBuilder for planning after injection has started');
+      }
+    }
+
+    const clone = new RomBuilder();
+    clone.files = this.files.map(file => ({
+      ...file,
+      injected: false,
+      data: new Uint8Array(file.data),
+      paddr: undefined,
+      dma: undefined,
+      alias: undefined,
+      vram: file.vram ? { ...file.vram } : undefined,
+    }));
+    clone.vaddr = this.vaddr;
+
+    const fileMap = new Map<RomFile, RomFile>();
+    for (let i = 0; i < this.files.length; ++i) {
+      fileMap.set(this.files[i], clone.files[i]);
+    }
+    for (let i = 0; i < this.files.length; ++i) {
+      const alias = this.files[i].alias;
+      if (!alias) continue;
+      const cloneAlias = fileMap.get(alias);
+      if (!cloneAlias) throw new Error('RomBuilder alias target is missing from the planning clone');
+      clone.files[i].alias = cloneAlias;
+      clone.files[i].data = cloneAlias.data;
+    }
+
+    return clone;
+  }
+
+  async measurePackedSize(): Promise<RomSizeMeasurement> {
+    for (const file of this.files) {
+      if (file.injected || file.paddr !== undefined || file.dma !== undefined) {
+        throw new Error('Cannot measure packed size after injection has started');
+      }
+    }
+
+    let files = 0;
+    for (const file of this.files) {
+      if (file.alias || file.type === 'dummy')
+        continue;
+
+      if (file.type === 'uncompressed') {
+        files += (file.data.length + 0xf) & ~0xf;
+        continue;
+      }
+
+      const compressedData = await compressFile(file.data);
+      files += (compressedData.length + 0xf) & ~0xf;
+    }
+
+    const extraDma = this.files.filter(file => file.game === 'custom').length * 0x10;
+    const total = files + extraDma;
+    return {
+      files,
+      extraDma,
+      total,
+      headroom: Math.max(0, ROM_DATA_LIMIT - total),
+    };
+  }
+
   private addPaddr(size: number) {
     const oldAddr = this.paddr;
     this.paddr += size;
-    if (this.paddr > 0x3fff000) {
+    if (this.paddr > ROM_DATA_LIMIT) {
       throw new Error(`ROM too large`);
     }
     return oldAddr;
@@ -341,6 +432,10 @@ export class RomBuilder {
 
     /* Write extra DMA */
     const extraDmaPaddr = this.paddr;
+    const packedSize = extraDmaPaddr + extraDmaBuffer.length;
+    if (packedSize > ROM_DATA_LIMIT) {
+      throw new Error(`ROM too large`);
+    }
     this.out.set(extraDmaBuffer, extraDmaPaddr);
 
     /* Build meta */
@@ -362,6 +457,6 @@ export class RomBuilder {
     /* Fix checksum */
     this.fixChecksum();
 
-    return { rom: this.out, size: this.paddr };
+    return { rom: this.out, size: packedSize };
   }
 };
