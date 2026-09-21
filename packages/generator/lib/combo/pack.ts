@@ -192,11 +192,23 @@ export async function pack(args: PackArgs): Promise<PackOutput> {
     }
   }
 
+  const assetDedupeEnabled = !process.env.OOTMM_DISABLE_ASSET_DEDUPE;
+  romBuilder.setHeadroomEstimator(async () => {
+    const planningBuilder = romBuilder.cloneForPlanning();
+    if (assetDedupeEnabled) {
+      applyAssetDedupe(roms, planningBuilder, monitor);
+    }
+    const measurement = await planningBuilder.measurePackedSize();
+    return measurement.headroom;
+  });
+
   /* Apply cosmetics */
   monitor.log("Pack: Cosmetics");
   const cosmeticLog = await cosmetics(monitor, args.opts, romBuilder, patchfile.symbols);
+  romBuilder.setHeadroomEstimator(null);
+
   let assetDedupe: ReturnType<typeof applyAssetDedupe> | null = null;
-  if (!process.env.OOTMM_DISABLE_ASSET_DEDUPE) {
+  if (assetDedupeEnabled) {
     monitor.log("Pack: Asset dedupe");
     assetDedupe = applyAssetDedupe(roms, romBuilder, monitor);
   }
