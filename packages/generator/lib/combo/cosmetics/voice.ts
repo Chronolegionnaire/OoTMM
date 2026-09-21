@@ -346,6 +346,7 @@ function resolveSlice(builder: RomBuilder, addr: number, size: number): Resolved
         if (!file.data.length) continue;
         const starts: number[] = [];
         if (file.vaddr !== undefined) starts.push(file.vaddr);
+        if (file.legacyPaddr !== undefined) starts.push(file.legacyPaddr);
         if (file.paddr !== undefined && file.type === 'uncompressed') starts.push(file.paddr);
         for (const start of starts) {
             const fileEnd = start + file.data.length;
@@ -2422,3 +2423,4 @@ export async function patchPlayerVoices(
 
     return needsMmVoiceBank;
 }
+

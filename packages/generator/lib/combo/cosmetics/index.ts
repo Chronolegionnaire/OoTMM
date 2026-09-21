@@ -37,6 +37,7 @@ import {
   resolveEquipmentInput,
   type EquipmentResolvedOverride,
 } from './equipment-input';
+import {align16} from "../compact.ts";
 
 export async function cosmeticsAssets() {
   return {
@@ -120,9 +121,9 @@ class CosmeticsPass {
     }
   }
 
-  private addNewFile(data: Uint8Array, compressed = true) {
-    const size = (data.length + 0xf) & ~0xf;
-    const vrom = this.builder.addFile({ data, type: compressed ? 'compressed' : 'uncompressed', game: 'custom' })!;
+  private addNewFile(data: Uint8Array, compressed = true, name?: string) {
+    const size = align16(data.length);
+    const vrom = this.builder.addFile({name, data, type: compressed ? 'compressed' : 'uncompressed', game: 'custom'})!;
     return [vrom, (vrom + size) >>> 0];
   }
 
@@ -370,7 +371,7 @@ class CosmeticsPass {
         original.data = patched;
       } else {
         const code = this.builder.fileByNameRequired('oot/code');
-        const object = this.addNewFile(patched);
+        const object = this.addNewFile(patched, true, 'custom/mm_gameplay_keep_runtime');
         code.data.set(toU32Buffer(object), 0xe7f58 + 8 * 0x15);
       }
       return;

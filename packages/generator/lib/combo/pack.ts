@@ -11,6 +11,7 @@ import { cosmetics } from './cosmetics';
 import { DmaData } from './dma';
 import { Patchfile } from './patch-build/patchfile';
 import { RomBuilder } from './rom-builder';
+import { applyAssetDedupe } from './compact.ts';
 
 /* Files to alias (will use the OoT version) */
 const ALIASES_OOT = [
@@ -62,6 +63,19 @@ const ALIASES_OOT = [
   'dummy/bump_texture_static',
 ];
 
+const LEGACY_AUDIO_PADDR = {
+  'oot/Audiobank': 0x0000d390,
+  'oot/Audioseq': 0x00029de0,
+  'oot/Audiotable': 0x00079470,
+  'mm/Audiobank': 0x004fa640,
+  'mm/Audioseq': 0x00520a30,
+  'mm/Audiotable': 0x00571eb0,
+} as const;
+
+function legacyPaddr(name: string): number | undefined {
+  return LEGACY_AUDIO_PADDR[name as keyof typeof LEGACY_AUDIO_PADDR];
+}
+
 function extractFiles(game: Game, roms: DecompressedRoms, romBuilder: RomBuilder) {
   const config = CONFIG[game];
   const rom = roms[game].rom;
@@ -78,7 +92,15 @@ function extractFiles(game: Game, roms: DecompressedRoms, romBuilder: RomBuilder
     }
     const data = rom.subarray(uncompressedEntry.virtStart, uncompressedEntry.virtEnd);
     const type = compressedEntry.physEnd === 0 ? 'uncompressed' : 'compressed';
-    romBuilder.addFile({ type, data, name, game, index: i, vaddr: uncompressedEntry.virtStart });
+    romBuilder.addFile({
+      type,
+      data,
+      name,
+      game,
+      index: i,
+      vaddr: uncompressedEntry.virtStart,
+      legacyPaddr: legacyPaddr(name),
+    });
   }
 }
 
@@ -131,10 +153,6 @@ export async function pack(args: PackArgs): Promise<PackOutput> {
     }
   }
 
-  /* We need to pack a few static files before we can pack the rest */
-  await injectFirst('oot', romBuilder, 6);
-  await injectFirst('mm', romBuilder,  6);
-
   /* Add the extra files */
   for (const newFile of patchfile.newFiles) {
     const type = newFile.compressed ? 'compressed' : 'uncompressed';
@@ -177,6 +195,14 @@ export async function pack(args: PackArgs): Promise<PackOutput> {
   /* Apply cosmetics */
   monitor.log("Pack: Cosmetics");
   const cosmeticLog = await cosmetics(monitor, args.opts, romBuilder, patchfile.symbols);
+  let assetDedupe: ReturnType<typeof applyAssetDedupe> | null = null;
+  if (!process.env.OOTMM_DISABLE_ASSET_DEDUPE) {
+    monitor.log("Pack: Asset dedupe");
+    assetDedupe = applyAssetDedupe(roms, romBuilder, monitor);
+  }
+  await injectFirst('oot', romBuilder, 6);
+  await injectFirst('mm', romBuilder,  6);
+  assetDedupe?.finalizePhysicalTables();
 
   /* Build the final ROM */
   monitor.log("Pack: Finishing up ROM");
