@@ -1,5 +1,1494 @@
-import { bufReadU32BE, bufWriteU32BE } from '../util/buffer';
+import { RomBuilder } from '../rom-builder';
+import { bufReadU16BE, bufReadU32BE, bufWriteU16BE, bufWriteU32BE } from '../util/buffer';
 
+/* model.ts */
+export const OOT_LINK_CHILD_OFFSETS = {
+  LUT_DL_SHIELD_DEKU: 0x060050D0,
+  LUT_DL_WAIST: 0x060050D8,
+  LUT_DL_RTHIGH: 0x060050E0,
+  LUT_DL_RSHIN: 0x060050E8,
+  LUT_DL_RFOOT: 0x060050F0,
+  LUT_DL_LTHIGH: 0x060050F8,
+  LUT_DL_LSHIN: 0x06005100,
+  LUT_DL_LFOOT: 0x06005108,
+  LUT_DL_HEAD: 0x06005110,
+  LUT_DL_HAT: 0x06005118,
+  LUT_DL_COLLAR: 0x06005120,
+  LUT_DL_LSHOULDER: 0x06005128,
+  LUT_DL_LFOREARM: 0x06005130,
+  LUT_DL_RSHOULDER: 0x06005138,
+  LUT_DL_RFOREARM: 0x06005140,
+  LUT_DL_TORSO: 0x06005148,
+  LUT_DL_LHAND: 0x06005150,
+  LUT_DL_LFIST: 0x06005158,
+  LUT_DL_LHAND_BOTTLE: 0x06005160,
+  LUT_DL_RHAND: 0x06005168,
+  LUT_DL_RFIST: 0x06005170,
+  LUT_DL_SWORD_SHEATH: 0x06005178,
+  LUT_DL_SWORD_HILT: 0x06005180,
+  LUT_DL_SWORD_BLADE: 0x06005188,
+  LUT_DL_SLINGSHOT: 0x06005190,
+  LUT_DL_OCARINA_FAIRY: 0x06005198,
+  LUT_DL_OCARINA_TIME: 0x060051A0,
+  LUT_DL_DEKU_STICK: 0x060051A8,
+  LUT_DL_BOOMERANG: 0x060051B0,
+  LUT_DL_SHIELD_HYLIAN_BACK: 0x060051B8,
+  LUT_DL_BOTTLE: 0x060051C0,
+  LUT_DL_MASTER_SWORD: 0x060051C8,
+  LUT_DL_GORON_BRACELET: 0x060051D0,
+  LUT_DL_FPS_RIGHT_ARM: 0x060051D8,
+  LUT_DL_SLINGSHOT_STRING: 0x060051E0,
+  LUT_DL_MASK_BUNNY: 0x060051E8,
+  LUT_DL_MASK_GERUDO: 0x060051F0,
+  LUT_DL_MASK_GORON: 0x060051F8,
+  LUT_DL_MASK_KEATON: 0x06005200,
+  LUT_DL_MASK_SPOOKY: 0x06005208,
+  LUT_DL_MASK_TRUTH: 0x06005210,
+  LUT_DL_MASK_ZORA: 0x06005218,
+  LUT_DL_MASK_SKULL: 0x06005220,
+  DL_SWORD_SHEATHED: 0x06005228,
+  LUT_DL_SWORD_SHEATHED: 0x06005248,
+  DL_SHIELD_DEKU_ODD: 0x06005250,
+  LUT_DL_SHIELD_DEKU_ODD: 0x06005260,
+  DL_SHIELD_DEKU_BACK: 0x06005268,
+  LUT_DL_SHIELD_DEKU_BACK: 0x06005278,
+  DL_SWORD_SHIELD_HYLIAN: 0x06005280,
+  LUT_DL_SWORD_SHIELD_HYLIAN: 0x06005290,
+  DL_SWORD_SHIELD_DEKU: 0x06005298,
+  LUT_DL_SWORD_SHIELD_DEKU: 0x060052A8,
+  DL_SHEATH0_HYLIAN: 0x060052B0,
+  LUT_DL_SHEATH0_HYLIAN: 0x060052C0,
+  DL_SHEATH0_DEKU: 0x060052C8,
+  LUT_DL_SHEATH0_DEKU: 0x060052D8,
+  DL_LFIST_SWORD: 0x060052E0,
+  LUT_DL_LFIST_SWORD: 0x060052F8,
+  DL_LHAND_PEDESTALSWORD: 0x06005300,
+  LUT_DL_LHAND_PEDESTALSWORD: 0x06005310,
+  DL_LFIST_BOOMERANG: 0x06005318,
+  LUT_DL_LFIST_BOOMERANG: 0x06005328,
+  DL_RFIST_SHIELD_DEKU: 0x06005330,
+  LUT_DL_RFIST_SHIELD_DEKU: 0x06005340,
+  DL_RFIST_SLINGSHOT: 0x06005348,
+  LUT_DL_RFIST_SLINGSHOT: 0x06005358,
+  DL_RHAND_OCARINA_FAIRY: 0x06005360,
+  LUT_DL_RHAND_OCARINA_FAIRY: 0x06005370,
+  DL_RHAND_OCARINA_TIME: 0x06005378,
+  LUT_DL_RHAND_OCARINA_TIME: 0x06005388,
+  DL_FPS_RARM_SLINGSHOT: 0x06005390,
+  LUT_DL_FPS_RARM_SLINGSHOT: 0x060053A0,
+  HIERARCHY: 0x060053A8,
+};
+
+export const OOT_LINK_ADULT_OFFSETS = {
+  LUT_DL_WAIST: 0x06005090,
+  LUT_DL_RTHIGH: 0x06005098,
+  LUT_DL_RSHIN: 0x060050A0,
+  LUT_DL_RFOOT: 0x060050A8,
+  LUT_DL_LTHIGH: 0x060050B0,
+  LUT_DL_LSHIN: 0x060050B8,
+  LUT_DL_LFOOT: 0x060050C0,
+  LUT_DL_HEAD: 0x060050C8,
+  LUT_DL_HAT: 0x060050D0,
+  LUT_DL_COLLAR: 0x060050D8,
+  LUT_DL_LSHOULDER: 0x060050E0,
+  LUT_DL_LFOREARM: 0x060050E8,
+  LUT_DL_RSHOULDER: 0x060050F0,
+  LUT_DL_RFOREARM: 0x060050F8,
+  LUT_DL_TORSO: 0x06005100,
+  LUT_DL_LHAND: 0x06005108,
+  LUT_DL_LFIST: 0x06005110,
+  LUT_DL_LHAND_BOTTLE: 0x06005118,
+  LUT_DL_RHAND: 0x06005120,
+  LUT_DL_RFIST: 0x06005128,
+  LUT_DL_SWORD_SHEATH: 0x06005130,
+  LUT_DL_SWORD_HILT: 0x06005138,
+  LUT_DL_SWORD_BLADE: 0x06005140,
+  LUT_DL_LONGSWORD_HILT: 0x06005148,
+  LUT_DL_LONGSWORD_BLADE: 0x06005150,
+  LUT_DL_LONGSWORD_BROKEN: 0x06005158,
+  LUT_DL_SHIELD_HYLIAN: 0x06005160,
+  LUT_DL_SHIELD_MIRROR: 0x06005168,
+  LUT_DL_HAMMER: 0x06005170,
+  LUT_DL_BOTTLE: 0x06005178,
+  LUT_DL_BOW: 0x06005180,
+  LUT_DL_OCARINA_TIME: 0x06005188,
+  LUT_DL_HOOKSHOT: 0x06005190,
+  LUT_DL_UPGRADE_LFOREARM: 0x06005198,
+  LUT_DL_UPGRADE_LHAND: 0x060051A0,
+  LUT_DL_UPGRADE_LFIST: 0x060051A8,
+  LUT_DL_UPGRADE_RFOREARM: 0x060051B0,
+  LUT_DL_UPGRADE_RHAND: 0x060051B8,
+  LUT_DL_UPGRADE_RFIST: 0x060051C0,
+  LUT_DL_BOOT_LIRON: 0x060051C8,
+  LUT_DL_BOOT_RIRON: 0x060051D0,
+  LUT_DL_BOOT_LHOVER: 0x060051D8,
+  LUT_DL_BOOT_RHOVER: 0x060051E0,
+  LUT_DL_FPS_LFOREARM: 0x060051E8,
+  LUT_DL_FPS_LHAND: 0x060051F0,
+  LUT_DL_FPS_RFOREARM: 0x060051F8,
+  LUT_DL_FPS_RHAND: 0x06005200,
+  LUT_DL_FPS_HOOKSHOT: 0x06005208,
+  LUT_DL_HOOKSHOT_CHAIN: 0x06005210,
+  LUT_DL_HOOKSHOT_HOOK: 0x06005218,
+  LUT_DL_HOOKSHOT_AIM: 0x06005220,
+  LUT_DL_BOW_STRING: 0x06005228,
+  LUT_DL_BLADEBREAK: 0x06005230,
+  LUT_DL_SWORD_SHEATHED: 0x06005238,
+  LUT_DL_SHIELD_HYLIAN_BACK: 0x06005258,
+  LUT_DL_SHIELD_MIRROR_BACK: 0x06005268,
+  LUT_DL_SWORD_SHIELD_HYLIAN: 0x06005278,
+  LUT_DL_SWORD_SHIELD_MIRROR: 0x06005288,
+  LUT_DL_SHEATH0_HYLIAN: 0x06005298,
+  LUT_DL_SHEATH0_MIRROR: 0x060052A8,
+  LUT_DL_LFIST_SWORD: 0x060052B8,
+  LUT_DL_LFIST_LONGSWORD: 0x060052D0,
+  LUT_DL_LFIST_LONGSWORD_BROKEN: 0x060052E8,
+  LUT_DL_LFIST_HAMMER: 0x06005300,
+  LUT_DL_RFIST_SHIELD_HYLIAN: 0x06005310,
+  LUT_DL_RFIST_SHIELD_MIRROR: 0x06005320,
+  LUT_DL_RFIST_BOW: 0x06005330,
+  LUT_DL_RFIST_HOOKSHOT: 0x06005340,
+  LUT_DL_RHAND_OCARINA_TIME: 0x06005350,
+  LUT_DL_FPS_RHAND_BOW: 0x06005360,
+  LUT_DL_FPS_LHAND_HOOKSHOT: 0x06005370,
+  HIERARCHY: 0x06005380,
+};
+
+function patchPtrHi(file: Uint8Array, offset: number, value: number) {
+  bufWriteU16BE(file, offset, value >>> 16);
+}
+
+function patchPtrLo(file: Uint8Array, offset: number, value: number) {
+  bufWriteU16BE(file, offset, value & 0xffff);
+}
+
+function patchPtr16(file: Uint8Array, offset: number, value: number) {
+  bufWriteU16BE(file, offset, value);
+}
+
+function patchPtr(file: Uint8Array, offset: number, value: number) {
+  bufWriteU32BE(file, offset, value);
+}
+
+export function enableModelOotLinkChild(builder: RomBuilder, dfAddr: number) {
+  dfAddr |= 0x06000000;
+  let base: number;
+
+  /* Patch code */
+  const fileCode = builder.fileByNameRequired('oot/code');
+  const fileEffStick = builder.fileByNameRequired('oot/actors/ovl_Effect_Ss_Stick');
+  const fileItemShield = builder.fileByNameRequired('oot/actors/ovl_Item_Shield'); /* Isn't this unused? */
+  const filePlayer = builder.fileByNameRequired('oot/ovl_player_actor');
+  const fileEnCs = builder.fileByNameRequired('oot/actors/ovl_En_Cs');
+  const fileEnHeishi2 = builder.fileByNameRequired('oot/actors/ovl_En_Heishi2');
+  const fileEnMm = builder.fileByNameRequired('oot/actors/ovl_En_Mm');
+
+  base = 0xe671c;
+  patchPtr(fileCode.data, base + 0x0000, OOT_LINK_CHILD_OFFSETS.LUT_DL_RFIST);
+  patchPtr(fileCode.data, base + 0x0008, OOT_LINK_CHILD_OFFSETS.LUT_DL_RFIST);
+  patchPtr(fileCode.data, base + 0x0010, OOT_LINK_CHILD_OFFSETS.LUT_DL_RFIST);
+  patchPtr(fileCode.data, base + 0x0018, OOT_LINK_CHILD_OFFSETS.LUT_DL_RFIST);
+  patchPtr(fileCode.data, base + 0x0010, OOT_LINK_CHILD_OFFSETS.LUT_DL_RFIST_SHIELD_DEKU);
+  patchPtr(fileCode.data, base + 0x0018, OOT_LINK_CHILD_OFFSETS.LUT_DL_RFIST_SHIELD_DEKU);
+  patchPtr(fileCode.data, base + 0x0020, OOT_LINK_CHILD_OFFSETS.LUT_DL_RFIST);
+  patchPtr(fileCode.data, base + 0x0028, OOT_LINK_CHILD_OFFSETS.LUT_DL_RFIST);
+  patchPtr(fileCode.data, base + 0x0030, dfAddr);
+  patchPtr(fileCode.data, base + 0x0038, dfAddr);
+  patchPtr(fileCode.data, base + 0x0040, OOT_LINK_CHILD_OFFSETS.LUT_DL_SWORD_SHEATHED);
+  patchPtr(fileCode.data, base + 0x0048, OOT_LINK_CHILD_OFFSETS.LUT_DL_SWORD_SHEATHED);
+  patchPtr(fileCode.data, base + 0x0050, OOT_LINK_CHILD_OFFSETS.LUT_DL_SWORD_SHIELD_DEKU);
+  patchPtr(fileCode.data, base + 0x0058, OOT_LINK_CHILD_OFFSETS.LUT_DL_SWORD_SHIELD_DEKU);
+  patchPtr(fileCode.data, base + 0x0060, OOT_LINK_CHILD_OFFSETS.LUT_DL_SWORD_SHIELD_HYLIAN);
+  patchPtr(fileCode.data, base + 0x0068, OOT_LINK_CHILD_OFFSETS.LUT_DL_SWORD_SHIELD_HYLIAN);
+  patchPtr(fileCode.data, base + 0x0070, dfAddr);
+  patchPtr(fileCode.data, base + 0x0078, dfAddr);
+  patchPtr(fileCode.data, base + 0x0080, 0x00000000);
+  patchPtr(fileCode.data, base + 0x0088, 0x00000000);
+  patchPtr(fileCode.data, base + 0x0090, OOT_LINK_CHILD_OFFSETS.LUT_DL_SHIELD_DEKU_BACK);
+  patchPtr(fileCode.data, base + 0x0098, OOT_LINK_CHILD_OFFSETS.LUT_DL_SHIELD_DEKU_BACK);
+  patchPtr(fileCode.data, base + 0x00a0, OOT_LINK_CHILD_OFFSETS.LUT_DL_SWORD_SHEATH);
+  patchPtr(fileCode.data, base + 0x00a8, OOT_LINK_CHILD_OFFSETS.LUT_DL_SWORD_SHEATH);
+  patchPtr(fileCode.data, base + 0x00b0, OOT_LINK_CHILD_OFFSETS.LUT_DL_SHEATH0_DEKU);
+  patchPtr(fileCode.data, base + 0x00b8, OOT_LINK_CHILD_OFFSETS.LUT_DL_SHEATH0_DEKU);
+  patchPtr(fileCode.data, base + 0x00c0, OOT_LINK_CHILD_OFFSETS.LUT_DL_SHEATH0_HYLIAN);
+  patchPtr(fileCode.data, base + 0x00c8, OOT_LINK_CHILD_OFFSETS.LUT_DL_SHEATH0_HYLIAN);
+  patchPtr(fileCode.data, base + 0x00d0, dfAddr);
+  patchPtr(fileCode.data, base + 0x00d8, dfAddr);
+  patchPtr(fileCode.data, base + 0x00e0, 0x00000000);
+  patchPtr(fileCode.data, base + 0x00e8, 0x00000000);
+  patchPtr(fileCode.data, base + 0x00f0, OOT_LINK_CHILD_OFFSETS.LUT_DL_SHIELD_DEKU_BACK);
+  patchPtr(fileCode.data, base + 0x00f8, OOT_LINK_CHILD_OFFSETS.LUT_DL_SHIELD_DEKU_BACK);
+  patchPtr(fileCode.data, base + 0x0100, OOT_LINK_CHILD_OFFSETS.LUT_DL_LHAND_PEDESTALSWORD);
+  patchPtr(fileCode.data, base + 0x0108, OOT_LINK_CHILD_OFFSETS.LUT_DL_LHAND_PEDESTALSWORD);
+  patchPtr(fileCode.data, base + 0x0110, OOT_LINK_CHILD_OFFSETS.LUT_DL_LHAND_PEDESTALSWORD);
+  patchPtr(fileCode.data, base + 0x0118, OOT_LINK_CHILD_OFFSETS.LUT_DL_LHAND_PEDESTALSWORD);
+  patchPtr(fileCode.data, base + 0x0120, OOT_LINK_CHILD_OFFSETS.LUT_DL_LHAND);
+  patchPtr(fileCode.data, base + 0x0128, OOT_LINK_CHILD_OFFSETS.LUT_DL_LHAND);
+  patchPtr(fileCode.data, base + 0x0130, OOT_LINK_CHILD_OFFSETS.LUT_DL_LFIST);
+  patchPtr(fileCode.data, base + 0x0138, OOT_LINK_CHILD_OFFSETS.LUT_DL_LFIST);
+  patchPtr(fileCode.data, base + 0x0140, OOT_LINK_CHILD_OFFSETS.LUT_DL_LFIST_SWORD);
+  patchPtr(fileCode.data, base + 0x0148, OOT_LINK_CHILD_OFFSETS.LUT_DL_LFIST_SWORD);
+  patchPtr(fileCode.data, base + 0x0150, OOT_LINK_CHILD_OFFSETS.LUT_DL_LFIST_SWORD);
+  patchPtr(fileCode.data, base + 0x0158, OOT_LINK_CHILD_OFFSETS.LUT_DL_LFIST_SWORD);
+  patchPtr(fileCode.data, base + 0x0160, OOT_LINK_CHILD_OFFSETS.LUT_DL_RHAND);
+  patchPtr(fileCode.data, base + 0x0168, OOT_LINK_CHILD_OFFSETS.LUT_DL_RHAND);
+  patchPtr(fileCode.data, base + 0x0170, OOT_LINK_CHILD_OFFSETS.LUT_DL_RFIST);
+  patchPtr(fileCode.data, base + 0x0178, OOT_LINK_CHILD_OFFSETS.LUT_DL_RFIST);
+  patchPtr(fileCode.data, base + 0x0180, OOT_LINK_CHILD_OFFSETS.LUT_DL_RFIST_SLINGSHOT);
+  patchPtr(fileCode.data, base + 0x0188, OOT_LINK_CHILD_OFFSETS.LUT_DL_RFIST_SLINGSHOT);
+  patchPtr(fileCode.data, base + 0x0190, OOT_LINK_CHILD_OFFSETS.LUT_DL_SWORD_SHEATHED);
+  patchPtr(fileCode.data, base + 0x0198, OOT_LINK_CHILD_OFFSETS.LUT_DL_SWORD_SHEATHED);
+  patchPtr(fileCode.data, base + 0x01a0, OOT_LINK_CHILD_OFFSETS.LUT_DL_SWORD_SHEATH);
+  patchPtr(fileCode.data, base + 0x01a8, OOT_LINK_CHILD_OFFSETS.LUT_DL_SWORD_SHEATH);
+  patchPtr(fileCode.data, base + 0x01b0, OOT_LINK_CHILD_OFFSETS.LUT_DL_WAIST);
+  patchPtr(fileCode.data, base + 0x01b8, OOT_LINK_CHILD_OFFSETS.LUT_DL_WAIST);
+  patchPtr(fileCode.data, base + 0x01c0, OOT_LINK_CHILD_OFFSETS.LUT_DL_RFIST_SLINGSHOT);
+  patchPtr(fileCode.data, base + 0x01c8, OOT_LINK_CHILD_OFFSETS.LUT_DL_RFIST_SLINGSHOT);
+  patchPtr(fileCode.data, base + 0x01d0, OOT_LINK_CHILD_OFFSETS.LUT_DL_RHAND_OCARINA_FAIRY);
+  patchPtr(fileCode.data, base + 0x01d8, OOT_LINK_CHILD_OFFSETS.LUT_DL_RHAND_OCARINA_FAIRY);
+  patchPtr(fileCode.data, base + 0x01e0, OOT_LINK_CHILD_OFFSETS.LUT_DL_RHAND_OCARINA_TIME);
+  patchPtr(fileCode.data, base + 0x01e8, OOT_LINK_CHILD_OFFSETS.LUT_DL_RHAND_OCARINA_TIME);
+  patchPtr(fileCode.data, base + 0x01f0, OOT_LINK_CHILD_OFFSETS.LUT_DL_RFIST);
+  patchPtr(fileCode.data, base + 0x01f8, OOT_LINK_CHILD_OFFSETS.LUT_DL_RFIST);
+  patchPtr(fileCode.data, base + 0x0200, OOT_LINK_CHILD_OFFSETS.LUT_DL_LFIST);
+  patchPtr(fileCode.data, base + 0x0208, OOT_LINK_CHILD_OFFSETS.LUT_DL_LFIST);
+  patchPtr(fileCode.data, base + 0x0210, OOT_LINK_CHILD_OFFSETS.LUT_DL_LFIST_BOOMERANG);
+  patchPtr(fileCode.data, base + 0x0218, OOT_LINK_CHILD_OFFSETS.LUT_DL_LFIST_BOOMERANG);
+  patchPtr(fileCode.data, base + 0x0220, OOT_LINK_CHILD_OFFSETS.LUT_DL_LHAND_BOTTLE);
+  patchPtr(fileCode.data, base + 0x0228, OOT_LINK_CHILD_OFFSETS.LUT_DL_LHAND_BOTTLE);
+  patchPtr(fileCode.data, base + 0x0230, 0x00000000);
+  patchPtr(fileCode.data, base + 0x0238, 0x00000000);
+  patchPtr(fileCode.data, base + 0x0240, OOT_LINK_CHILD_OFFSETS.LUT_DL_RSHOULDER);
+  patchPtr(fileCode.data, base + 0x0248, 0x00000000);
+  patchPtr(fileCode.data, base + 0x0250, OOT_LINK_CHILD_OFFSETS.LUT_DL_FPS_RARM_SLINGSHOT);
+
+  base = 0xe6b2c;
+  patchPtr(fileCode.data, base + 0x0000, OOT_LINK_CHILD_OFFSETS.LUT_DL_BOTTLE);
+
+  base = 0xe6b74;
+  patchPtr(fileCode.data, base + 0x0000, OOT_LINK_CHILD_OFFSETS.LUT_DL_SLINGSHOT_STRING);
+  patchPtr(fileCode.data, base + 0x0004, 0x44178000);
+  patchPtr(fileCode.data, base + 0x0008, 0x436C0000);
+
+  patchPtrHi(fileCode.data, 0x6922e, OOT_LINK_CHILD_OFFSETS.LUT_DL_GORON_BRACELET);
+  patchPtrLo(fileCode.data, 0x69232, OOT_LINK_CHILD_OFFSETS.LUT_DL_GORON_BRACELET);
+  patchPtrHi(fileCode.data, 0x6a80e, OOT_LINK_CHILD_OFFSETS.LUT_DL_DEKU_STICK);
+  patchPtrLo(fileCode.data, 0x6a812, OOT_LINK_CHILD_OFFSETS.LUT_DL_DEKU_STICK);
+
+  patchPtr(fileEffStick.data, 0x334, OOT_LINK_CHILD_OFFSETS.LUT_DL_DEKU_STICK);
+  patchPtr16(fileEffStick.data, 0x330, 0x0015);
+
+  patchPtrHi(fileItemShield.data, 0x7ee, OOT_LINK_CHILD_OFFSETS.LUT_DL_SHIELD_DEKU_ODD);
+  patchPtrLo(fileItemShield.data, 0x7f2, OOT_LINK_CHILD_OFFSETS.LUT_DL_SHIELD_DEKU_ODD);
+
+  base = 0x2253c;
+  patchPtr(filePlayer.data, base + 0x0000, OOT_LINK_CHILD_OFFSETS.LUT_DL_MASK_KEATON);
+  patchPtr(filePlayer.data, base + 0x0004, OOT_LINK_CHILD_OFFSETS.LUT_DL_MASK_SKULL);
+  patchPtr(filePlayer.data, base + 0x0008, OOT_LINK_CHILD_OFFSETS.LUT_DL_MASK_SPOOKY);
+  patchPtr(filePlayer.data, base + 0x000c, OOT_LINK_CHILD_OFFSETS.LUT_DL_MASK_BUNNY);
+  patchPtr(filePlayer.data, base + 0x0010, OOT_LINK_CHILD_OFFSETS.LUT_DL_MASK_GORON);
+  patchPtr(filePlayer.data, base + 0x0014, OOT_LINK_CHILD_OFFSETS.LUT_DL_MASK_ZORA);
+  patchPtr(filePlayer.data, base + 0x0018, OOT_LINK_CHILD_OFFSETS.LUT_DL_MASK_GERUDO);
+  patchPtr(filePlayer.data, base + 0x001c, OOT_LINK_CHILD_OFFSETS.LUT_DL_MASK_TRUTH);
+
+  patchPtrHi(fileEnCs.data, 0xe62, OOT_LINK_CHILD_OFFSETS.LUT_DL_MASK_SPOOKY);
+  patchPtrLo(fileEnCs.data, 0xe66, OOT_LINK_CHILD_OFFSETS.LUT_DL_MASK_SPOOKY);
+
+  patchPtrHi(fileEnHeishi2.data, 0x1ea2, OOT_LINK_CHILD_OFFSETS.LUT_DL_MASK_KEATON);
+  patchPtrLo(fileEnHeishi2.data, 0x1ea6, OOT_LINK_CHILD_OFFSETS.LUT_DL_MASK_KEATON);
+
+  patchPtrHi(fileEnMm.data, 0x1142, OOT_LINK_CHILD_OFFSETS.LUT_DL_MASK_BUNNY);
+  patchPtrLo(fileEnMm.data, 0x1146, OOT_LINK_CHILD_OFFSETS.LUT_DL_MASK_BUNNY);
+
+  patchPtr(fileCode.data, 0xe65a4, OOT_LINK_CHILD_OFFSETS.HIERARCHY);
+}
+
+export function enableModelOotLinkAdult(builder: RomBuilder, dfAddr: number) {
+  dfAddr |= 0x06000000;
+  let base: number;
+
+  const fileCode = builder.fileByNameRequired('oot/code');
+  const fileArmsHook = builder.fileByNameRequired('oot/actors/ovl_Arms_Hook');
+  const fileEffStick = builder.fileByNameRequired('oot/actors/ovl_Effect_Ss_Stick');
+
+  base = 0xe6718;
+  patchPtr(fileCode.data, base + 0x0000, OOT_LINK_ADULT_OFFSETS.LUT_DL_RFIST);
+  patchPtr(fileCode.data, base + 0x0008, OOT_LINK_ADULT_OFFSETS.LUT_DL_RFIST);
+  patchPtr(fileCode.data, base + 0x0010, dfAddr);
+  patchPtr(fileCode.data, base + 0x0018, dfAddr);
+  patchPtr(fileCode.data, base + 0x0020, OOT_LINK_ADULT_OFFSETS.LUT_DL_RFIST_SHIELD_HYLIAN);
+  patchPtr(fileCode.data, base + 0x0028, OOT_LINK_ADULT_OFFSETS.LUT_DL_RFIST_SHIELD_HYLIAN);
+  patchPtr(fileCode.data, base + 0x0030, OOT_LINK_ADULT_OFFSETS.LUT_DL_RFIST_SHIELD_MIRROR);
+  patchPtr(fileCode.data, base + 0x0038, OOT_LINK_ADULT_OFFSETS.LUT_DL_RFIST_SHIELD_MIRROR);
+  patchPtr(fileCode.data, base + 0x0040, OOT_LINK_ADULT_OFFSETS.LUT_DL_SWORD_SHEATHED);
+  patchPtr(fileCode.data, base + 0x0048, OOT_LINK_ADULT_OFFSETS.LUT_DL_SWORD_SHEATHED);
+  patchPtr(fileCode.data, base + 0x0050, dfAddr);
+  patchPtr(fileCode.data, base + 0x0058, dfAddr);
+  patchPtr(fileCode.data, base + 0x0060, OOT_LINK_ADULT_OFFSETS.LUT_DL_SWORD_SHIELD_HYLIAN);
+  patchPtr(fileCode.data, base + 0x0068, OOT_LINK_ADULT_OFFSETS.LUT_DL_SWORD_SHIELD_HYLIAN);
+  patchPtr(fileCode.data, base + 0x0070, OOT_LINK_ADULT_OFFSETS.LUT_DL_SWORD_SHIELD_MIRROR);
+  patchPtr(fileCode.data, base + 0x0078, OOT_LINK_ADULT_OFFSETS.LUT_DL_SWORD_SHIELD_MIRROR);
+  patchPtr(fileCode.data, base + 0x0080, 0x00000000);
+  patchPtr(fileCode.data, base + 0x0088, 0x00000000);
+  patchPtr(fileCode.data, base + 0x0090, 0x00000000);
+  patchPtr(fileCode.data, base + 0x0098, 0x00000000);
+  patchPtr(fileCode.data, base + 0x00a0, OOT_LINK_ADULT_OFFSETS.LUT_DL_SWORD_SHEATH);
+  patchPtr(fileCode.data, base + 0x00a8, OOT_LINK_ADULT_OFFSETS.LUT_DL_SWORD_SHEATH);
+  patchPtr(fileCode.data, base + 0x00b0, dfAddr);
+  patchPtr(fileCode.data, base + 0x00b8, dfAddr);
+  patchPtr(fileCode.data, base + 0x00c0, OOT_LINK_ADULT_OFFSETS.LUT_DL_SHEATH0_HYLIAN);
+  patchPtr(fileCode.data, base + 0x00c8, OOT_LINK_ADULT_OFFSETS.LUT_DL_SHEATH0_HYLIAN);
+  patchPtr(fileCode.data, base + 0x00d0, OOT_LINK_ADULT_OFFSETS.LUT_DL_SHEATH0_MIRROR);
+  patchPtr(fileCode.data, base + 0x00d8, OOT_LINK_ADULT_OFFSETS.LUT_DL_SHEATH0_MIRROR);
+  patchPtr(fileCode.data, base + 0x00e0, 0x00000000);
+  patchPtr(fileCode.data, base + 0x00e8, 0x00000000);
+  patchPtr(fileCode.data, base + 0x00f0, 0x00000000);
+  patchPtr(fileCode.data, base + 0x00f8, 0x00000000);
+  patchPtr(fileCode.data, base + 0x0100, OOT_LINK_ADULT_OFFSETS.LUT_DL_LFIST_LONGSWORD);
+  patchPtr(fileCode.data, base + 0x0108, OOT_LINK_ADULT_OFFSETS.LUT_DL_LFIST_LONGSWORD);
+  patchPtr(fileCode.data, base + 0x0110, OOT_LINK_ADULT_OFFSETS.LUT_DL_LFIST_LONGSWORD_BROKEN);
+  patchPtr(fileCode.data, base + 0x0118, OOT_LINK_ADULT_OFFSETS.LUT_DL_LFIST_LONGSWORD_BROKEN);
+  patchPtr(fileCode.data, base + 0x0120, OOT_LINK_ADULT_OFFSETS.LUT_DL_LHAND);
+  patchPtr(fileCode.data, base + 0x0128, OOT_LINK_ADULT_OFFSETS.LUT_DL_LHAND);
+  patchPtr(fileCode.data, base + 0x0130, OOT_LINK_ADULT_OFFSETS.LUT_DL_LFIST);
+  patchPtr(fileCode.data, base + 0x0138, OOT_LINK_ADULT_OFFSETS.LUT_DL_LFIST);
+  patchPtr(fileCode.data, base + 0x0140, dfAddr);
+  patchPtr(fileCode.data, base + 0x0148, dfAddr);
+  patchPtr(fileCode.data, base + 0x0150, OOT_LINK_ADULT_OFFSETS.LUT_DL_LFIST_SWORD);
+  patchPtr(fileCode.data, base + 0x0158, OOT_LINK_ADULT_OFFSETS.LUT_DL_LFIST_SWORD);
+  patchPtr(fileCode.data, base + 0x0160, OOT_LINK_ADULT_OFFSETS.LUT_DL_RHAND);
+  patchPtr(fileCode.data, base + 0x0168, OOT_LINK_ADULT_OFFSETS.LUT_DL_RHAND);
+  patchPtr(fileCode.data, base + 0x0170, OOT_LINK_ADULT_OFFSETS.LUT_DL_RFIST);
+  patchPtr(fileCode.data, base + 0x0178, OOT_LINK_ADULT_OFFSETS.LUT_DL_RFIST);
+  patchPtr(fileCode.data, base + 0x0180, OOT_LINK_ADULT_OFFSETS.LUT_DL_RFIST_BOW);
+  patchPtr(fileCode.data, base + 0x0188, OOT_LINK_ADULT_OFFSETS.LUT_DL_RFIST_BOW);
+  patchPtr(fileCode.data, base + 0x0190, OOT_LINK_ADULT_OFFSETS.LUT_DL_SWORD_SHEATHED);
+  patchPtr(fileCode.data, base + 0x0198, OOT_LINK_ADULT_OFFSETS.LUT_DL_SWORD_SHEATHED);
+  patchPtr(fileCode.data, base + 0x01a0, OOT_LINK_ADULT_OFFSETS.LUT_DL_SWORD_SHEATH);
+  patchPtr(fileCode.data, base + 0x01a8, OOT_LINK_ADULT_OFFSETS.LUT_DL_SWORD_SHEATH);
+  patchPtr(fileCode.data, base + 0x01b0, OOT_LINK_ADULT_OFFSETS.LUT_DL_WAIST);
+  patchPtr(fileCode.data, base + 0x01b8, OOT_LINK_ADULT_OFFSETS.LUT_DL_WAIST);
+  patchPtr(fileCode.data, base + 0x01c0, OOT_LINK_ADULT_OFFSETS.LUT_DL_RFIST_BOW);
+  patchPtr(fileCode.data, base + 0x01c8, OOT_LINK_ADULT_OFFSETS.LUT_DL_RFIST_BOW);
+  patchPtr(fileCode.data, base + 0x01d0, OOT_LINK_ADULT_OFFSETS.LUT_DL_RHAND_OCARINA_TIME);
+  patchPtr(fileCode.data, base + 0x01d8, OOT_LINK_ADULT_OFFSETS.LUT_DL_RHAND_OCARINA_TIME);
+  patchPtr(fileCode.data, base + 0x01e0, OOT_LINK_ADULT_OFFSETS.LUT_DL_RHAND_OCARINA_TIME);
+  patchPtr(fileCode.data, base + 0x01e8, OOT_LINK_ADULT_OFFSETS.LUT_DL_RHAND_OCARINA_TIME);
+  patchPtr(fileCode.data, base + 0x01f0, OOT_LINK_ADULT_OFFSETS.LUT_DL_RFIST_HOOKSHOT);
+  patchPtr(fileCode.data, base + 0x01f8, OOT_LINK_ADULT_OFFSETS.LUT_DL_RFIST_HOOKSHOT);
+  patchPtr(fileCode.data, base + 0x0200, OOT_LINK_ADULT_OFFSETS.LUT_DL_LFIST_HAMMER);
+  patchPtr(fileCode.data, base + 0x0208, OOT_LINK_ADULT_OFFSETS.LUT_DL_LFIST_HAMMER);
+  patchPtr(fileCode.data, base + 0x0210, dfAddr);
+  patchPtr(fileCode.data, base + 0x0218, dfAddr);
+  patchPtr(fileCode.data, base + 0x0220, OOT_LINK_ADULT_OFFSETS.LUT_DL_LHAND_BOTTLE);
+  patchPtr(fileCode.data, base + 0x0228, OOT_LINK_ADULT_OFFSETS.LUT_DL_LHAND_BOTTLE);
+  patchPtr(fileCode.data, base + 0x0230, OOT_LINK_ADULT_OFFSETS.LUT_DL_FPS_LFOREARM);
+  patchPtr(fileCode.data, base + 0x0238, OOT_LINK_ADULT_OFFSETS.LUT_DL_FPS_LHAND);
+  patchPtr(fileCode.data, base + 0x0240, OOT_LINK_ADULT_OFFSETS.LUT_DL_RSHOULDER);
+  patchPtr(fileCode.data, base + 0x0248, OOT_LINK_ADULT_OFFSETS.LUT_DL_FPS_RFOREARM);
+  patchPtr(fileCode.data, base + 0x0250, OOT_LINK_ADULT_OFFSETS.LUT_DL_FPS_RHAND_BOW);
+
+  base = 0xe6a4c;
+  patchPtr(fileCode.data, base + 0x0000, OOT_LINK_ADULT_OFFSETS.LUT_DL_BOOT_LIRON);
+  patchPtr(fileCode.data, base + 0x0004, OOT_LINK_ADULT_OFFSETS.LUT_DL_BOOT_RIRON);
+  patchPtr(fileCode.data, base + 0x0008, OOT_LINK_ADULT_OFFSETS.LUT_DL_BOOT_LHOVER);
+  patchPtr(fileCode.data, base + 0x000c, OOT_LINK_ADULT_OFFSETS.LUT_DL_BOOT_RHOVER);
+
+  patchPtr(fileCode.data, 0xe6b28, OOT_LINK_ADULT_OFFSETS.LUT_DL_BOTTLE);
+
+  base = 0xe6b64;
+  patchPtr(fileCode.data, base + 0x0000, OOT_LINK_ADULT_OFFSETS.LUT_DL_BOW_STRING);
+  patchPtr(fileCode.data, base + 0x0004, 0x00000000);
+  patchPtr(fileCode.data, base + 0x0008, 0xC3B43333);
+
+  patchPtrHi(fileCode.data, 0x69112, OOT_LINK_ADULT_OFFSETS.LUT_DL_UPGRADE_LFOREARM);
+  patchPtrLo(fileCode.data, 0x69116, OOT_LINK_ADULT_OFFSETS.LUT_DL_UPGRADE_LFOREARM);
+  patchPtrHi(fileCode.data, 0x6912E, OOT_LINK_ADULT_OFFSETS.LUT_DL_UPGRADE_RFOREARM);
+  patchPtrLo(fileCode.data, 0x69132, OOT_LINK_ADULT_OFFSETS.LUT_DL_UPGRADE_RFOREARM);
+  patchPtrHi(fileCode.data, 0x6914E, OOT_LINK_ADULT_OFFSETS.LUT_DL_UPGRADE_LFIST);
+  patchPtrLo(fileCode.data, 0x69162, OOT_LINK_ADULT_OFFSETS.LUT_DL_UPGRADE_LFIST);
+  patchPtrHi(fileCode.data, 0x69166, OOT_LINK_ADULT_OFFSETS.LUT_DL_UPGRADE_LHAND);
+  patchPtrLo(fileCode.data, 0x69172, OOT_LINK_ADULT_OFFSETS.LUT_DL_UPGRADE_LHAND);
+  patchPtrHi(fileCode.data, 0x6919E, OOT_LINK_ADULT_OFFSETS.LUT_DL_UPGRADE_RFIST);
+  patchPtrLo(fileCode.data, 0x691A2, OOT_LINK_ADULT_OFFSETS.LUT_DL_UPGRADE_RFIST);
+  patchPtrHi(fileCode.data, 0x691AE, OOT_LINK_ADULT_OFFSETS.LUT_DL_UPGRADE_RHAND);
+  patchPtrLo(fileCode.data, 0x691B2, OOT_LINK_ADULT_OFFSETS.LUT_DL_UPGRADE_RHAND);
+  patchPtrHi(fileCode.data, 0x69DEA, OOT_LINK_ADULT_OFFSETS.LUT_DL_FPS_LHAND_HOOKSHOT);
+  patchPtrLo(fileCode.data, 0x69DEE, OOT_LINK_ADULT_OFFSETS.LUT_DL_FPS_LHAND_HOOKSHOT);
+  patchPtrHi(fileCode.data, 0x6A666, OOT_LINK_ADULT_OFFSETS.LUT_DL_HOOKSHOT_AIM);
+  patchPtrLo(fileCode.data, 0x6A66A, OOT_LINK_ADULT_OFFSETS.LUT_DL_HOOKSHOT_AIM);
+
+  patchPtrHi(fileArmsHook.data, 0xa72, OOT_LINK_ADULT_OFFSETS.LUT_DL_HOOKSHOT_HOOK);
+  patchPtrLo(fileArmsHook.data, 0xa76, OOT_LINK_ADULT_OFFSETS.LUT_DL_HOOKSHOT_HOOK);
+  patchPtrHi(fileArmsHook.data, 0xb66, OOT_LINK_ADULT_OFFSETS.LUT_DL_HOOKSHOT_CHAIN);
+  patchPtrLo(fileArmsHook.data, 0xb6a, OOT_LINK_ADULT_OFFSETS.LUT_DL_HOOKSHOT_CHAIN);
+  patchPtr16(fileArmsHook.data, 0xba8, 0x0014);
+
+  patchPtr(fileEffStick.data, 0x32C, OOT_LINK_ADULT_OFFSETS.LUT_DL_BLADEBREAK);
+  patchPtr16(fileEffStick.data, 0x328, 0x0014);
+
+  patchPtr(fileCode.data, 0xe65a0, OOT_LINK_ADULT_OFFSETS.HIERARCHY);
+}
+
+/* model-pak.ts */
+export type PlayerModelGame = 'oot' | 'mm';
+export type PlayerModelAge = 'adult' | 'child';
+
+export type PakPlayerModel = {
+  name: string;
+  data: Uint8Array;
+  game: PlayerModelGame | null;
+  age: PlayerModelAge | null;
+};
+
+type PakEntry = {
+  name: string;
+  compression: string;
+  dataStart: number;
+  dataEnd: number;
+};
+
+type ModelHint = {
+  file: string;
+  game: PlayerModelGame;
+  age: PlayerModelAge | null;
+  order: number;
+};
+
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
+const PAK_MAGIC = encoder.encode('ModLoader64\0');
+const MODEL_MAGIC = encoder.encode('MODLOADER64');
+const PAK_VERSION = 3;
+const MAX_FILES = 0x10000;
+const MAX_MODEL_SIZE = 0x400000;
+const MAX_JSON_SIZE = 0x100000;
+
+function bytesEqual(data: Uint8Array, offset: number, value: Uint8Array) {
+  if (offset < 0 || offset + value.length > data.length) {
+    return false;
+  }
+
+  for (let i = 0; i < value.length; ++i) {
+    if (data[offset + i] !== value[i]) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function normalizePath(value: string) {
+  return value.replace(/\\/g, '/').replace(/^\.\//, '').toLowerCase();
+}
+
+function basename(value: string) {
+  const normalized = value.replace(/\\/g, '/');
+  const index = normalized.lastIndexOf('/');
+  return index === -1 ? normalized : normalized.slice(index + 1);
+}
+
+function dirname(value: string) {
+  const normalized = value.replace(/\\/g, '/');
+  const index = normalized.lastIndexOf('/');
+  return index === -1 ? '' : normalized.slice(0, index);
+}
+
+function findFilenameEnd(data: Uint8Array, start: number) {
+  if (start < 0 || start >= data.length) {
+    throw new Error('Invalid pak filename offset');
+  }
+
+  for (let i = start; i < data.length; ++i) {
+    if (data[i] === 0xff || data[i] === 0x00) {
+      return i;
+    }
+  }
+
+  throw new Error('Unterminated pak filename');
+}
+
+function readPakEntries(data: Uint8Array) {
+  if (!isPlayerModelPak(data)) {
+    throw new Error('Invalid ModLoader64 pak');
+  }
+
+  if (data.length < 0x10) {
+    throw new Error('Invalid ModLoader64 pak header');
+  }
+
+  const packed = bufReadU32BE(data, 0x0c);
+  const version = packed & 0xff;
+  const count = packed >>> 8;
+
+  if (version !== PAK_VERSION) {
+    throw new Error(`Unsupported ModLoader64 pak version ${version}`);
+  }
+
+  if (count > MAX_FILES) {
+    throw new Error(`ModLoader64 pak contains too many files: ${count}`);
+  }
+
+  const tableEnd = 0x10 + count * 0x10;
+  if (tableEnd > data.length) {
+    throw new Error('Invalid ModLoader64 pak file table');
+  }
+
+  const entries: PakEntry[] = [];
+
+  for (let i = 0; i < count; ++i) {
+    const offset = 0x10 + i * 0x10;
+    const compression = decoder.decode(data.subarray(offset, offset + 4));
+    const nameOffset = bufReadU32BE(data, offset + 4);
+    const dataStart = bufReadU32BE(data, offset + 8);
+    const dataEnd = bufReadU32BE(data, offset + 0x0c);
+
+    if (nameOffset < tableEnd || nameOffset >= data.length) {
+      throw new Error(`Invalid pak filename offset for file ${i}`);
+    }
+
+    if (dataStart > dataEnd || dataEnd > data.length) {
+      throw new Error(`Invalid pak data range for file ${i}`);
+    }
+
+    const nameEnd = findFilenameEnd(data, nameOffset);
+    const name = decoder.decode(data.subarray(nameOffset, nameEnd));
+
+    entries.push({
+      name,
+      compression,
+      dataStart,
+      dataEnd,
+    });
+  }
+
+  return entries;
+}
+
+async function decompress(entry: PakEntry, pak: Uint8Array, maxSize: number) {
+  const input = pak.subarray(entry.dataStart, entry.dataEnd);
+
+  if (entry.compression === 'DEFL') {
+    const blobInput = new Uint8Array(input);
+    const stream = new Blob([blobInput])
+        .stream()
+        .pipeThrough(new DecompressionStream('deflate'));
+
+    const output = new Uint8Array(await new Response(stream).arrayBuffer());
+
+    if (output.length > maxSize) {
+      throw new Error(`Pak file ${entry.name} is too large after decompression`);
+    }
+
+    return output;
+  }
+
+  if (
+      entry.compression === 'UNCO' ||
+      entry.compression === 'NONE' ||
+      entry.compression === 'RAW ' ||
+      entry.compression === '\0\0\0\0'
+  ) {
+    if (input.length > maxSize) {
+      throw new Error(`Pak file ${entry.name} is too large`);
+    }
+
+    return new Uint8Array(input);
+  }
+
+  throw new Error(
+      `Unsupported pak compression ${entry.compression} for ${entry.name}`
+  );
+}
+
+function readModelReference(value: unknown) {
+  if (typeof value === 'string') {
+    return value.toLowerCase().endsWith('.zobj') && value !== '' ? [value] : [];
+  }
+
+  if (Array.isArray(value)) {
+    const out: string[] = [];
+    for (const item of value) {
+      if (typeof item === 'string') {
+        if (item.toLowerCase().endsWith('.zobj')) {
+          out.push(item);
+        }
+      } else if (item && typeof item === 'object') {
+        const file = (item as Record<string, unknown>).file;
+        if (typeof file === 'string' && file.toLowerCase().endsWith('.zobj') && file !== '') {
+          out.push(file);
+        }
+      }
+    }
+    return out;
+  }
+
+  if (value && typeof value === 'object') {
+    const file = (value as Record<string, unknown>).file;
+    if (typeof file === 'string' && file.toLowerCase().endsWith('.zobj') && file !== '') {
+      return [file];
+    }
+  }
+
+  return [];
+}
+
+function findProperty(value: Record<string, unknown>, names: string[]) {
+  const lowered = new Map<string, unknown>();
+  for (const [key, item] of Object.entries(value)) {
+    lowered.set(key.toLowerCase(), item);
+  }
+
+  for (const name of names) {
+    const item = lowered.get(name.toLowerCase());
+    if (item !== undefined) {
+      return item;
+    }
+  }
+
+  return undefined;
+}
+
+function getObject(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
+function packageHints(value: unknown) {
+  const root = getObject(value);
+  if (!root) {
+    return [];
+  }
+
+  const zzplayas = getObject(findProperty(root, ['zzplayas']));
+  if (!zzplayas) {
+    return [];
+  }
+
+  const hints: Omit<ModelHint, 'order'>[] = [];
+  const oot = getObject(findProperty(zzplayas, ['OOT', 'OcarinaOfTime', 'OcarinaofTime']));
+  const mm = getObject(findProperty(zzplayas, ['MM', 'MajorasMask']));
+
+  if (oot) {
+    for (const file of readModelReference(findProperty(oot, ['adult_model']))) {
+      hints.push({ file, game: 'oot', age: 'adult' });
+    }
+    for (const file of readModelReference(findProperty(oot, ['child_model']))) {
+      hints.push({ file, game: 'oot', age: 'child' });
+    }
+  }
+
+  if (mm) {
+    for (const file of readModelReference(findProperty(mm, ['adult_model']))) {
+      hints.push({ file, game: 'mm', age: 'adult' });
+    }
+    for (const file of readModelReference(findProperty(mm, ['child_model']))) {
+      hints.push({ file, game: 'mm', age: null });
+    }
+  }
+
+  return hints;
+}
+
+export function isProcessedPlayerModel(data: Uint8Array) {
+  return data.length >= 0x5010 && bytesEqual(data, 0x5000, MODEL_MAGIC);
+}
+
+export function classifyPlayerModel(data: Uint8Array): { game: PlayerModelGame | null, age: PlayerModelAge | null } {
+  if (isProcessedPlayerModel(data)) {
+    const type = data[0x500b];
+    const hierarchy = bufReadU32BE(data, 0x500c);
+
+    switch (type) {
+    case 0x00:
+      return { game: 'oot', age: 'adult' };
+    case 0x01:
+      return { game: 'oot', age: 'child' };
+    case 0x04:
+      return { game: 'mm', age: 'child' };
+    case 0x68:
+      return { game: 'mm', age: 'adult' };
+    }
+
+    if (hierarchy === 0x06005380) {
+      return { game: 'oot', age: 'adult' };
+    }
+    if (hierarchy === 0x060053a8) {
+      return { game: 'oot', age: 'child' };
+    }
+    if (hierarchy === 0x06005420) {
+      return { game: 'mm', age: null };
+    }
+  }
+
+  const manifest = decoder.decode(data.subarray(Math.max(0, data.length - 0x4000)));
+  if (!manifest.includes('!PlayAsManifest0')) {
+    return { game: null, age: null };
+  }
+
+  if (
+    manifest.includes('Shield.2.Face') ||
+    manifest.includes('Sword.4') ||
+    manifest.includes('Sheath.3')
+  ) {
+    return { game: 'mm', age: null };
+  }
+
+  if (
+    manifest.includes('Hammer') ||
+    manifest.includes('Shield.3') ||
+    manifest.includes('Gauntlet.') ||
+    manifest.includes('Foot.3.L')
+  ) {
+    return { game: 'oot', age: 'adult' };
+  }
+
+  if (
+    manifest.includes('Slingshot') ||
+    manifest.includes('Boomerang') ||
+    manifest.includes('Mask.Bunny') ||
+    manifest.includes('DekuStick') ||
+    manifest.includes('GoronBracelet') ||
+    manifest.includes('Ocarina.1') ||
+    manifest.includes('Blade.1') ||
+    manifest.includes('Hilt.1')
+  ) {
+    return { game: 'oot', age: 'child' };
+  }
+
+  if (
+    manifest.includes('Limb 1') &&
+    manifest.includes('Limb 10') &&
+    manifest.includes('Limb 19') &&
+    manifest.includes('Limb 20') &&
+    manifest.includes('Fist.L') &&
+    manifest.includes('Fist.R')
+  ) {
+    return { game: 'mm', age: null };
+  }
+
+  return { game: null, age: null };
+}
+
+function matchHint(entryName: string, hints: ModelHint[]) {
+  const normalized = normalizePath(entryName);
+  const base = basename(normalized);
+
+  for (const hint of hints) {
+    const file = normalizePath(hint.file);
+    if (normalized === file || normalized.endsWith('/' + file)) {
+      return hint;
+    }
+  }
+
+  for (const hint of hints) {
+    if (basename(normalizePath(hint.file)) === base) {
+      return hint;
+    }
+  }
+
+  return null;
+}
+
+export function isPlayerModelPak(data: Uint8Array) {
+  return bytesEqual(data, 0, PAK_MAGIC);
+}
+
+export async function readPakPlayerModels(data: Uint8Array): Promise<PakPlayerModel[]> {
+  const entries = readPakEntries(data);
+  const jsonEntries = entries.filter((entry) => basename(entry.name).toLowerCase() === 'package.json');
+  const hints: ModelHint[] = [];
+  let order = 0;
+
+  for (const entry of jsonEntries) {
+    const jsonData = await decompress(entry, data, MAX_JSON_SIZE);
+    let json: unknown;
+
+    try {
+      json = JSON.parse(decoder.decode(jsonData));
+    } catch {
+      continue;
+    }
+
+    for (const hint of packageHints(json)) {
+      const root = dirname(entry.name);
+      hints.push({
+        ...hint,
+        file: root ? `${root}/${hint.file}` : hint.file,
+        order: order++,
+      });
+    }
+  }
+
+  const zobjEntries = entries.filter((entry) => entry.name.toLowerCase().endsWith('.zobj'));
+  const orderedEntries = zobjEntries.map((entry, index) => {
+    const hint = matchHint(entry.name, hints);
+    return {
+      entry,
+      hint,
+      index,
+      priority: hint ? hint.order : 0x100000 + index,
+    };
+  }).sort((a, b) => a.priority - b.priority);
+
+  const models: PakPlayerModel[] = [];
+
+  for (const { entry, hint } of orderedEntries) {
+    const model = await decompress(entry, data, MAX_MODEL_SIZE);
+    const classified = classifyPlayerModel(model);
+
+    models.push({
+      name: entry.name,
+      data: model,
+      game: classified.game ?? hint?.game ?? null,
+      age: classified.age ?? hint?.age ?? null,
+    });
+  }
+
+  if (models.length === 0) {
+    throw new Error('ModLoader64 pak contains no player model zobj files');
+  }
+
+  return models;
+}
+
+
+
+export type PakZobj = {
+  name: string;
+  data: Uint8Array;
+};
+
+export async function readPakZobjs(data: Uint8Array): Promise<PakZobj[]> {
+  const entries = readPakEntries(data);
+  const zobjEntries = entries.filter((entry) => entry.name.toLowerCase().endsWith('.zobj'));
+  const out: PakZobj[] = [];
+
+  for (const entry of zobjEntries) {
+    out.push({
+      name: entry.name,
+      data: await decompress(entry, data, MAX_MODEL_SIZE),
+    });
+  }
+
+  return out;
+}
+
+/* model-input.ts */
+export type ResolvedPlayerModel = {
+  data: Uint8Array;
+  sourceGame: PlayerModelGame | null;
+};
+
+export type PlayerModelPair = {
+  adult: ResolvedPlayerModel | null;
+  child: ResolvedPlayerModel | null;
+};
+
+function emptyPair(): PlayerModelPair {
+  return {
+    adult: null,
+    child: null,
+  };
+}
+
+function resolvedModel(model: PakPlayerModel): ResolvedPlayerModel {
+  return {
+    data: model.data,
+    sourceGame: model.game,
+  };
+}
+
+export async function resolvePlayerModelInput(
+  data: Uint8Array | null,
+  game: PlayerModelGame,
+  slotAge: PlayerModelAge,
+): Promise<PlayerModelPair> {
+  const out = emptyPair();
+
+  if (data === null) {
+    return out;
+  }
+
+  if (!isPlayerModelPak(data)) {
+    const classified = classifyPlayerModel(data);
+
+    out[slotAge] = {
+      data,
+      sourceGame: classified.game,
+    };
+
+    return out;
+  }
+
+  const models = await readPakPlayerModels(data);
+  let relevant = models.filter((model) => model.game === game);
+  if (relevant.length === 0) {
+    relevant = models.filter((model) => model.game === null);
+  }
+
+  if (relevant.length === 0) {
+    const crossGame = models.filter(
+      (model) => model.game !== null && model.game !== game,
+    );
+
+    const rawCrossGame = crossGame.filter(
+      (model) => !isProcessedPlayerModel(model.data),
+    );
+
+    relevant = rawCrossGame.length > 0 ? rawCrossGame : crossGame;
+  }
+
+  if (relevant.length === 0) {
+    throw new Error(`Model pak contains no player models usable by ${game.toUpperCase()}`);
+  }
+
+  const adult = relevant.find((model) => model.age === 'adult');
+  const child = relevant.find((model) => model.age === 'child');
+  const unknown = relevant.filter((model) => model.age === null);
+
+  if (adult) {
+    out.adult = resolvedModel(adult);
+  }
+
+  if (child) {
+    out.child = resolvedModel(child);
+  }
+
+  if (unknown.length === 1) {
+    const model = resolvedModel(unknown[0]);
+
+    if (out.adult !== null && out.child === null) {
+      out.child = model;
+    } else if (out.child !== null && out.adult === null) {
+      out.adult = model;
+    } else if (out[slotAge] === null) {
+      out[slotAge] = model;
+    }
+  } else if (unknown.length > 1) {
+    throw new Error(`Model pak contains multiple unclassified ${game.toUpperCase()} player models`);
+  }
+
+  if (out.adult === null && out.child === null) {
+    throw new Error(`Unable to determine player model age from ${game.toUpperCase()} pak`);
+  }
+
+  return out;
+}
+
+export function mergePlayerModelInputs(
+  childSlot: PlayerModelPair,
+  adultSlot: PlayerModelPair,
+): PlayerModelPair {
+  return {
+    child: childSlot.child ?? adultSlot.child,
+    adult: adultSlot.adult ?? childSlot.adult,
+  };
+}
+
+/* player-model-compat.ts */
+const CROSS_GAME_PLAYER_PIECES = new Set<string>([
+  'Limb 1','Limb 3','Limb 4','Limb 5','Limb 6','Limb 7','Limb 8',
+  'Limb 10','Limb 11','Limb 12','Limb 13','Limb 14','Limb 15',
+  'Limb 16','Limb 17','Limb 18','Limb 19','Limb 20',
+  'Waist','Thigh.R','Shin.R','Foot.R','Thigh.L','Shin.L','Foot.L',
+  'Head','Hat','Collar','Shoulder.L','Forearm.L','Hand.L',
+  'Shoulder.R','Forearm.R','Hand.R','Torso',
+  'Fist.L','Fist.R',
+]);
+
+export function isCrossGamePlayerPiece(name: string) {
+  return CROSS_GAME_PLAYER_PIECES.has(name);
+}
+
+export function crossGamePieceDefaultLimb(name: string): number | null {
+  switch (name) {
+    case 'Fist.L': return 15;
+    case 'Fist.R': return 18;
+    default: return null;
+  }
+}
+
+/* player-model-retarget.ts */
+const SEGMENT_MODEL = 0x06;
+const SEGMENT_MATRIX = 0x0d;
+const LIMB_COUNT = 21;
+
+type Vec3 = [number, number, number];
+
+type Limb = {
+    recordOffset: number;
+    translation: Vec3;
+    child: number;
+    sibling: number;
+    dlistNear: number;
+    dlistFar: number;
+};
+
+type Skeleton = {
+    hierarchyOffset: number;
+    limbTableOffset: number;
+    dlistCount: number;
+    limbs: Limb[];
+};
+
+export type RetargetExtraList = {
+    address: number;
+    defaultLimb: number;
+};
+
+function signed16(value: number) {
+    return value & 0x8000 ? value - 0x10000 : value;
+}
+
+function unsigned16(value: number) {
+    return value & 0xffff;
+}
+
+function findSkeleton(data: Uint8Array): Skeleton {
+    for (let hierarchyOffset = 0; hierarchyOffset + 12 <= data.length; hierarchyOffset += 4) {
+        const limbTableAddress = bufReadU32BE(data, hierarchyOffset);
+        if ((limbTableAddress >>> 24) !== SEGMENT_MODEL) {
+            continue;
+        }
+        if (data[hierarchyOffset + 4] !== LIMB_COUNT) {
+            continue;
+        }
+        const headerDlistCount = data[hierarchyOffset + 8];
+        if (headerDlistCount === 0 || headerDlistCount > LIMB_COUNT) {
+            continue;
+        }
+
+        const limbTableOffset = limbTableAddress & 0x00ffffff;
+        if (limbTableOffset + LIMB_COUNT * 4 > data.length) {
+            continue;
+        }
+
+        const limbs: Limb[] = [];
+        let valid = true;
+
+        for (let i = 0; i < LIMB_COUNT; ++i) {
+            const limbAddress = bufReadU32BE(data, limbTableOffset + i * 4);
+            if ((limbAddress >>> 24) !== SEGMENT_MODEL) {
+                valid = false;
+                break;
+            }
+
+            const recordOffset = limbAddress & 0x00ffffff;
+            if (recordOffset + 0x10 > data.length) {
+                valid = false;
+                break;
+            }
+
+            const child = data[recordOffset + 6];
+            const sibling = data[recordOffset + 7];
+            const dlistNear = bufReadU32BE(data, recordOffset + 8);
+            const dlistFar = bufReadU32BE(data, recordOffset + 12);
+
+            if (
+                (child !== 0xff && child >= LIMB_COUNT) ||
+                (sibling !== 0xff && sibling >= LIMB_COUNT)
+            ) {
+                valid = false;
+                break;
+            }
+
+            for (const address of [dlistNear, dlistFar]) {
+                if (
+                    address !== 0 &&
+                    (
+                        (address >>> 24) !== SEGMENT_MODEL ||
+                        (address & 0x00ffffff) >= data.length
+                    )
+                ) {
+                    valid = false;
+                    break;
+                }
+            }
+            if (!valid) {
+                break;
+            }
+
+            limbs.push({
+                recordOffset,
+                translation: [
+                    signed16(bufReadU16BE(data, recordOffset + 0)),
+                    signed16(bufReadU16BE(data, recordOffset + 2)),
+                    signed16(bufReadU16BE(data, recordOffset + 4)),
+                ],
+                child,
+                sibling,
+                dlistNear,
+                dlistFar,
+            });
+        }
+
+        if (!valid) {
+            continue;
+        }
+
+        const actualDlistCount = limbs.filter(
+            (limb) => limb.dlistNear !== 0 || limb.dlistFar !== 0
+        ).length;
+        if (actualDlistCount === 0 || actualDlistCount > LIMB_COUNT) {
+            continue;
+        }
+
+        return {
+            hierarchyOffset,
+            limbTableOffset,
+            dlistCount: actualDlistCount,
+            limbs,
+        };
+    }
+
+    throw new Error('Failed to find valid 21-limb player flex skeleton');
+}
+
+function makeParents(limbs: Limb[]) {
+    const parents = new Array<number | null>(limbs.length).fill(null);
+    const visited = new Set<number>();
+
+    function walkChain(index: number, parent: number | null) {
+        let current = index;
+
+        while (current !== 0xff) {
+            if (current < 0 || current >= limbs.length || visited.has(current)) {
+                return;
+            }
+
+            visited.add(current);
+            parents[current] = parent;
+
+            const child = limbs[current].child;
+            if (child !== 0xff) {
+                walkChain(child, current);
+            }
+
+            current = limbs[current].sibling;
+        }
+    }
+
+    walkChain(0, null);
+    return parents;
+}
+
+function globalTranslations(translations: Vec3[], parents: Array<number | null>) {
+    const out: Vec3[] = [];
+
+    for (let i = 0; i < translations.length; ++i) {
+        let x = 0;
+        let y = 0;
+        let z = 0;
+        let current: number | null = i;
+        const seen = new Set<number>();
+
+        while (current !== null) {
+            if (seen.has(current)) {
+                throw new Error('Invalid cyclic player skeleton');
+            }
+            seen.add(current);
+
+            const t = translations[current];
+            x += t[0];
+            y += t[1];
+            z += t[2];
+            current = parents[current];
+        }
+
+        out.push([x, y, z]);
+    }
+
+    return out;
+}
+
+function matrixSlotToLimb(skeleton: Skeleton) {
+    const out: number[] = [];
+
+    for (let i = 0; i < skeleton.limbs.length; ++i) {
+        const limb = skeleton.limbs[i];
+        if (limb.dlistNear !== 0 || limb.dlistFar !== 0) {
+            out.push(i);
+        }
+    }
+
+    if (out.length !== skeleton.dlistCount) {
+        throw new Error(
+            `Unexpected player skeleton display-list count: ` +
+            `${out.length} != ${skeleton.dlistCount}`
+        );
+    }
+
+    return out;
+}
+
+function matrixSlotByLimb(target: ReadonlyArray<number>) {
+    const out = new Map<number, number>();
+
+    for (let slot = 0; slot < target.length; ++slot) {
+        const limb = target[slot];
+        if (!Number.isInteger(limb) || limb < 0 || limb >= LIMB_COUNT) {
+            throw new Error(`Invalid target player matrix-slot limb ${limb}`);
+        }
+        if (out.has(limb)) {
+            throw new Error(`Duplicate target player matrix-slot limb ${limb}`);
+        }
+        out.set(limb, slot);
+    }
+
+    return out;
+}
+
+function normalizeTargetTranslations(target: ReadonlyArray<ReadonlyArray<number>>) {
+    if (target.length !== LIMB_COUNT) {
+        throw new Error(`Expected ${LIMB_COUNT} target skeleton translations, got ${target.length}`);
+    }
+
+    const out: Vec3[] = target.map((v, i) => {
+        if (v.length < 3) {
+            throw new Error(`Invalid target skeleton translation for limb ${i}`);
+        }
+        return [signed16(v[0] & 0xffff), signed16(v[1] & 0xffff), signed16(v[2] & 0xffff)];
+    });
+
+    return out;
+}
+
+export function readPlayerSkeletonTranslations(data: Uint8Array): Vec3[] {
+    return findSkeleton(data).limbs.map((limb) => [...limb.translation] as Vec3);
+}
+
+export function readPlayerSkeletonMatrixSlotLimbs(data: Uint8Array): number[] {
+    return matrixSlotToLimb(findSkeleton(data));
+}
+
+export function retargetPlayerModelBindPose(
+    input: Uint8Array,
+    targetTranslationsInput: ReadonlyArray<ReadonlyArray<number>>,
+    extraLists: RetargetExtraList[] = [],
+    targetMatrixSlotLimbs?: ReadonlyArray<number>,
+): Uint8Array {
+    const source = findSkeleton(input);
+    const sourceTranslations = source.limbs.map((limb) => [...limb.translation] as Vec3);
+    const targetTranslations = normalizeTargetTranslations(targetTranslationsInput);
+    const geometryTargetTranslations = targetTranslations.map((v) => [...v] as Vec3);
+    /* Root motion is not part of zzconvert's per-limb bind compensation. */
+    geometryTargetTranslations[0] = [...sourceTranslations[0]] as Vec3;
+    const parents = makeParents(source.limbs);
+    const sourceGlobals = globalTranslations(sourceTranslations, parents);
+    const targetGlobals = globalTranslations(geometryTargetTranslations, parents);
+    const slotToLimb = matrixSlotToLimb(source);
+    const targetSlotByLimb = targetMatrixSlotLimbs === undefined
+        ? null
+        : matrixSlotByLimb(targetMatrixSlotLimbs);
+
+    const shifts: Vec3[] = sourceGlobals.map((sourcePos, limb) => [
+        sourcePos[0] - targetGlobals[limb][0],
+        sourcePos[1] - targetGlobals[limb][1],
+        sourcePos[2] - targetGlobals[limb][2],
+    ]);
+
+    type VertexUse = {
+        commandOffset: number;
+        sourceOffset: number;
+        length: number;
+        shift: Vec3;
+    };
+
+    const vertexUses: VertexUse[] = [];
+    const commandUse = new Map<number, string>();
+    const matrixSlotPatches = new Map<number, number>();
+    const recursion = new Set<string>();
+
+    function processList(address: number, initialLimb: number): number {
+        if ((address >>> 24) !== SEGMENT_MODEL) {
+            return initialLimb;
+        }
+
+        let currentLimb = initialLimb;
+        let offset = address & 0x00ffffff;
+        const recursionKey = `${offset}:${initialLimb}`;
+
+        if (recursion.has(recursionKey)) {
+            return currentLimb;
+        }
+        recursion.add(recursionKey);
+
+        for (let commandCount = 0; commandCount < 0x10000; ++commandCount) {
+            if (offset + 8 > input.length) {
+                throw new Error(`Player display list runs out of range at 0x${offset.toString(16)}`);
+            }
+
+            const op = input[offset];
+            const target = bufReadU32BE(input, offset + 4);
+
+            if (op === 0xda && (target >>> 24) === SEGMENT_MATRIX) {
+                const matrixOffset = target & 0x00ffffff;
+                if ((matrixOffset & 0x3f) === 0) {
+                    const slot = matrixOffset >>> 6;
+                    if (slot < slotToLimb.length) {
+                        currentLimb = slotToLimb[slot];
+                        if (targetSlotByLimb !== null) {
+                            const targetSlot = targetSlotByLimb.get(currentLimb);
+                            if (targetSlot === undefined) {
+                                throw new Error(
+                                    `Target player skeleton has no matrix slot for source limb ${currentLimb}`
+                                );
+                            }
+
+                            const previous = matrixSlotPatches.get(offset);
+                            if (previous !== undefined && previous !== targetSlot) {
+                                throw new Error(
+                                    `Cross-game matrix command 0x${offset.toString(16)} ` +
+                                    `maps to incompatible target slots`
+                                );
+                            }
+                            matrixSlotPatches.set(offset, targetSlot);
+                        }
+                    }
+                }
+            } else if (op === 0x01 && (target >>> 24) === SEGMENT_MODEL) {
+                const length = bufReadU16BE(input, offset + 1);
+                const sourceOffset = target & 0x00ffffff;
+
+                if (length === 0 || (length & 0x0f) !== 0 || sourceOffset + length > input.length) {
+                    throw new Error(`Invalid player vertex load at 0x${offset.toString(16)}`);
+                }
+
+                const shift = shifts[currentLimb];
+                const useKey = `${sourceOffset}:${length}:${shift[0]}:${shift[1]}:${shift[2]}`;
+                const previous = commandUse.get(offset);
+
+                if (previous !== undefined && previous !== useKey) {
+                    throw new Error(
+                        `Cross-game model reuses display-list command 0x${offset.toString(16)} with incompatible limb matrices`,
+                    );
+                }
+
+                if (previous === undefined) {
+                    commandUse.set(offset, useKey);
+                    vertexUses.push({ commandOffset: offset, sourceOffset, length, shift });
+                }
+            } else if (op === 0xde && (target >>> 24) === SEGMENT_MODEL) {
+                currentLimb = processList(target, currentLimb);
+
+                if (input[offset + 1] === 0x01) {
+                    break;
+                }
+            } else if (op === 0xdf) {
+                break;
+            }
+
+            offset += 8;
+        }
+
+        recursion.delete(recursionKey);
+        return currentLimb;
+    }
+
+    for (let limbIndex = 0; limbIndex < source.limbs.length; ++limbIndex) {
+        const limb = source.limbs[limbIndex];
+        const lists = new Set<number>();
+
+        if (limb.dlistNear !== 0) lists.add(limb.dlistNear);
+        if (limb.dlistFar !== 0) lists.add(limb.dlistFar);
+
+        for (const address of lists) {
+            processList(address, limbIndex);
+        }
+    }
+
+    for (const extra of extraLists) {
+        if (extra.address !== 0) {
+            processList(extra.address, extra.defaultLimb);
+        }
+    }
+
+    const cloneOffsets = new Map<string, number>();
+    const cloneBlocks: Array<{ offset: number; sourceOffset: number; length: number; shift: Vec3 }> = [];
+    let outputLength = (input.length + 0x0f) & ~0x0f;
+
+    for (const use of vertexUses) {
+        const { shift } = use;
+        if (shift[0] === 0 && shift[1] === 0 && shift[2] === 0) {
+            continue;
+        }
+
+        const key = `${use.sourceOffset}:${use.length}:${shift[0]}:${shift[1]}:${shift[2]}`;
+        if (!cloneOffsets.has(key)) {
+            if (outputLength + use.length >= 0x01000000) {
+                throw new Error('Cross-game player model exceeds segment 0x06 address space');
+            }
+
+            cloneOffsets.set(key, outputLength);
+            cloneBlocks.push({
+                offset: outputLength,
+                sourceOffset: use.sourceOffset,
+                length: use.length,
+                shift,
+            });
+            outputLength = (outputLength + use.length + 0x0f) & ~0x0f;
+        }
+    }
+
+    const output = new Uint8Array(outputLength);
+    output.set(input);
+
+    for (const [commandOffset, targetSlot] of matrixSlotPatches) {
+        bufWriteU32BE(
+            output,
+            commandOffset + 4,
+            (SEGMENT_MATRIX << 24) | (targetSlot << 6),
+        );
+    }
+
+    for (const block of cloneBlocks) {
+        output.set(input.subarray(block.sourceOffset, block.sourceOffset + block.length), block.offset);
+
+        for (let i = 0; i < block.length; i += 0x10) {
+            const vertexOffset = block.offset + i;
+            const x = signed16(bufReadU16BE(output, vertexOffset + 0)) + block.shift[0];
+            const y = signed16(bufReadU16BE(output, vertexOffset + 2)) + block.shift[1];
+            const z = signed16(bufReadU16BE(output, vertexOffset + 4)) + block.shift[2];
+
+            if (x < -0x8000 || x > 0x7fff || y < -0x8000 || y > 0x7fff || z < -0x8000 || z > 0x7fff) {
+                throw new Error('Cross-game player vertex translation overflows s16');
+            }
+
+            bufWriteU16BE(output, vertexOffset + 0, unsigned16(x));
+            bufWriteU16BE(output, vertexOffset + 2, unsigned16(y));
+            bufWriteU16BE(output, vertexOffset + 4, unsigned16(z));
+        }
+    }
+
+    for (const use of vertexUses) {
+        const { shift } = use;
+        if (shift[0] === 0 && shift[1] === 0 && shift[2] === 0) {
+            continue;
+        }
+
+        const key = `${use.sourceOffset}:${use.length}:${shift[0]}:${shift[1]}:${shift[2]}`;
+        const cloneOffset = cloneOffsets.get(key);
+        if (cloneOffset === undefined) {
+            throw new Error('Internal cross-game vertex relocation failure');
+        }
+
+        bufWriteU32BE(output, use.commandOffset + 4, 0x06000000 | cloneOffset);
+    }
+
+    for (let i = 0; i < source.limbs.length; ++i) {
+        const recordOffset = source.limbs[i].recordOffset;
+        bufWriteU16BE(output, recordOffset + 0, unsigned16(targetTranslations[i][0]));
+        bufWriteU16BE(output, recordOffset + 2, unsigned16(targetTranslations[i][1]));
+        bufWriteU16BE(output, recordOffset + 4, unsigned16(targetTranslations[i][2]));
+    }
+
+    return output;
+}
+
+/* player-model-compactor.ts */
 export type PlayerModelByteRange = {
   start: number;
   end: number;
@@ -1717,6 +3206,16 @@ export class PlayerModelGraphCompactor {
 
       for (const [address, pairs] of groups) {
         if (this.segmentOffset(address) < this.preserveBefore) {
+          continue;
+        }
+        /* A protected root is expected to remain visually exact. CI8 and
+         * downsampling already honor root protection; do the same for IA/I
+         * reductions so imported equipment cannot be altered by a pressure
+         * pass. */
+        if (this.textureReferences.some(ref =>
+            ref.address === address &&
+            (this.protectedLists.has(ref.listOffset) ||
+             this.dimensionProtectedLists.has(ref.listOffset)))) {
           continue;
         }
         const first = pairs[0];

@@ -1,8 +1,8 @@
 import { bufReadU16BE, bufReadU32BE, bufWriteU16BE, bufWriteU32BE } from '../util/buffer';
-import { OOT_LINK_ADULT_OFFSETS, OOT_LINK_CHILD_OFFSETS } from './model';
-import { PlayerModelGraphCompactor } from './player-model-compactor.ts';
-import { crossGamePieceDefaultLimb, isCrossGamePlayerPiece } from './player-model-compat.ts';
-import { readPlayerSkeletonMatrixSlotLimbs, retargetPlayerModelBindPose, type RetargetExtraList } from './player-model-retarget';
+import { OOT_LINK_ADULT_OFFSETS, OOT_LINK_CHILD_OFFSETS } from './player-model';
+import { PlayerModelGraphCompactor } from './player-model';
+import { crossGamePieceDefaultLimb, isCrossGamePlayerPiece } from './player-model';
+import { readPlayerSkeletonMatrixSlotLimbs, retargetPlayerModelBindPose, type RetargetExtraList } from './player-model';
 
 export type OotModelAge = 'adult' | 'child';
 
@@ -742,11 +742,14 @@ function collectPlayerSkeletonForCompaction(
       const address = bufReadU32BE(limb, pointerOffset);
 
       if (address !== 0 && (address >>> 24) === 0x06) {
-        const preserveImportantTextures = i >= 10 && i <= 12;
-
+        /*
+         * Never apply lossy texture pressure to custom OoT body limbs.
+         * Large player models are allowed to relocate instead of shrinking
+         * individual body textures and producing visible UV/stretch artifacts.
+         */
         graph.addDisplayListRoot(address, {
-          preserveCi8: preserveImportantTextures,
-          preserveTextureDimensions: preserveImportantTextures,
+          preserveCi8: true,
+          preserveTextureDimensions: true,
         });
       }
     }
@@ -768,6 +771,7 @@ function buildOotCompactionAttempt(
   age: OotModelAge,
   maxSize: number,
   replacedPieces: string[],
+  preservedEquipment: ReadonlySet<string>,
   aggressiveTextures = false,
   downsampleTextureLevels = 0,
   downsampleMinBytes = 0x400,
@@ -792,12 +796,9 @@ function buildOotCompactionAttempt(
     downsampleTextureLevels,
     downsampleMinBytes,
     geometryPositionStep: 0,
-    allowProtectedCi4UpToBytes:
-      !quantizeCi8ToCi4
-        ? 0
-        : aggressiveTextures
-          ? Number.MAX_SAFE_INTEGER
-          : 0x200,
+    /* Imported equipment is marked protected below; never override that
+     * protection just because a pressure pass is active. */
+    allowProtectedCi4UpToBytes: 0,
 
     deduplicate: true,
     packIntoPreservedHoles: false,
@@ -821,14 +822,13 @@ function buildOotCompactionAttempt(
     }
 
     const target = bufReadU32BE(source, entry + 4);
-    const preserveImportantTextures =
-      name === 'Limb 10' ||
-      name === 'Limb 11' ||
-      name === 'Limb 12';
+    const protectEquipment = preservedEquipment.has(name);
+    const protectBodyTexture = isCrossGamePlayerPiece(name);
 
     graph.addDisplayListRoot(target, {
-      preserveCi8: preserveImportantTextures,
-      preserveTextureDimensions: preserveImportantTextures,
+      preserveCi8: protectEquipment || protectBodyTexture,
+      preserveTextureDimensions: protectEquipment || protectBodyTexture,
+      preserveGeometry: protectEquipment,
     });
 
     pieceTargets.set(name, { entry, target });
@@ -931,127 +931,31 @@ export function compactOotPlayerModel(
   preserveEquipmentPieces: Iterable<string> = [],
 ): PreparedOotModel {
   const preserve = new Set(preserveEquipmentPieces);
-
   const vanillaEquipment = ootVanillaEquipmentPieces(age)
     .filter((name) => !preserve.has(name));
-  let best: OotCompactionAttempt;
-  const lossless = buildOotCompactionAttempt(
+
+  /*
+   * OoT's old pressure ladder progressively downsampled or CI4-quantized
+   * whatever body texture was still unprotected. That made large models look
+   * correct in one area only for the distortion to move to another limb.
+   *
+   * Keep the graph compaction itself (dedupe, reachability packing, vanilla
+   * equipment fallback), but stop after the lossless attempt. If it is larger
+   * than the vanilla object envelope the caller already relocates the object,
+   * and the retired original object is not packed again.
+   */
+  return buildOotCompactionAttempt(
     prepared,
     vanilla,
     age,
     maxSize,
     vanillaEquipment,
+    preserve,
     false,
     0,
     0x400,
     false,
-  );
-
-  best = lossless;
-
-  if (lossless.usedSize <= maxSize) {
-    return lossless.model;
-  }
-  const nonCi4PressurePasses = [
-    [1, 0x1000],
-    [1, 0x400],
-    [1, 0x100],
-    [2, 0x1000],
-    [2, 0x400],
-    [2, 0x100],
-  ] as const;
-
-  for (const [levels, minBytes] of nonCi4PressurePasses) {
-    const downsampled = buildOotCompactionAttempt(
-      prepared,
-      vanilla,
-      age,
-      maxSize,
-      vanillaEquipment,
-      false,
-      levels,
-      minBytes,
-      false,
-    );
-
-    if (downsampled.usedSize < best.usedSize) {
-      best = downsampled;
-    }
-
-    if (downsampled.usedSize <= maxSize) {
-      return downsampled.model;
-    }
-  }
-  const ci4 = buildOotCompactionAttempt(
-    prepared,
-    vanilla,
-    age,
-    maxSize,
-    vanillaEquipment,
-    false,
-    0,
-    0x400,
-    true,
-  );
-
-  if (ci4.usedSize < best.usedSize) {
-    best = ci4;
-  }
-
-  if (ci4.usedSize <= maxSize) {
-    return ci4.model;
-  }
-
-  const aggressiveCi4 = buildOotCompactionAttempt(
-    prepared,
-    vanilla,
-    age,
-    maxSize,
-    vanillaEquipment,
-    true,
-    0,
-    0x400,
-    true,
-  );
-
-  if (aggressiveCi4.usedSize < best.usedSize) {
-    best = aggressiveCi4;
-  }
-
-  if (aggressiveCi4.usedSize <= maxSize) {
-    return aggressiveCi4.model;
-  }
-  const aggressivePressurePasses = [
-    [1, 0x1000],
-    [1, 0x400],
-    [1, 0x100],
-    [2, 0x1000],
-    [2, 0x400],
-    [2, 0x100],
-  ] as const;
-
-  for (const [levels, minBytes] of aggressivePressurePasses) {
-    const downsampled = buildOotCompactionAttempt(
-      prepared,
-      vanilla,
-      age,
-      maxSize,
-      vanillaEquipment,
-      true,
-      levels,
-      minBytes,
-      true,
-    );
-
-    if (downsampled.usedSize < best.usedSize) {
-      best = downsampled;
-    }
-
-    if (downsampled.usedSize <= maxSize) {
-      return downsampled.model;
-    }
-  }
-  return best.model;
+  ).model;
 }
 
 

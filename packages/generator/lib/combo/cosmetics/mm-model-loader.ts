@@ -1,9 +1,9 @@
 import { bufReadU32BE, bufWriteU32BE } from '../util/buffer';
-import { OOT_LINK_ADULT_OFFSETS, OOT_LINK_CHILD_OFFSETS } from './model';
+import { OOT_LINK_ADULT_OFFSETS, OOT_LINK_CHILD_OFFSETS } from './player-model';
 import { ObjectEditor } from '../custom/object-editor';
-import { PlayerModelGraphCompactor } from './player-model-compactor';
-import { crossGamePieceDefaultLimb, isCrossGamePlayerPiece } from './player-model-compat.ts';
-import { readPlayerSkeletonMatrixSlotLimbs, readPlayerSkeletonTranslations, retargetPlayerModelBindPose, type RetargetExtraList } from './player-model-retarget';
+import { PlayerModelGraphCompactor } from './player-model';
+import { crossGamePieceDefaultLimb, isCrossGamePlayerPiece } from './player-model';
+import { readPlayerSkeletonMatrixSlotLimbs, readPlayerSkeletonTranslations, retargetPlayerModelBindPose, type RetargetExtraList } from './player-model';
 
 export type MmModelAge = 'adult' | 'child';
 
@@ -1002,6 +1002,7 @@ function buildMmCompactionAttempt(
   age: MmModelAge,
   maxSize: number | undefined,
   replacedPieces: string[],
+  preservedEquipment: ReadonlySet<string>,
   aggressiveTextures = false,
   downsampleTextureLevels = 0,
   downsampleMinBytes = 0x400,
@@ -1042,10 +1043,8 @@ function buildMmCompactionAttempt(
     downsampleMinDimension,
     downsampleTargetBytesToSave,
     geometryPositionStep,
-    allowProtectedCi4UpToBytes:
-      aggressiveTextures && bodyTexturePolicy === 'allow-all'
-        ? Number.MAX_SAFE_INTEGER
-        : 0,
+    /* Protected roots (notably imported equipment) are never format-reduced. */
+    allowProtectedCi4UpToBytes: 0,
     deduplicate: true,
     packIntoPreservedHoles: expression.mode !== 'none',
     reservedPreservedRanges: expressionLayout.ranges,
@@ -1065,13 +1064,17 @@ function buildMmCompactionAttempt(
 
     const target = bufReadU32BE(source, entry + 4);
     const isBodyPiece = isCrossGamePlayerPiece(name);
+    const protectEquipment = preservedEquipment.has(name);
     graph.addDisplayListRoot(target, {
+      preserveCi8: protectEquipment,
       preserveTextureDimensions:
-        isBodyPiece
+        protectEquipment ||
+        (isBodyPiece
           ? protectMmBodyPieceDimensions(bodyTexturePolicy, name)
-          : bodyTexturePolicy === 'body-only-preserve-face',
+          : bodyTexturePolicy === 'body-only-preserve-face'),
       preserveGeometry:
-        isBodyPiece && (name === 'Limb 10' || name === 'Limb 11' || name === 'Limb 12'),
+        protectEquipment ||
+        (isBodyPiece && (name === 'Limb 10' || name === 'Limb 11' || name === 'Limb 12')),
     });
     sourceTargets.set(name, target);
   }
@@ -1386,6 +1389,7 @@ export function compactMmPlayerModel(
     age,
     undefined,
     vanillaEquipment,
+    preserve,
     false,
     0,
     0x400,
@@ -1412,6 +1416,7 @@ export function compactMmPlayerModel(
     age,
     undefined,
     vanillaEquipment,
+    preserve,
     false,
     0,
     0x400,

@@ -1,9 +1,8 @@
-import { ObjectEditor } from '../custom/object-editor';
 import { bufReadU32BE, bufWriteU32BE } from '../util/buffer';
-import { OOT_LINK_ADULT_OFFSETS, OOT_LINK_CHILD_OFFSETS } from './model';
+import { OOT_LINK_ADULT_OFFSETS, OOT_LINK_CHILD_OFFSETS } from './player-model';
 import { MM_LINK_OFFSETS } from './mm-model-loader';
-import { PlayerModelGraphCompactor } from './player-model-compactor';
-import { classifyPlayerModel, isPlayerModelPak, readPakZobjs } from './model-pak';
+import { PlayerModelGraphCompactor } from './player-model';
+import { classifyPlayerModel, isPlayerModelPak, readPakZobjs } from './player-model';
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -17,6 +16,210 @@ const SEG_SOURCE = 0x06;
 const SEG_PLAYER = 0x06;
 const SEG_MM_KEEP = 0x04;
 const BASE = 0x06000000;
+
+class EquipmentObjectEditor {
+  private readonly segments = new Map<number, Uint8Array>();
+  private readonly seenLists = new Map<number, number>();
+  private readonly seenData = new Map<string, number>();
+  private readonly chunks: Uint8Array[] = [];
+  private outSize = 0;
+
+  constructor(
+    private readonly outSegment: number,
+    private readonly outBase: number,
+  ) {}
+
+  loadSegment(segment: number, data: Uint8Array | null) {
+    if (data === null) this.segments.delete(segment);
+    else this.segments.set(segment, data);
+  }
+
+  private outputAddress() {
+    return ((this.outSegment << 24) | (this.outBase + this.outSize)) >>> 0;
+  }
+
+  private append(data: Uint8Array) {
+    const address = this.outputAddress();
+    const copy = new Uint8Array(data);
+    this.chunks.push(copy);
+    this.outSize += copy.length;
+    const padding = (-this.outSize) & 0x0f;
+    if (padding) {
+      this.chunks.push(new Uint8Array(padding));
+      this.outSize += padding;
+    }
+    return address;
+  }
+
+  private segmentData(address: number, size?: number) {
+    const segment = address >>> 24;
+    const offset = address & 0x00ffffff;
+    const source = this.segments.get(segment);
+    if (!source || offset > source.length) return null;
+    if (size === undefined) return source.subarray(offset);
+    if (offset + size > source.length) {
+      throw new Error(
+        `Equipment pointer 0x${address.toString(16)}+0x${size.toString(16)} is out of range`
+      );
+    }
+    return source.subarray(offset, offset + size);
+  }
+
+  private listSize(address: number) {
+    const data = this.segmentData(address);
+    if (!data) return 0;
+    for (let size = 8; size <= data.length; size += 8) {
+      const word = bufReadU32BE(data, size - 8);
+      const op = word >>> 24;
+      const op2 = (word >>> 16) & 0xff;
+      if (op === 0xdf || (op === 0xde && op2 === 0x01)) return size;
+    }
+    throw new Error(`Unterminated equipment display list at 0x${address.toString(16)}`);
+  }
+
+  private listData(address: number) {
+    const size = this.listSize(address);
+    return size ? this.segmentData(address, size) : null;
+  }
+
+  private copy(address: number, size: number) {
+    const key = `${address >>> 0}:${size}`;
+    const cached = this.seenData.get(key);
+    if (cached !== undefined) return cached;
+    const data = this.segmentData(address, size);
+    if (!data) return address;
+    const output = this.append(data);
+    this.seenData.set(key, output);
+    return output;
+  }
+
+  private textureByteLength(list: Uint8Array, command: number) {
+    const setImage = bufReadU32BE(list, command);
+    const sizeCode = (setImage >>> 19) & 3;
+    const bpp = [4, 8, 16, 32][sizeCode];
+    const scanEnd = Math.min(list.length, command + 0x80);
+
+    for (let offset = command + 8; offset + 8 <= scanEnd; offset += 8) {
+      const op = list[offset];
+      if (op === 0xfd) break;
+      if (op === 0xf3) {
+        const load = bufReadU32BE(list, offset + 4);
+        const lrs = (load >>> 12) & 0x0fff;
+        return Math.max(Math.ceil(((lrs + 1) * bpp) / 8), 8);
+      }
+    }
+
+    let renderSizeCode = sizeCode;
+    for (let offset = command + 8; offset + 8 <= scanEnd; offset += 8) {
+      const op = list[offset];
+      if (op === 0xfd) break;
+      if (op === 0xf5) {
+        renderSizeCode = (bufReadU32BE(list, offset) >>> 19) & 3;
+      }
+      if (op === 0xf2) {
+        const dimensions = bufReadU32BE(list, offset + 4);
+        const rawWidth = (dimensions >>> 12) & 0x0fff;
+        const rawHeight = dimensions & 0x0fff;
+        if ((rawWidth & 3) === 0 && (rawHeight & 3) === 0) {
+          const width = (rawWidth >>> 2) + 1;
+          const height = (rawHeight >>> 2) + 1;
+          const renderBpp = [4, 8, 16, 32][renderSizeCode];
+          return Math.max(Math.ceil((width * height * renderBpp) / 8), 8);
+        }
+      }
+    }
+
+    throw new Error(
+      `Unable to determine equipment texture size at display-list offset 0x${command.toString(16)}`
+    );
+  }
+
+  private paletteByteLength(list: Uint8Array, command: number) {
+    const scanEnd = Math.min(list.length, command + 0x80);
+    for (let offset = command + 8; offset + 8 <= scanEnd; offset += 8) {
+      const op = list[offset];
+      if (op === 0xfd) break;
+      if (op === 0xf0) {
+        const count = ((bufReadU32BE(list, offset + 4) >>> 14) & 0x03ff) + 1;
+        return count * 2;
+      }
+    }
+    throw new Error(
+      `Unable to determine equipment palette size at display-list offset 0x${command.toString(16)}`
+    );
+  }
+
+  processListAddr(address: number): number {
+    const cached = this.seenLists.get(address >>> 0);
+    if (cached !== undefined) return cached;
+    const data = this.listData(address);
+    if (!data) return address;
+    const output = this.processList(data);
+    this.seenLists.set(address >>> 0, output);
+    return output;
+  }
+
+  processList(input: Uint8Array): number {
+    const list = new Uint8Array(input);
+
+    for (let offset = 0; offset + 8 <= list.length; offset += 8) {
+      const word = bufReadU32BE(list, offset);
+      const op = word >>> 24;
+      const address = bufReadU32BE(list, offset + 4);
+
+      if (op === 0x01) {
+        const count = (word >>> 12) & 0xff;
+        if (count) {
+          bufWriteU32BE(list, offset + 4, this.copy(address, count * 0x10));
+        }
+      } else if (op === 0xda) {
+        bufWriteU32BE(list, offset + 4, this.copy(address, 0x40));
+      } else if (op === 0xde) {
+        bufWriteU32BE(list, offset + 4, this.processListAddr(address));
+      } else if (op === 0xfd && offset + 16 <= list.length) {
+        const nextOp = list[offset + 8];
+        if (nextOp === 0xf5) {
+          bufWriteU32BE(
+            list,
+            offset + 4,
+            this.copy(address, this.textureByteLength(list, offset)),
+          );
+        } else if (nextOp === 0xe8) {
+          bufWriteU32BE(
+            list,
+            offset + 4,
+            this.copy(address, this.paletteByteLength(list, offset)),
+          );
+        }
+      }
+    }
+
+    return this.append(list);
+  }
+
+  combineListsAddrs(lists: number[]) {
+    const data = new Uint8Array(lists.length * 8);
+    for (let i = 0; i < lists.length; ++i) {
+      bufWriteU32BE(
+        data,
+        i * 8,
+        (0xde000000 | (i === lists.length - 1 ? 0x00010000 : 0)) >>> 0,
+      );
+      bufWriteU32BE(data, i * 8 + 4, lists[i]);
+    }
+    return data;
+  }
+
+  build() {
+    const data = new Uint8Array(this.outSize);
+    let offset = 0;
+    for (const chunk of this.chunks) {
+      data.set(chunk, offset);
+      offset += chunk.length;
+    }
+    return { data };
+  }
+}
 
 export type EquipmentGame = 'oot' | 'mm';
 export type EquipmentFamily = 'sword' | 'shield' | 'equipment';
@@ -703,7 +906,7 @@ function applyActionsGrouped(
 
   for (const [sourceData, group] of groups) {
     const base = align16(out.length);
-    const editor = new ObjectEditor(outSegment, base);
+    const editor = new EquipmentObjectEditor(outSegment, base);
     editor.loadSegment(SEG_SOURCE, sourceData);
 
     const imported = new Map<string, number>();
@@ -732,6 +935,15 @@ function applyActionsGrouped(
     out = expanded;
 
     for (const { action, address } of writes) {
+      if (address !== 0 && (address >>> 24) === outSegment) {
+        const offset = address & 0x00ffffff;
+        if (offset < base || offset >= base + built.length) {
+          throw new Error(
+            `Imported equipment root 0x${address.toString(16)} is outside its appended range ` +
+            `0x${base.toString(16)}..0x${(base + built.length).toString(16)}`
+          );
+        }
+      }
       const slot = action.slot;
       if (processed) {
         if (slot.lut === undefined) {
@@ -818,7 +1030,10 @@ function compactMmGameplayKeepTail(
 
   const graph = new PlayerModelGraphCompactor(source, preserveBefore, {
     segment: SEG_MM_KEEP,
-    quantizeCi8ToCi4: true,
+    /* Equipment imports must stay byte/texture-format exact. This tail pass is
+     * only for graph packing/deduplication; lossy CI8 -> CI4 conversion can
+     * corrupt custom palettes and is not needed here. */
+    quantizeCi8ToCi4: false,
     reduceIntensityTextures: false,
     downsampleTextureLevels: 0,
     deduplicate: true,
@@ -832,7 +1047,11 @@ function compactMmGameplayKeepTail(
     if (raw === undefined || raw < 0 || raw + 8 > source.length) continue;
     const address = bufReadU32BE(source, raw + 4);
     if (address !== 0 && (address >>> 24) === SEG_MM_KEEP) {
-      graph.addDisplayListRoot(address);
+      graph.addDisplayListRoot(address, {
+        preserveCi8: true,
+        preserveTextureDimensions: true,
+        preserveGeometry: true,
+      });
       roots.push({ slot: action.slot, address });
     }
   }

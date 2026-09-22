@@ -3,13 +3,74 @@
 #include <combo/common/scene.h>
 #include <combo/common/cosmetics.h>
 
-#define MM_OBJECT_BANK_EXTRA 0x00020000u
-
 static EntranceTableEntry defaultEntrance = {
     0, /* Southern Swamp (Clear) */
     0, /* From Road to Southern Swamp */
     TRANS_TYPE_FADE_BLACK
 };
+
+#define MM_OBJECT_BANK_EXTRA_MAX 0x0005E800u
+
+u32 gMmVanillaLinkChildSize;
+EXPORT_SYMBOL(MM_VANILLA_LINK_CHILD_SIZE, gMmVanillaLinkChildSize);
+
+static u32 Object_AlignSize(u32 size)
+{
+    return ALIGN16(size);
+}
+
+static u32 Object_GetHumanReserveSize(void)
+{
+    u32 childSize;
+    u32 adultSize;
+
+    childSize = Object_AlignSize(
+        comboLoadObject(NULL, OBJECT_LINK_CHILD)
+    );
+
+    adultSize = Object_AlignSize(
+        comboLoadObject(NULL, CUSTOM_OBJECT_ID_MM_ADULT_LINK)
+    );
+
+    return childSize > adultSize ? childSize : adultSize;
+}
+
+static u32 Object_GetDynamicExtraSize(void)
+{
+    u32 vanillaSize;
+    u32 reserveSize;
+    u32 extraSize;
+
+    vanillaSize = Object_AlignSize(gMmVanillaLinkChildSize);
+
+    if (!vanillaSize)
+    {
+        Fault_AddHungupAndCrashImpl(
+            "Missing vanilla Link size",
+            "Object_GetDynamicExtraSize"
+        );
+        return MM_OBJECT_BANK_EXTRA_MAX;
+    }
+
+    reserveSize = Object_GetHumanReserveSize();
+
+    if (reserveSize <= vanillaSize)
+        return 0;
+
+    extraSize = reserveSize - vanillaSize;
+
+    if (extraSize > MM_OBJECT_BANK_EXTRA_MAX)
+    {
+        Fault_AddHungupAndCrashImpl(
+            "MM object bank extra too large",
+            "Object_GetDynamicExtraSize"
+        );
+
+        return MM_OBJECT_BANK_EXTRA_MAX;
+    }
+
+    return extraSize;
+}
 
 static u32 Object_GetExpandedSpaceSize(s16 sceneId)
 {
@@ -37,7 +98,7 @@ static u32 Object_GetExpandedSpaceSize(s16 sceneId)
         break;
     }
 
-    return size + MM_OBJECT_BANK_EXTRA;
+    return size + Object_GetDynamicExtraSize();
 }
 
 static int Object_CheckBankRange(ObjectContext* objectCtx, const void* start, u32 size, const char* where)
@@ -61,17 +122,12 @@ static int Object_CheckBankRange(ObjectContext* objectCtx, const void* start, u3
 
 static u32 Object_GetPersistentReserveSize(s16 id, u32 objectSize)
 {
-    u32 adultSize;
+    if (id == OBJECT_LINK_CHILD)
+        return Object_GetHumanReserveSize();
 
-    if (id != OBJECT_LINK_CHILD)
-        return objectSize;
-
-    adultSize = comboLoadObject(NULL, CUSTOM_OBJECT_ID_MM_ADULT_LINK);
-    if (adultSize > objectSize)
-        return adultSize;
-
-    return objectSize;
+    return Object_AlignSize(objectSize);
 }
+
 static uintptr_t Object_GetSlotLimit(ObjectContext* objectCtx, s32 slot)
 {
     uintptr_t start;
@@ -122,36 +178,29 @@ s32 Object_SpawnPersistentCustom(ObjectContext* objectCtx, s16 id)
 {
     u32 size;
     u32 reserveSize;
-    void* segment;
+    s32 slot;
 
-    if (objectCtx->num >= ARRAY_COUNT(objectCtx->slots))
+    slot = objectCtx->num;
+
+    objectCtx->slots[slot].id = id;
+
+    size = comboLoadObject(
+        objectCtx->slots[slot].segment,
+        id
+    );
+
+    reserveSize = Object_GetPersistentReserveSize(
+        id,
+        size
+    );
+
+    if (slot < ARRAY_COUNT(objectCtx->slots) - 1)
     {
-        Fault_AddHungupAndCrashImpl("MM object slot overflow", "Object_SpawnPersistent");
-        return -1;
-    }
-
-    segment = objectCtx->slots[objectCtx->num].segment;
-    size = comboLoadObject(NULL, id);
-    reserveSize = Object_GetPersistentReserveSize(id, size);
-
-    if (!Object_CheckBankRange(
-            objectCtx,
-            segment,
-            reserveSize,
-            "Object_SpawnPersistent"))
-    {
-        return -1;
-    }
-
-    objectCtx->slots[objectCtx->num].id = id;
-
-    if (size != 0)
-        comboLoadObject(segment, id);
-
-    if (objectCtx->num < ARRAY_COUNT(objectCtx->slots) - 1)
-    {
-        objectCtx->slots[objectCtx->num + 1].segment =
-            (void*)ALIGN16((uintptr_t)segment + reserveSize);
+        objectCtx->slots[slot + 1].segment =
+            (void*)ALIGN16(
+                (u32)objectCtx->slots[slot].segment +
+                reserveSize
+            );
     }
 
     objectCtx->num++;
@@ -160,7 +209,7 @@ s32 Object_SpawnPersistentCustom(ObjectContext* objectCtx, s16 id)
     return objectCtx->num - 1;
 }
 
-PATCH_FUNC(0x8012f2e0, Object_SpawnPersistentCustom);
+PATCH_FUNC(0x8012F2E0, Object_SpawnPersistentCustom);
 
 void Scene_ApplyHumanAgeGameplayKeep(ObjectContext* objectCtx, s32 isAdult)
 {
@@ -362,10 +411,11 @@ PATCH_FUNC(0x8012F4FC, Object_UpdateEntriesCustom);
 
 void Object_InitContextExpanded(GameState* gameState, ObjectContext* objectCtx)
 {
-    PlayState* play = (PlayState*)gameState;
+    PlayState* play;
     u32 spaceSize;
     s32 i;
 
+    play = (PlayState*)gameState;
     spaceSize = Object_GetExpandedSpaceSize(play->sceneId);
 
     objectCtx->num = 0;
@@ -374,36 +424,18 @@ void Object_InitContextExpanded(GameState* gameState, ObjectContext* objectCtx)
     objectCtx->subKeepIndex = 0;
 
     for (i = 0; i < ARRAY_COUNT(objectCtx->slots); i++)
-    {
         objectCtx->slots[i].id = 0;
-        objectCtx->slots[i].segment = NULL;
-        objectCtx->slots[i].dmaRequest.vromAddr = 0;
-    }
 
-    objectCtx->spaceStart = objectCtx->slots[0].segment =
-        THA_AllocTailAlign16(&gameState->tha, spaceSize);
-
-    if (THA_IsCrash(&gameState->tha))
-    {
-        Fault_AddHungupAndCrashImpl("MM object bank THA overflow", "Object_InitContext");
-        return;
-    }
+    objectCtx->spaceStart = objectCtx->slots[0].segment = THA_AllocTailAlign16(&gameState->tha, spaceSize);
 
     objectCtx->spaceEnd =
-        (void*)((uintptr_t)objectCtx->spaceStart + spaceSize);
+        (void*)((uintptr_t)objectCtx->spaceStart +
+                spaceSize);
 
     objectCtx->mainKeepIndex =
         Object_SpawnPersistent(objectCtx, OBJECT_GAMEPLAY_KEEP);
 
-    if (objectCtx->mainKeepIndex < 0)
-    {
-        Fault_AddHungupAndCrashImpl("MM gameplay_keep load failed", "Object_InitContext");
-        return;
-    }
-
-    gSegments[0x04] = OS_K0_TO_PHYSICAL(
-        objectCtx->slots[objectCtx->mainKeepIndex].segment
-    );
+    gSegments[0x04] = OS_K0_TO_PHYSICAL(objectCtx->slots[objectCtx->mainKeepIndex].segment);
 }
 
 PATCH_FUNC(0x8012F3D0, Object_InitContextExpanded);

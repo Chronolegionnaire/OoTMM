@@ -592,6 +592,7 @@ function collectLocalSamples(game: Game, builder: RomBuilder, roms: Decompressed
   );
   const fonts = [...runtimeNativeFonts(game, builder, roms), ...runtimeCustomFonts(game, builder)];
   const records = new Map<string, SampleRecord>();
+  const pinnedBanks = new Set<number>();
 
   for (const font of fonts) walkFontSamples(font, (sampleOff, kind) => {
     const info = sampleInfo(font.data, sampleOff);
@@ -608,14 +609,16 @@ function collectLocalSamples(game: Game, builder: RomBuilder, roms: Decompressed
     if (logicalBank >= runtimeSamples.length)
       throw new Error(`${font.key}: ${game} sample bank ${logicalBank} out of range`);
 
-    /* Runtime-added sample banks are custom-file-backed and are compacted by
-     * their owning custom asset pass. Native Audiotable compaction must leave
-     * those sample headers alone. */
     if (logicalBank >= native.sampleEntries.length) return;
 
     const bank = resolveAudioEntry(native.sampleEntries, logicalBank);
-    if (info.sampleAddr + info.size > bank.entry.size)
+    if (info.sampleAddr + info.size > bank.entry.size) {
+      if (font.kind === 'custom') {
+        pinnedBanks.add(bank.index);
+        return;
+      }
       throw new Error(`${font.key}: sample 0x${info.sampleAddr.toString(16)}+0x${info.size.toString(16)} outside ${game} sample bank ${logicalBank}`);
+    }
 
     const absolute = bank.entry.romAddr + info.sampleAddr;
     const source: LocalSource = {
@@ -624,8 +627,6 @@ function collectLocalSamples(game: Game, builder: RomBuilder, roms: Decompressed
     };
     record.localSources.set(sourceKey(source), source);
   });
-
-  const pinnedBanks = new Set<number>();
   for (const record of records.values()) {
     const sources = [...record.localSources.values()];
     if (sources.length === 1) record.source = sources[0];
