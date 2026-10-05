@@ -8,7 +8,11 @@
 void Interface_LoadItemIconCustom(u32 vrom, s32 id, void* dst, size_t size)
 {
     DmaEntry dma;
-
+    if (id == ITEM_NONE)
+    {
+        bzero(dst, size);
+        return;
+    }
     if (id < ITEM_MM_CUSTOM_MIN)
     {
         LoadIcon(vrom, id, dst, size);
