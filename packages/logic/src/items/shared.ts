@@ -166,6 +166,11 @@ const BIGGORON_SWORDS: ItemSharedDef[] = [
     mm: Items.MM_SWORD_KNIFE,
   },
   {
+    shared: Items.SHARED_SWORD_BIGGORON,
+    oot: Items.OOT_SWORD_BIGGORON,
+    mm: Items.MM_SWORD_BIGGORON,
+  },
+  {
     shared: Items.SHARED_SWORD_GORON,
     oot: Items.OOT_SWORD_GORON,
     mm: Items.MM_SWORD_GORON,
