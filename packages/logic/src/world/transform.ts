@@ -1267,15 +1267,18 @@ class LogicPassWorldTransform {
         }
       } else {
         if (settings.sharedDekuShield) {
-          this.shareItems(SharedItemGroups.DEKU_SHIELD, 'max');
+          this.replaceItem(Items.OOT_SHIELD_DEKU, Items.SHARED_SHIELD_DEKU);
+          this.replaceItem(Items.MM_SHIELD_DEKU, Items.SHARED_SHIELD_DEKU);
         }
 
         if (settings.sharedHeroShield) {
-          this.shareItems(SharedItemGroups.HERO_SHIELD, 'max');
+          this.replaceItem(Items.OOT_SHIELD_HERO, Items.SHARED_SHIELD_HERO);
+          this.replaceItem(Items.MM_SHIELD_HERO, Items.SHARED_SHIELD_HERO);
         }
 
         if (settings.sharedHylianShield) {
-          this.shareItems(SharedItemGroups.HYLIAN_SHIELD, 'max');
+          this.replaceItem(Items.OOT_SHIELD_HYLIAN, Items.SHARED_SHIELD_HYLIAN);
+          this.replaceItem(Items.MM_SHIELD_HYLIAN, Items.SHARED_SHIELD_HYLIAN);
         }
 
         if (settings.sharedMirrorShield) {
