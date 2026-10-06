@@ -2054,8 +2054,7 @@ int Player_OverrideLimbWrapper(PlayState* play, s32 limbIndex, Gfx** dList, Vec3
 
         if (limbIndex == PLAYER_LIMB_RIGHT_HAND)
         {
-            if (player->rightHandType == PLAYER_MODELTYPE_RH_SHIELD &&
-    player->currentShield)
+            if (player->rightHandType == PLAYER_MODELTYPE_RH_SHIELD && player->currentShield)
             {
                 MmShieldId shield = MmShield_GetEquipped();
 
@@ -2070,8 +2069,10 @@ int Player_OverrideLimbWrapper(PlayState* play, s32 limbIndex, Gfx** dList, Vec3
 
                 if (shield == MM_SHIELD_HYLIAN)
                 {
+                    s32 result;
+                    result = sPlayerOverrideLimb(play, limbIndex, dList, pos, rot, unk);
                     *dList = Player_CustomEquipment(0, comboGetObject(CUSTOM_OBJECT_ID_EQ_SHIELD_HYLIAN_ADULT), CUSTOM_OBJECT_EQ_SHIELD_HYLIAN_ADULT_0);
-                    return FALSE;
+                    return result;
                 }
             }
 
