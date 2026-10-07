@@ -843,7 +843,7 @@ static void Player_OverrideCustomSheath(PlayState* play, Player* this, Gfx** dli
     }
 
     if (shieldOnBack && gSave.info.equips.equipment.shields == 1 && OotChildShield_GetEquippedVariant() == OOT_CHILD_SHIELD_HERO)
-        *dlist = Player_CustomPair(shield, sword);
+        *dlist = Player_CustomPair(sword, shield);
     else
         *dlist = Player_CustomPair(shield, sword);
 }
