@@ -1148,6 +1148,14 @@ export const SETTINGS = [{
   cond: hasMM,
   default: false
 }, {
+  key: 'pictographShuffle',
+  name: 'Pictograph Shuffle',
+  category: 'main.mm',
+  type: 'boolean',
+  description: 'Randomizes the subjects required for Pictograph Box rewards.',
+  default: false,
+  cond: hasMM,
+}, {
   key: 'ganonTrials',
   name: 'Ganon Trials',
   category: 'main.events',

@@ -67,4 +67,5 @@ export type World = {
   exprParsers: ExprParsers;
   dungeonsEntrances: Map<string, DungeonEntrance>;
   checkItems: Map<string, Item>;
+  //pictoSubjects: [0xffff, 0xffff],
 };

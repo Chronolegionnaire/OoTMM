@@ -12,6 +12,200 @@
 #define PICTOBOX_DEKU_KING      (1 << 10)
 #define PICTOBOX_PIRATE_BAD     (1 << 11)
 
+
+#include "picto_names.inc"
+
+#define PICTO_SUBJECT_NONE 0xffff
+#define PICTO_SAVED_SUBJECT_MASK 0x0000ffff
+
+static u16 sPictoPendingSubject = PICTO_SUBJECT_NONE;
+static u16 sPictoPreviousSubject = PICTO_SUBJECT_NONE;
+static u8 sPictoSubjectPending = 0;
+
+static const char* Picto_GetSubjectName(u16 subjectId)
+{
+    if (subjectId == PICTO_SUBJECT_NONE || subjectId >= ARRAY_COUNT(sPictoActorNames))
+        return "Unknown";
+
+    if (sPictoActorNames[subjectId] == NULL)
+        return "Unknown";
+
+    return sPictoActorNames[subjectId];
+}
+
+u16 Picto_GetSavedSubject(void)
+{
+    u16 value = gSave.info.pictoFlags1 & PICTO_SAVED_SUBJECT_MASK;
+    return value ? value - 1 : PICTO_SUBJECT_NONE;
+}
+
+static void Picto_SetSavedSubject(u16 subjectId)
+{
+    u32 value = subjectId == PICTO_SUBJECT_NONE ? 0 : subjectId + 1;
+    gSave.info.pictoFlags1 = (gSave.info.pictoFlags1 & ~PICTO_SAVED_SUBJECT_MASK) | value;
+}
+
+static int PictoValidateActor(PlayState* play, Actor* actor)
+{
+    u32 flags0 = gSave.info.pictoFlags0;
+    u32 flags1 = gSave.info.pictoFlags1;
+    s32 result;
+
+    result = Snap_ValidatePictograph(play, actor, 0, &actor->focus.pos, &actor->shape.rot, 10.0f, 1200.0f, -1);
+
+    gSave.info.pictoFlags0 = flags0;
+    gSave.info.pictoFlags1 = flags1;
+
+    return result == 0;
+}
+
+static u16 Picto_GetSubjectId(const Actor* actor)
+{
+    switch (actor->id)
+    {
+    case ACTOR_EN_RD:
+        if (actor->params == -2 || actor->params == -3)
+            return 0x300;
+        break;
+    case ACTOR_EN_WF:
+        if ((actor->params & 0x3f) == 0)
+            return 0x301;
+        break;
+    case ACTOR_EN_PO_COMPOSER:
+        return (actor->params & 0x8000) ? 0x302 : 0x303;
+    case ACTOR_EN_TSN:
+        if (actor->params & 0x100)
+            return (actor->params & 0xf) == 0 ? 0x304 : 0xffff;
+        break;
+    case ACTOR_EN_IN:
+        switch (actor->params & 0x1ff)
+        {
+    case 1: case 3: return 0x306;
+    case 2: case 4: return 0x305;
+        }
+        break;
+    case ACTOR_EN_RZ:
+        return (actor->params & 0x8000) ? 0x308 : 0x307;
+    case ACTOR_DM_CHAR00:
+        return actor->params == 0 ? 0x309 : actor->params == 1 ? 0x30a : 0xffff;
+    }
+    return actor->id;
+}
+
+
+static u16 Picto_CanonicalSubjectId(u16 subjectId)
+{
+    switch (subjectId)
+    {
+    case 0x2a3: return 0x176; /* Tingle */
+
+    case 0x187:
+    case 0x214: return 0x168; /* Koume */
+
+    case 0x1b7: return 0x188; /* Kotake */
+    case 0x21f: return 0x1a4; /* Romani */
+
+    case 0x299:
+    case 0x29e: return 0x202; /* Anju */
+
+    case 0x29d: return 0x262; /* Madame Aroma */
+    case 0x29f: return 0x253; /* Anju's Mother */
+    case 0x2a0: return 0x243; /* Anju's Grandmother */
+    case 0x2a2: return 0x26f; /* Mayor Dotour */
+    case 0x2a8: return 0x26c; /* Viscen */
+    case 0x2a9: return 0x26b; /* Mutoh */
+    case 0x1d5: return 0x17d; /* Postman */
+    case 0x1fa: return 0x1f7; /* Darmani */
+    case 0x1ba: return 0x144; /* Snapper */
+    case 0x304: return 0x205; /* Seahorse */
+
+    case 0x09f: return 0x21e; /* Gerudo Pirate */
+    case 0x292: return 0x1c2; /* Fisherman */
+
+    case 0x26a:
+    case 0x2ab: return 0x09c; /* Carpenter */
+
+    case 0x2aa: return 0x26d; /* Soldier */
+    case 0x2a5: return 0x0ed; /* Stalchild */
+
+    case 0x17a:
+    case 0x1a0: return 0x08a; /* Deku Guard */
+
+    case 0x24c:
+    case 0x274: return 0x1bd; /* Business Scrub */
+
+    case 0x242:
+    case 0x276: return 0x138; /* Goron */
+
+    case 0x260: return 0x228; /* Zora */
+
+    case 0x280:
+    case 0x281: return 0x27f; /* Bomber */
+    }
+
+    return subjectId;
+}
+
+static u16 Picto_RecordSubject(PlayState* play)
+{
+    Actor* actor;
+    u16 bestId = PICTO_SUBJECT_NONE;
+    f32 bestDistance = 1000000.0f;
+    s32 category;
+
+    for (category = 0; category < ACTORCAT_MAX; category++)
+    {
+        for (actor = play->actorCtx.actors[category].first; actor != NULL; actor = actor->next)
+        {
+            if (actor->id == ACTOR_PLAYER || actor->draw == NULL)
+                continue;
+
+            if (actor->id >= ARRAY_COUNT(sPictoActorNames))
+                continue;
+
+            if (sPictoActorNames[actor->id] == NULL)
+            {
+                u16 subjectId = Picto_GetSubjectId(actor);
+
+                if (subjectId == 0xffff || subjectId >= ARRAY_COUNT(sPictoActorNames))
+                    continue;
+
+                if (sPictoActorNames[subjectId] == NULL)
+                    continue;
+            }
+
+            if (!PictoValidateActor(play, actor))
+                continue;
+
+            if (actor->xzDistToPlayer < bestDistance)
+            {
+                bestDistance = actor->xzDistToPlayer;
+                bestId = Picto_CanonicalSubjectId(Picto_GetSubjectId(actor));
+            }
+        }
+    }
+
+    return bestId;
+}
+
+void Picto_UpdateSavedSubject(void)
+{
+    if (!sPictoSubjectPending)
+        return;
+
+    if (gPictoboxState == 0)
+    {
+        Picto_SetSavedSubject(sPictoPendingSubject);
+        sPictoSubjectPending = 0;
+    }
+    else if (gPictoboxState == 1)
+    {
+        Picto_SetSavedSubject(sPictoPreviousSubject);
+        sPictoSubjectPending = 0;
+    }
+}
+
+
 static const char* pictoText(void)
 {
     static const u32 luluMask = PICTOBOX_LULU1 | PICTOBOX_LULU2 | PICTOBOX_LULU3;
@@ -42,16 +236,65 @@ static const char* pictoText(void)
     return "picture";
 }
 
+static int PictoStartsWith(const char* str, const char* prefix)
+{
+    while (*prefix)
+    {
+        if (*str++ != *prefix++)
+            return 0;
+    }
+
+    return 1;
+}
+
 static void PictoHijackText(PlayState* play)
 {
     char* b;
+    const char* subject;
+    const char* name;
+
+    subject = NULL;
+
+    if (sPictoPendingSubject < ARRAY_COUNT(sPictoActorNames))
+        subject = sPictoActorNames[sPictoPendingSubject];
 
     b = play->msgCtx.font.textBuffer.schar;
     comboTextAppendHeader(&b);
+    comboTextAppendStr(&b, "Keep this picture");
 
-    comboTextAppendStr(&b, "Keep this " TEXT_COLOR_RED);
-    comboTextAppendStr(&b, pictoText());
-    comboTextAppendClearColor(&b);
+    if (subject != NULL)
+    {
+        name = subject;
+
+        name = subject;
+
+        if (PictoStartsWith(name, "of "))
+        {
+            comboTextAppendStr(&b, " of ");
+            name += 3;
+        }
+
+        if (PictoStartsWith(name, "an "))
+        {
+            comboTextAppendStr(&b, "an ");
+            name += 3;
+        }
+        else if (PictoStartsWith(name, "a "))
+        {
+            comboTextAppendStr(&b, "a ");
+            name += 2;
+        }
+        else if (PictoStartsWith(name, "the "))
+        {
+            comboTextAppendStr(&b, "the ");
+            name += 4;
+        }
+
+        comboTextAppendStr(&b, TEXT_COLOR_RED);
+        comboTextAppendStr(&b, name);
+        comboTextAppendClearColor(&b);
+    }
+
     comboTextAppendStr(&b, "?" TEXT_NL TEXT_NL TEXT_CHOICE2 TEXT_COLOR_GREEN "Yes" TEXT_NL "No" TEXT_END);
 }
 
@@ -59,7 +302,10 @@ static void PictoDisplayTextBox(PlayState* play, s16 messageId, Actor* actor)
 {
     if (gPictoboxPhotoTaken == 1)
     {
+        sPictoPreviousSubject = Picto_GetSavedSubject();
         PictoUpdateFlags(play);
+        sPictoPendingSubject = Picto_RecordSubject(play);
+        sPictoSubjectPending = 1;
     }
 
     PlayerDisplayTextBox(play, messageId, actor);
@@ -67,6 +313,46 @@ static void PictoDisplayTextBox(PlayState* play, s16 messageId, Actor* actor)
 }
 
 PATCH_CALL(0x80120c34, PictoDisplayTextBox);
+
+
+#define PICTO_SUBJECT_MAX 0x400
+#define PICTO_SUBJECT_BYTES (PICTO_SUBJECT_MAX / 8)
+
+static u8 sPictoSubjects[PICTO_SUBJECT_BYTES];
+
+void Picto_RecordSubjects(PlayState* play)
+{
+    Actor* actor;
+    s32 category;
+    s32 i;
+
+    for (i = 0; i < PICTO_SUBJECT_BYTES; i++)
+        sPictoSubjects[i] = 0;
+
+    for (category = 0; category < ACTORCAT_MAX; category++)
+    {
+        for (actor = play->actorCtx.actors[category].first; actor != NULL; actor = actor->next)
+        {
+            u16 id = actor->id;
+
+            if (id >= PICTO_SUBJECT_MAX || actor->draw == NULL)
+                continue;
+
+            if (!PictoValidateActor(play, actor))
+                continue;
+
+            sPictoSubjects[id >> 3] |= 1 << (id & 7);
+        }
+    }
+}
+
+int Picto_HasSubject(u16 subjectId)
+{
+    if (subjectId >= PICTO_SUBJECT_MAX)
+        return 0;
+
+    return (sPictoSubjects[subjectId >> 3] & (1 << (subjectId & 7))) != 0;
+}
 
 //pictograph box fix
 
@@ -136,6 +422,7 @@ void Picto_PrepareDraw(void)
     {
         if (R_PICTO_PHOTO_STATE == 1)
         {
+            Picto_RecordSubjects(gPlay);
             sPictoCaptureActive = 1;
             sPictoCaptureStarted = 0;
             sPictoCleanFrames = 3;
@@ -187,3 +474,47 @@ static void PictoDrawCoverage(PictoCoveragePreRender* prerender, Gfx** gfx)
 }
 
 PATCH_FUNC(0x80170730, PictoDrawCoverage);
+
+typedef struct
+{
+    u16 subjectId;
+    u16 actorId;
+    s16 paramsMask;
+    s16 paramsValue;
+    f32 minDistance;
+    f32 maxDistance;
+    s16 angleRange;
+} PictoSubjectDef;
+
+static int PictoSubjectMatches(const PictoSubjectDef* subject, Actor* actor)
+{
+    return actor->id == subject->actorId &&
+           (actor->params & subject->paramsMask) == subject->paramsValue;
+}
+
+#define PICTO_CHECK_TOURIST_CENTER 0
+#define PICTO_CHECK_SEAHORSE      1
+#define PICTO_CHECK_COUNT         2
+
+#define PICTO_SUBJECT_DISABLED    0xffff
+
+
+u16 Picto_GetRequiredSubject(int check)
+{
+    if (check < 0 || check >= PICTO_CHECK_COUNT)
+        return PICTO_SUBJECT_DISABLED;
+
+    return gComboConfig.pictoSubjects[check];
+}
+
+int Picto_CheckPhoto(int check)
+{
+    u16 subject = Picto_GetRequiredSubject(check);
+
+    if (subject == PICTO_SUBJECT_DISABLED)
+        return 0;
+
+    return Picto_HasSubject(subject);
+}
+
+

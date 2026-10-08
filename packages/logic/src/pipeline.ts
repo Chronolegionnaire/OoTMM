@@ -43,6 +43,7 @@ export type LogicResultWorld = {
   locations: Set<string>;
   regions: { [k: string]: string };
   dungeons: { [k: string]: Set<string> };
+  //pictoSubjects: number[];
 };
 
 export type LogicResult = {
@@ -110,6 +111,7 @@ export async function logic(monitor: Monitor, opts: Options): Promise<LogicResul
       locations: w.locations,
       regions: w.regions,
       dungeons: w.dungeons,
+      pictoSubjects: w.pictoSubjects
     }));
 
     return {

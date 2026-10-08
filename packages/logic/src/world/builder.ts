@@ -103,6 +103,7 @@ export function cloneWorld(world: World): World {
     exprParsers: world.exprParsers,
     dungeonsEntrances: new Map(world.dungeonsEntrances),
     checkItems: new Map(world.checkItems),
+    //pictoSubjects: [...world.pictoSubjects],
   };
 }
 
@@ -234,6 +235,7 @@ class LogicPassWorld {
       exprParsers,
       dungeonsEntrances: new Map,
       checkItems: new Map,
+      //pictoSubjects: new Map,
     };
   }
 

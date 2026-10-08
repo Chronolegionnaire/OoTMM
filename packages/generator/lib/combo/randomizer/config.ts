@@ -115,6 +115,7 @@ export class RandomizerPatcherConfig {
     buffers.push(toU8Buffer([BOMBCHU_BEHAVIORS[this.ctx.settings.bombchuBehaviorMm]]));
     buffers.push(toU8Buffer(this.world.songEventsOot));
     buffers.push(toU8Buffer(this.world.songEventsMm));
+    //buffers.push(toU16Buffer(this.world.pictoSubjects));
     return concatUint8Arrays(buffers);
   }
 

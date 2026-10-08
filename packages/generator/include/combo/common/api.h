@@ -836,4 +836,9 @@ s32 Snap_ValidatePictograph(PlayState* play, Actor* actor, s32 flag, Vec3f* pos,
 void EffectSsDtBubble_SpawnCustomColor(PlayState* play, Vec3f* pos, Vec3f* velocity, Vec3f* accel, Color_RGBA8* primColor, Color_RGBA8* envColor, s16 scale, s16 life, s16 randXZ);
 void Actor_SetColorFilter(Actor* actor, u16 colorFlag, u16 colorIntensityMax, u16 bufFlag, u16 duration);
 void Actor_DrawDamageEffects(PlayState* play, Actor* actor, Vec3f bodyPartsPos[], s16 bodyPartsCount, f32 effectScale, f32 frozenSteamScale, f32 effectAlpha, u8 type);
+
+u16 Picto_GetRequiredSubject(int check);
+int Picto_CheckPhoto(int check);
+void Picto_RecordSubjects(PlayState* play);
+int Picto_HasSubject(u16 subjectId);
 #endif

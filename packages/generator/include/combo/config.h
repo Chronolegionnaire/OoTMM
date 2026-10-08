@@ -58,6 +58,7 @@ typedef struct
     u8              bombchuBehaviorMm;
     u8              songEventsOot[0x12];
     u8              songEventsMm[0xd];
+    u16             pictoSubjects[2];
 }
 ComboConfig;
 
