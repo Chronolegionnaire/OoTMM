@@ -1132,11 +1132,15 @@ static int addItemBeansMm(PlayState* play, u8 itemId, s16 gi, u16 param)
 static int addItemSwordOot(PlayState* play, u8 itemId, s16 gi, u16 param)
 {
     int base;
+    int newMaster;
 
+    newMaster = param == 2 && !(gOotSave.info.inventory.equipment.swords & EQ_OOT_SWORD_MASTER);
     base = param;
     if (base > 3)
         base = 3;
     gOotSave.info.inventory.equipment.swords |= (1 << (base - 1));
+    if (param == 1 && !(Config_Flag(CFG_SHARED_CHILD_SWORDS) ? Config_Flag(CFG_MM_PROGRESSIVE_CHILD_SWORDS) : Config_Flag(CFG_OOT_PROGRESSIVE_CHILD_SWORDS)))
+        gSharedCustomSave.extraSwordsOot |= 1u << 0;
     if (param >= 3)
     {
         gOotSave.info.playerData.swordHealth = 8;
@@ -1168,10 +1172,34 @@ static int addItemSwordOot(PlayState* play, u8 itemId, s16 gi, u16 param)
     return 0;
 }
 
-static int addItemSwordMm(PlayState* play, u8 itemId, s16 gi, u16 param)
+static int mmSwordCanAutoEquipAtAge(u8 itemId, s32 age)
+{
+    ComboAgeReq req = comboGetItemAgeReqMm(itemId);
+
+    switch (req)
+    {
+    case COMBO_AGE_REQ_CHILD:
+        return age == AGE_CHILD;
+
+    case COMBO_AGE_REQ_ADULT:
+        return age == AGE_ADULT;
+
+    default:
+        return 1;
+    }
+}
+
+static int addItemChildSwordMm(PlayState* play, u8 itemId, s16 gi, u16 param)
 {
     MmSwordId sword = (MmSwordId)param;
     s32 refresh = 0;
+    if (!Config_Flag(CFG_MM_PROGRESSIVE_CHILD_SWORDS) && sword >= MM_SWORD_KOKIRI && sword <= MM_SWORD_GILDED)
+    {
+        gSharedCustomSave.mm.swords.sword |= 1u << (sword - MM_SWORD_KOKIRI);
+        if (sword == MM_SWORD_RAZOR)
+            gMmSave.info.playerData.swordHealth = 100;
+        return 0;
+    }
 
     switch (sword)
     {
@@ -1187,6 +1215,8 @@ static int addItemSwordMm(PlayState* play, u8 itemId, s16 gi, u16 param)
 
             for (s32 age = 0; age < 2; age++)
             {
+                if (!mmSwordCanAutoEquipAtAge(ITEM_MM_SWORD_RAZOR, age))
+                    continue;
                 if (gSharedCustomSave.mm.humanAgeLoadouts[age].sword == MM_SWORD_KOKIRI)
                 {
                     gSharedCustomSave.mm.humanAgeLoadouts[age].sword = MM_SWORD_RAZOR;
@@ -1196,6 +1226,7 @@ static int addItemSwordMm(PlayState* play, u8 itemId, s16 gi, u16 param)
                 }
             }
         }
+        gMmSave.info.playerData.swordHealth = 100;
         break;
 
     case MM_SWORD_GILDED:
@@ -1205,8 +1236,9 @@ static int addItemSwordMm(PlayState* play, u8 itemId, s16 gi, u16 param)
 
             for (s32 age = 0; age < 2; age++)
             {
-                if (gSharedCustomSave.mm.humanAgeLoadouts[age].sword == MM_SWORD_KOKIRI ||
-                    gSharedCustomSave.mm.humanAgeLoadouts[age].sword == MM_SWORD_RAZOR)
+                if (!mmSwordCanAutoEquipAtAge(ITEM_MM_SWORD_GILDED, age))
+                    continue;
+                if (gSharedCustomSave.mm.humanAgeLoadouts[age].sword == MM_SWORD_KOKIRI || gSharedCustomSave.mm.humanAgeLoadouts[age].sword == MM_SWORD_RAZOR)
                 {
                     gSharedCustomSave.mm.humanAgeLoadouts[age].sword = MM_SWORD_GILDED;
 
@@ -2346,10 +2378,76 @@ static int addSongOotMm(PlayState* play, u8 itemId, s16 gi, u16 param)
     return 0;
 }
 
+static s32 ootChildSwordsProgressive(void)
+{
+    if (Config_Flag(CFG_SHARED_CHILD_SWORDS))
+        return Config_Flag(CFG_MM_PROGRESSIVE_CHILD_SWORDS);
+
+    return Config_Flag(CFG_OOT_PROGRESSIVE_CHILD_SWORDS);
+}
+
+u8 OotChildSword_GetOwnedMask(void)
+{
+    u8 owned = 0;
+
+    if (!Config_Flag(CFG_OOT_EXTRA_CHILD_SWORDS) &&
+        !Config_Flag(CFG_SHARED_CHILD_SWORDS))
+    {
+        return (gOotSave.info.inventory.equipment.swords &
+                EQ_OOT_SWORD_KOKIRI) ? 1 : 0;
+    }
+
+    if (!ootChildSwordsProgressive())
+    {
+        owned = gSharedCustomSave.extraSwordsOot & 0x07;
+        if (!owned &&
+            (gOotSave.info.inventory.equipment.swords &
+             EQ_OOT_SWORD_KOKIRI))
+        {
+            owned = 1;
+            gSharedCustomSave.extraSwordsOot |= 1;
+        }
+
+        return owned;
+    }
+    if (gOotSave.info.inventory.equipment.swords &
+        EQ_OOT_SWORD_KOKIRI)
+        owned |= 0x01;
+
+    if (gSharedCustomSave.extraSwordsOot >= 1)
+        owned |= 0x02;
+
+    if (gSharedCustomSave.extraSwordsOot >= 2)
+        owned |= 0x04;
+
+    return owned;
+}
+
 static int addItemSwordExtraOot(PlayState* play, u8 itemId, s16 gi, u16 param)
 {
-    if (gSharedCustomSave.extraSwordsOot < param)
-        gSharedCustomSave.extraSwordsOot = (u8)param;
+    int progressive;
+
+    progressive = Config_Flag(CFG_SHARED_CHILD_SWORDS) ? Config_Flag(CFG_MM_PROGRESSIVE_CHILD_SWORDS) : Config_Flag(CFG_OOT_PROGRESSIVE_CHILD_SWORDS);
+
+    if (progressive)
+    {
+        if (gSharedCustomSave.extraSwordsOot < param)
+            gSharedCustomSave.extraSwordsOot = (u8)param;
+    }
+    else
+    {
+        u8 oldOwned = gSharedCustomSave.extraSwordsOot & 0x07;
+        gSharedCustomSave.extraSwordsOot |= 1u << param;
+        gOotSave.info.inventory.equipment.swords |= EQ_OOT_SWORD_KOKIRI;
+
+#if defined(GAME_OOT)
+        if (oldOwned == 0)
+        {
+            gOotChildSwordVariant = (u8)param;
+            gOotChildSwordEquippedVariant = (u8)param;
+        }
+#endif
+    }
 
 #if defined(GAME_OOT)
     if (play)
@@ -2535,7 +2633,7 @@ static const AddItemFunc kAddItemHandlers[] = {
     addItemBeansOot,
     addItemBeansMm,
     addItemSwordOot,
-    addItemSwordMm,
+    addItemChildSwordMm,
     addItemBombBagOot,
     addItemBombBagMm,
     addItemShieldOot,

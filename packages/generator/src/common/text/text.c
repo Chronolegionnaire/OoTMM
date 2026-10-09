@@ -672,21 +672,20 @@ static int isItemAmbiguous(s16 gi)
     case GI_MM_GOLDEN_GAUNTLETS:
         return (Config_Flag(CFG_MM_STRENGTH) && !Config_Flag(CFG_SHARED_STRENGTH));
     case GI_OOT_SWORD_KOKIRI:
-    case GI_MM_SWORD_KOKIRI:
-        return !Config_Flag(CFG_SHARED_CHILD_SWORDS);
     case GI_OOT_SWORD_RAZOR:
     case GI_OOT_SWORD_GILDED:
+    case GI_MM_SWORD_KOKIRI:
     case GI_MM_SWORD_RAZOR:
     case GI_MM_SWORD_GILDED:
-        return Config_Flag(CFG_OOT_EXTRA_CHILD_SWORDS) && !Config_Flag(CFG_SHARED_CHILD_SWORDS);
-    case GI_OOT_SWORD_KNIFE:
-    case GI_OOT_SWORD_BIGGORON:
+        return !Config_Flag(CFG_SHARED_CHILD_SWORDS);
     case GI_OOT_SWORD_MASTER:
     case GI_MM_SWORD_MASTER:
+        return !Config_Flag(CFG_SHARED_MASTER_SWORD);
+    case GI_OOT_SWORD_KNIFE:
+    case GI_OOT_SWORD_BIGGORON:
     case GI_MM_SWORD_KNIFE:
     case GI_MM_SWORD_BIGGORON:
-        return Config_Flag(CFG_MM_BIGGORON_SWORD)
-            && !Config_Flag(CFG_SHARED_GORON_SWORDS);
+        return !Config_Flag(CFG_SHARED_GORON_SWORDS);
     case GI_OOT_HAMMER:
     case GI_MM_HAMMER:
         return Config_Flag(CFG_MM_HAMMER) && !Config_Flag(CFG_SHARED_HAMMER);
@@ -1061,29 +1060,83 @@ void comboTextAppendItemNameEx(char** b, s16 gi, int flags, int importance)
         switch (gi)
         {
         case GI_OOT_SWORD_KOKIRI:
-            if (Config_Flag(CFG_OOT_PROGRESSIVE_SWORDS) || Config_Flag(CFG_OOT_EXTRA_CHILD_SWORDS))
+        case GI_OOT_SWORD_RAZOR:
+        case GI_OOT_SWORD_GILDED:
+            if (Config_Flag(CFG_OOT_EXTRA_CHILD_SWORDS) &&
+                (Config_Flag(CFG_SHARED_CHILD_SWORDS)
+                    ? Config_Flag(CFG_MM_PROGRESSIVE_CHILD_SWORDS)
+                    : Config_Flag(CFG_OOT_PROGRESSIVE_CHILD_SWORDS)))
             {
-                itemName = "a " TEXT_C1 "Progressive Sword";
+                itemName = "a " TEXT_C1 "Progressive Child Sword";
                 ambiguous = !Config_Flag(CFG_SHARED_CHILD_SWORDS);
             }
             break;
+        case GI_MM_SWORD_KOKIRI:
+        case GI_MM_SWORD_RAZOR:
+        case GI_MM_SWORD_GILDED:
+            if (Config_Flag(CFG_MM_PROGRESSIVE_CHILD_SWORDS))
+            {
+                itemName = "a " TEXT_C1 "Progressive Child Sword";
+                ambiguous = !Config_Flag(CFG_SHARED_CHILD_SWORDS);
+            }
+            break;
+        case GI_OOT_SWORD_MASTER:
+            if (Config_Flag(CFG_OOT_PROGRESSIVE_SWORDS))
+            {
+                itemName = "a " TEXT_C1 "Progressive Adult Sword";
+                ambiguous =
+                    !Config_Flag(CFG_SHARED_MASTER_SWORD) ||
+                    !Config_Flag(CFG_SHARED_GORON_SWORDS);
+            }
+            break;
+
         case GI_OOT_SWORD_KNIFE:
-            if (Config_Flag(CFG_OOT_PROGRESSIVE_SWORDS_GORON))
+        case GI_OOT_SWORD_BIGGORON:
+            if (Config_Flag(CFG_OOT_PROGRESSIVE_SWORDS))
+            {
+                itemName = "a " TEXT_C1 "Progressive Adult Sword";
+                ambiguous =
+                    !Config_Flag(CFG_SHARED_MASTER_SWORD) ||
+                    !Config_Flag(CFG_SHARED_GORON_SWORDS);
+            }
+            else if (Config_Flag(CFG_OOT_PROGRESSIVE_SWORDS_GORON))
             {
                 itemName = "a " TEXT_C1 "Progressive Goron Sword";
+                ambiguous = !Config_Flag(CFG_SHARED_GORON_SWORDS);
+            }
+            break;
+        case GI_MM_SWORD_MASTER:
+            if (Config_Flag(CFG_SHARED_MASTER_SWORD)
+                ? Config_Flag(CFG_OOT_PROGRESSIVE_SWORDS)
+                : (Config_Flag(CFG_MM_PROGRESSIVE_SWORDS) &&
+                   !Config_Flag(CFG_SHARED_GORON_SWORDS)))
+            {
+                itemName = "a " TEXT_C1 "Progressive Adult Sword";
+                ambiguous =
+                    !Config_Flag(CFG_SHARED_MASTER_SWORD) ||
+                    !Config_Flag(CFG_SHARED_GORON_SWORDS);
             }
             break;
         case GI_MM_SWORD_KNIFE:
-            if (Config_Flag(
-                    CFG_MM_PROGRESSIVE_SWORDS_GORON))
+        case GI_MM_SWORD_BIGGORON:
+            if (Config_Flag(CFG_SHARED_GORON_SWORDS)
+                ? Config_Flag(CFG_OOT_PROGRESSIVE_SWORDS)
+                : (Config_Flag(CFG_MM_PROGRESSIVE_SWORDS) &&
+                   !Config_Flag(CFG_SHARED_MASTER_SWORD)))
             {
-                itemName =
-                    "a " TEXT_C1 "Progressive Biggoron Sword";
+                itemName = "a " TEXT_C1 "Progressive Adult Sword";
+                ambiguous =
+                    !Config_Flag(CFG_SHARED_MASTER_SWORD) ||
+                    !Config_Flag(CFG_SHARED_GORON_SWORDS);
             }
-            break;
-        case GI_MM_SWORD_KOKIRI:
-            itemName = "a " TEXT_C1 "Progressive Sword";
-            ambiguous = !Config_Flag(CFG_SHARED_CHILD_SWORDS);
+            else if (Config_Flag(CFG_SHARED_GORON_SWORDS)
+                ? Config_Flag(CFG_OOT_PROGRESSIVE_SWORDS_GORON)
+                : (Config_Flag(CFG_MM_PROGRESSIVE_SWORDS_GORON) ||
+                   Config_Flag(CFG_MM_PROGRESSIVE_SWORDS)))
+            {
+                itemName = "a " TEXT_C1 "Progressive Goron Sword";
+                ambiguous = !Config_Flag(CFG_SHARED_GORON_SWORDS);
+            }
             break;
         case GI_OOT_PROGRESSIVE_SHIELD_DEKU:
         case GI_MM_PROGRESSIVE_SHIELD_DEKU:

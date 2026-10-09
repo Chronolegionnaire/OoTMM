@@ -85,9 +85,14 @@ static int checkItemToggle(PlayState* play)
         if (play->state.input[0].press.button & U_CBUTTONS)
         {
             u8 sword;
-            sword = OotChildSword_GetVariant() + 1;
-            if (sword > gSharedCustomSave.extraSwordsOot)
-                sword = 0;
+            sword = OotChildSword_GetVariant();
+            for (int i = 0; i < 3; ++i)
+            {
+                sword = (sword + 1) % 3;
+
+                if (OotChildSword_GetOwnedMask() & (1u << sword))
+                    break;
+            }
             gOotChildSwordVariant = sword;
             p->namedItem = PAUSE_ITEM_NONE;
             PlaySound(0x4809);
@@ -2292,38 +2297,73 @@ void KaleidoScope_DrawQuadEquipment(GraphicsContext* gfxCtx, u32 dlist, int w, i
             }
         }
 
-        if (gSharedCustomSave.extraSwordsOot > 0)
         {
-            next = sword + 1;
-            if (next > gSharedCustomSave.extraSwordsOot)
-                next = 0;
+            s32 progressive;
+            s32 hasSecondary = 0;
+            progressive = Config_Flag(CFG_SHARED_CHILD_SWORDS) ? Config_Flag(CFG_MM_PROGRESSIVE_CHILD_SWORDS) : Config_Flag(CFG_OOT_PROGRESSIVE_CHILD_SWORDS);
 
-            if (gSave.info.equips.equipment.swords == 1 && OotChildSword_GetEquippedVariant() == next)
-                secondaryEquipped = 1;
-
-            if (next == 0)
+            if (progressive)
             {
-                secondaryDlist = originalDlist;
+                if (gSharedCustomSave.extraSwordsOot > 0)
+                {
+                    next = sword + 1;
+
+                    if (next > gSharedCustomSave.extraSwordsOot)
+                        next = 0;
+
+                    hasSecondary = 1;
+                }
             }
             else
             {
-                if (!customKokiriSwordSmallTexture)
-                    customKokiriSwordSmallTexture = malloc(0x1000);
+                u8 owned = gSharedCustomSave.extraSwordsOot & 0x07;
 
-                if (customKokiriSwordSmallTexture)
+                if (popcount(owned) > 1)
                 {
-                    if (customKokiriSwordSmallId != next || customKokiriSwordSmallAge != gSave.age)
+                    next = sword;
+
+                    for (s32 i = 0; i < 3; ++i)
                     {
-                        customKokiriSwordSmallId = next;
-                        customKokiriSwordSmallAge = gSave.age;
-                        KaleidoScope_LoadChildSwordTexture(customKokiriSwordSmallTexture, next);
+                        next = (next + 1) % 3;
+
+                        if (owned & (1u << next))
+                            break;
                     }
 
-                    secondaryDlist = ((u32)customKokiriSwordSmallTexture) & 0xffffff;
+                    hasSecondary = 1;
                 }
             }
 
-            equipType = OOT_EQUIP_VARIANT_SWORD;
+            if (hasSecondary)
+            {
+                if (gSave.info.equips.equipment.swords == 1 &&
+                    OotChildSword_GetEquippedVariant() == next)
+                {
+                    secondaryEquipped = 1;
+                }
+
+                if (next == 0)
+                {
+                    secondaryDlist = originalDlist;
+                }
+                else
+                {
+                    if (!customKokiriSwordSmallTexture)
+                        customKokiriSwordSmallTexture = malloc(0x1000);
+                    if (customKokiriSwordSmallTexture)
+                    {
+                        if (customKokiriSwordSmallId != next ||
+                            customKokiriSwordSmallAge != gSave.age)
+                        {
+                            customKokiriSwordSmallId = next;
+                            customKokiriSwordSmallAge = gSave.age;
+                            KaleidoScope_LoadChildSwordTexture(customKokiriSwordSmallTexture, next);
+                        }
+                        secondaryDlist = ((u32)customKokiriSwordSmallTexture) & 0xffffff;
+                    }
+                }
+                equipType = OOT_EQUIP_VARIANT_SWORD;
+            }
         }
     }
 

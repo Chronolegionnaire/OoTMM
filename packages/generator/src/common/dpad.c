@@ -64,10 +64,6 @@ static int canUseDpadItem(PlayState* play, s16 itemId, int flags)
     if (itemId == ITEM_NONE)
         return 0;
 
-#if defined(GAME_MM)
-    int KaleidoScope_CheckMmItemAgeReq(u8 item);
-#endif
-
     /* Boots */
 #if defined(GAME_OOT)
     if (itemId == ITEM_OOT_BOOTS_IRON || itemId == ITEM_OOT_BOOTS_HOVER)

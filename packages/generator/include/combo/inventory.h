@@ -104,6 +104,7 @@ extern u8 gOotChildShieldEquippedVariant;
 u8 OotChildShield_GetVariant(void);
 u8 OotChildShield_GetEquippedVariant(void);
 u8 OotChildShield_GetNextOwned(u8 current);
+u8 OotChildSword_GetOwnedMask(void);
 #endif
 
 #endif

@@ -170,14 +170,29 @@ static s16 progressiveSwordGoronOoT(void)
 
 static s16 progressiveSwordOot(void)
 {
-    if (!(gOotSave.info.inventory.equipment.swords & EQ_OOT_SWORD_KOKIRI))
-        return GI_OOT_SWORD_KOKIRI;
-    if (!(gOotSave.info.inventory.equipment.swords & EQ_OOT_SWORD_MASTER))
+    if (!(gOotSave.info.inventory.equipment.swords &
+          EQ_OOT_SWORD_MASTER))
+    {
         return GI_OOT_SWORD_MASTER;
+    }
     return progressiveSwordGoronOoT();
 }
 
-static s16 progressiveSwordMm(void)
+static int progressiveChildSwordsOotEnabled(void)
+{
+    if (Config_Flag(CFG_SHARED_CHILD_SWORDS))
+        return Config_Flag(CFG_MM_PROGRESSIVE_CHILD_SWORDS);
+    return Config_Flag(CFG_OOT_PROGRESSIVE_CHILD_SWORDS);
+}
+
+static int progressiveGfsOotEnabled(void)
+{
+    if (Config_Flag(CFG_SHARED_GREAT_FAIRY_SWORD))
+        return Config_Flag(CFG_MM_PROGRESSIVE_GFS);
+    return Config_Flag(CFG_OOT_PROGRESSIVE_GFS);
+}
+
+static s16 progressiveChildSwordMm(void)
 {
     switch (gSharedCustomSave.mm.swords.sword)
     {
@@ -200,7 +215,14 @@ static s16 progressiveSwordGoronMm(void)
     return GI_MM_SWORD_BIGGORON;
 }
 
-/* We use an extra field to know which shields we got from shops */
+static s16 progressiveSwordMm(void)
+{
+    if (!gSharedCustomSave.mm.swords.masterSword)
+        return GI_MM_SWORD_MASTER;
+
+    return progressiveSwordGoronMm();
+}
+
 static s16 progressiveShieldOot(void)
 {
     if (!(gOotExtraItems.shield & EQ_OOT_SHIELD_DEKU))
@@ -456,12 +478,14 @@ static s16 progressiveExtraSwordOot(void)
         return GI_OOT_SWORD_KOKIRI;
     if (gSharedCustomSave.extraSwordsOot == 0)
         return GI_OOT_SWORD_RAZOR;
-    return GI_OOT_SWORD_GILDED;
+    if (gSharedCustomSave.extraSwordsOot == 1)
+        return GI_OOT_SWORD_GILDED;
+    return progressiveGfsOotEnabled() ? GI_OOT_GREAT_FAIRY_SWORD : GI_OOT_SWORD_GILDED;
 }
 
 s16 Item_Progressive(s16 gi, int ovflags)
 {
-    if (Config_Flag(CFG_OOT_EXTRA_CHILD_SWORDS))
+    if (Config_Flag(CFG_OOT_EXTRA_CHILD_SWORDS) && progressiveChildSwordsOotEnabled())
     {
         switch (gi)
         {
@@ -516,13 +540,16 @@ s16 Item_Progressive(s16 gi, int ovflags)
         break;
     /* Equipment */
     case GI_OOT_SWORD_KOKIRI:
+        break;
     case GI_OOT_SWORD_MASTER:
         if (Config_Flag(CFG_OOT_PROGRESSIVE_SWORDS))
             gi = progressiveSwordOot();
         break;
-    case GI_OOT_SWORD_BIGGORON:
     case GI_OOT_SWORD_KNIFE:
-        if (Config_Flag(CFG_OOT_PROGRESSIVE_SWORDS) || Config_Flag(CFG_OOT_PROGRESSIVE_SWORDS_GORON))
+    case GI_OOT_SWORD_BIGGORON:
+        if (Config_Flag(CFG_OOT_PROGRESSIVE_SWORDS))
+            gi = progressiveSwordOot();
+        else if (Config_Flag(CFG_OOT_PROGRESSIVE_SWORDS_GORON))
             gi = progressiveSwordGoronOoT();
         break;
     case GI_OOT_PROGRESSIVE_SHIELD_DEKU:
@@ -592,13 +619,25 @@ s16 Item_Progressive(s16 gi, int ovflags)
         if (Config_Flag(CFG_MM_OCARINA_FAIRY))
             gi = progressiveOcarinaMm();
         break;
+    case GI_OOT_GREAT_FAIRY_SWORD:
+        if (Config_Flag(CFG_OOT_EXTRA_CHILD_SWORDS) && progressiveChildSwordsOotEnabled() && progressiveGfsOotEnabled())
+            gi = progressiveExtraSwordOot();
+        break;
     case GI_MM_SWORD_KOKIRI:
+        if (Config_Flag(CFG_MM_PROGRESSIVE_CHILD_SWORDS))
+            gi = progressiveChildSwordMm();
+        break;
     case GI_MM_SWORD_RAZOR:
     case GI_MM_SWORD_GILDED:
-        gi = progressiveSwordMm();
+        if (Config_Flag(CFG_MM_PROGRESSIVE_CHILD_SWORDS))
+            gi = progressiveChildSwordMm();
         break;
     case GI_MM_GREAT_FAIRY_SWORD:
-        if (Config_Flag(CFG_MM_PROGRESSIVE_GFS))
+        if (Config_Flag(CFG_MM_PROGRESSIVE_GFS) && Config_Flag(CFG_MM_PROGRESSIVE_CHILD_SWORDS))
+            gi = progressiveChildSwordMm();
+        break;
+    case GI_MM_SWORD_MASTER:
+        if (!Config_Flag(CFG_SHARED_MASTER_SWORD) && !Config_Flag(CFG_SHARED_GORON_SWORDS) && Config_Flag(CFG_MM_PROGRESSIVE_SWORDS))
             gi = progressiveSwordMm();
         break;
     case GI_MM_SWORD_KNIFE:
@@ -608,6 +647,8 @@ s16 Item_Progressive(s16 gi, int ovflags)
             if (Config_Flag(CFG_OOT_PROGRESSIVE_SWORDS) || Config_Flag(CFG_OOT_PROGRESSIVE_SWORDS_GORON))
                 gi = progressiveSwordGoronMm();
         }
+        else if (Config_Flag(CFG_MM_PROGRESSIVE_SWORDS) && !Config_Flag(CFG_SHARED_MASTER_SWORD))
+            gi = progressiveSwordMm();
         else if (Config_Flag(CFG_MM_PROGRESSIVE_SWORDS_GORON))
             gi = progressiveSwordGoronMm();
         break;

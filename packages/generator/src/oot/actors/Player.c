@@ -310,8 +310,18 @@ u8 gOotChildShieldEquippedVariant = 0xff;
 
 u8 OotChildSword_GetVariant(void)
 {
-    if (gOotChildSwordVariant > gSharedCustomSave.extraSwordsOot)
-        gOotChildSwordVariant = gSharedCustomSave.extraSwordsOot;
+    u8 owned = OotChildSword_GetOwnedMask();
+
+    if (gOotChildSwordVariant >= 3 ||
+        !(owned & (1u << gOotChildSwordVariant)))
+    {
+        if (owned & 0x04)
+            gOotChildSwordVariant = 2;
+        else if (owned & 0x02)
+            gOotChildSwordVariant = 1;
+        else
+            gOotChildSwordVariant = 0;
+    }
 
     return gOotChildSwordVariant;
 }

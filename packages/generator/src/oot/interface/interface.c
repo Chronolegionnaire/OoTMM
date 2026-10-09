@@ -138,11 +138,9 @@ static void LoadCustomItemIconSlot(PlayState* play, int slot, int isInit)
             case 1:
                 LoadMmItemIcon(dst, ITEM_MM_SWORD_RAZOR);
                 return;
-
             case 2:
                 LoadMmItemIcon(dst, ITEM_MM_SWORD_GILDED);
                 return;
-
             case 0:
             default:
                 break;

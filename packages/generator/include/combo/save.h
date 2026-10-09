@@ -62,7 +62,7 @@ typedef struct ALIGNED(16)
     RespawnData     respawn[1];
     u8              foundMasterSword:1;
     u8              storedSirloin:1;
-    u8              extraSwordsOot:2;
+    u8              extraSwordsOot:3;
     u8              ootChildShields:2;
     u8              bombchuBagOot:2;
     u8              bombchuBagMm:2;

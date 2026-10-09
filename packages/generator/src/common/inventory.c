@@ -7,8 +7,18 @@ static MmShieldId sMmShieldSelected = MM_SHIELD_NONE;
 static MmShieldId sMmShieldLost = MM_SHIELD_NONE;
 s32 MmSword_IsOwned(MmSwordId sword)
 {
-    switch (sword)
+    if (!Config_Flag(CFG_MM_PROGRESSIVE_CHILD_SWORDS))
     {
+        if (sword >= MM_SWORD_KOKIRI && sword <= MM_SWORD_GILDED)
+        {
+            return !!(gSharedCustomSave.mm.swords.sword &
+                      (1u << (sword - MM_SWORD_KOKIRI)));
+        }
+    }
+    else
+    {
+        switch (sword)
+        {
         case MM_SWORD_KOKIRI:
             return gSharedCustomSave.mm.swords.sword >= 1;
 
@@ -18,17 +28,24 @@ s32 MmSword_IsOwned(MmSwordId sword)
         case MM_SWORD_GILDED:
             return gSharedCustomSave.mm.swords.sword >= 3;
 
-        case MM_SWORD_MASTER:
-            return gSharedCustomSave.mm.swords.masterSword;
-
-        case MM_SWORD_GIANTS_KNIFE:
-            return gSharedCustomSave.mm.swords.giantSword == 1;
-
-        case MM_SWORD_BIGGORON:
-            return gSharedCustomSave.mm.swords.giantSword >= 2;
-
         default:
-            return 0;
+            break;
+        }
+    }
+
+    switch (sword)
+    {
+    case MM_SWORD_MASTER:
+        return gSharedCustomSave.mm.swords.masterSword;
+
+    case MM_SWORD_GIANTS_KNIFE:
+        return gSharedCustomSave.mm.swords.giantSword == 1;
+
+    case MM_SWORD_BIGGORON:
+        return gSharedCustomSave.mm.swords.giantSword >= 2;
+
+    default:
+        return 0;
     }
 }
 
@@ -38,23 +55,12 @@ void MmSword_EnsureState(void)
     MmSwordId equipped;
     s32 age;
 
-    switch (gSharedCustomSave.mm.swords.sword)
-    {
-        case 3:
-            first = MM_SWORD_GILDED;
-            break;
-
-        case 2:
-            first = MM_SWORD_RAZOR;
-            break;
-
-        case 1:
-            first = MM_SWORD_KOKIRI;
-            break;
-
-        default:
-            break;
-    }
+    if (MmSword_IsOwned(MM_SWORD_GILDED))
+        first = MM_SWORD_GILDED;
+    else if (MmSword_IsOwned(MM_SWORD_RAZOR))
+        first = MM_SWORD_RAZOR;
+    else if (MmSword_IsOwned(MM_SWORD_KOKIRI))
+        first = MM_SWORD_KOKIRI;
 
     if (first == MM_SWORD_NONE &&
         gSharedCustomSave.mm.swords.masterSword)

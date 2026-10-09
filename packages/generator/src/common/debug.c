@@ -476,13 +476,9 @@ static void cheatAllItems(PlayState* play)
     gSave.info.weekEventReg[72] = 0x7f;
     gSharedCustomSave.mm.swords.sword = 3;
     gSharedCustomSave.mm.swords.masterSword = 1;
-    gSharedCustomSave.mm.swords.giantSword = 1;
+    gSharedCustomSave.mm.swords.giantSword = 2;
     MmSword_SetGiantsKnifeHealth(8);
-    gSharedCustomSave.mm.shieldsOwned =
-        (1 << (MM_SHIELD_DEKU - 1)) |
-        (1 << (MM_SHIELD_HERO - 1)) |
-        (1 << (MM_SHIELD_HYLIAN - 1)) |
-        (1 << (MM_SHIELD_MIRROR - 1));
+    gSharedCustomSave.mm.shieldsOwned = (1 << (MM_SHIELD_DEKU - 1)) | (1 << (MM_SHIELD_HERO - 1)) | (1 << (MM_SHIELD_HYLIAN - 1)) | (1 << (MM_SHIELD_MIRROR - 1));
     gSharedCustomSave.mmProgressiveShields = 3;
     gSave.info.inventory.upgrades.scale = 3;
     gSave.info.inventory.upgrades.quiver = 3;
@@ -621,9 +617,7 @@ static void cheatAllItems(PlayState* play)
     gSave.info.playerData.swordHealth = 8;
     gSave.info.isBiggoronSword = 1;
     gSharedCustomSave.extraSwordsOot = 2;
-    gSharedCustomSave.ootChildShields =
-    (1u << OOT_CHILD_SHIELD_DEKU) |
-    (1u << OOT_CHILD_SHIELD_HERO);
+    gSharedCustomSave.ootChildShields = (1u << OOT_CHILD_SHIELD_DEKU) | (1u << OOT_CHILD_SHIELD_HERO);
     gSave.info.inventory.goldTokens = 100;
     gSharedCustomSave.foundMasterSword = 1;
 

@@ -592,7 +592,7 @@ typedef union
 {
     struct
     {
-        u8 sword:2;
+        u8 sword:3;
         u8 giantSword:2;
         u8 masterSword:1;
         u8 unused:3;

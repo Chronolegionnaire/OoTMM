@@ -111,7 +111,7 @@ export function Select<T>({ id, options, value, placeholder, clearable, creatabl
           {filteredOptions.length > 0 && filteredOptions.map((opt, i) =>
               <div
                   key={i}
-                  className={cn(
+                  className={clsx(
                       'p-2',
                       opt.disabled
                           ? 'text-gray-400 dark:text-gray-500 cursor-not-allowed'

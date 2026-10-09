@@ -1818,32 +1818,62 @@ export const SETTINGS = [{
   cond: hasOoT,
 }, {
   key: 'progressiveSwordsOot',
-  name: 'OoT Swords',
+  name: 'OoT Adult Swords',
   category: 'items.progressive',
   type: 'enum',
-  description: 'Alters the behavior of the OoT Swords',
+  description: 'Alters the pickup behavior of the adult OoT Swords. If OoT swords are shared, setting setting will be used instead of the MM sword progression.',
   values: [
     { value: 'separate', name: 'Separate', description: 'They can be found independently from each other' },
-    { value: 'goron', name: 'Progressive Knife and Biggoron', description: 'Kokiri Sword and Master Sword are independent. However, Giant\'s Knife and Biggoron Sword are progressive.' },
-    { value: 'progressive', name: 'Progressive', description: 'Each Progressive Sword will grant you the next one: Kokiri Sword -> Master Sword -> Giant\'s Knife -> Biggoron Sword' },
+    { value: 'goron', name: 'Progressive Knife and Biggoron', description: 'Master Sword is independent. However, Giant\'s Knife and Biggoron Sword are progressive.' },
+    { value: 'progressive', name: 'Progressive', description: 'Each Progressive Sword will grant you the next one: Master Sword -> Giant\'s Knife -> Biggoron Sword' },
   ],
   default: 'goron',
   cond: hasOoT,
 }, {
-  key: 'progressiveGoronSwordsMm',
-  name: 'MM Goron Swords',
+  key: 'progressiveSwordsMm',
+  name: 'MM Adult Swords',
   category: 'items.progressive',
   type: 'enum',
-  description: 'Makes the Goron Swords in MM two progressive items instead of two separate items. If Shared Goron Swords is on, this setting is ignored and the OoT progression setting is used instead.',
+  description: 'Alters the pickup behavior of the adult OoT Swords in MM. If OoT swords are shared, the OoT progression setting will be used instead.',
   values: [
     { value: 'separate', name: 'Separate', description: 'They can be found independently from each other' },
-    { value: 'progressive', name: 'Progressive', description: 'Each Progressive Goron Sword will grant you the nextone. Giant\'s Knife -> Biggoron Sword' },
+    { value: 'goron', name: 'Progressive Knife and Biggoron', description: 'Master Sword is independent. However, Giant\'s Knife and Biggoron Sword are progressive.' },
+    { value: 'progressive', name: 'Progressive', description: 'Each Progressive Sword will grant you the next one: Master Sword -> Giant\'s Knife -> Biggoron Sword' },
+  ],
+  default: 'goron',
+  cond: (s: any) =>
+      hasMM(s) &&
+      s.masterSwordMm &&
+      s.goronSwordsMm &&
+      !s.sharedMasterSword &&
+      !s.sharedGoronSwords,
+}, {
+  key: 'progressiveChildSwordsMm',
+  name: 'MM Child Swords',
+  category: 'items.progressive',
+  type: 'enum',
+  description: 'Makes the Kokiri, Razor, and Gilded Swords in MM, three progressive items instead of three separate items. If child swords are shared, this setting will be used in placed of the OoT progression setting.',
+  values: [
+    { value: 'separate', name: 'Separate', description: 'They can be found independently from each other' },
+    { value: 'progressive', name: 'Progressive', description: 'Each Progressive Child Sword will grant you the next one. Kokiri Sword -> Razor Sword -> Gilded Sword' },
+  ],
+  default: 'progressive',
+  cond: hasMM,
+}, {
+  key: 'progressiveChildSwordsOot',
+  name: 'OoT Child Swords',
+  category: 'items.progressive',
+  type: 'enum',
+  description: 'Makes the Kokiri, Razor, and Gilded Swords in OoT, three progressive items instead of three separate items. If Child Swords are shared, the MM progression setting will be used instead.',
+  values: [
+    { value: 'separate', name: 'Separate', description: 'They can be found independently from each other' },
+    { value: 'progressive', name: 'Progressive', description: 'Each Progressive Child Sword will grant you the next one. Kokiri Sword -> Razor Sword -> Gilded Sword' },
   ],
   default: 'progressive',
   cond: (s: any) =>
-      hasMM(s) &&
-      s.goronSwordsMm &&
-      !s.sharedGoronSwords,
+      hasOoT(s) &&
+      s.extraChildSwordsOot &&
+      !s.sharedChildSwords,
 }, {
   key: 'progressiveShieldsMm',
   name: 'MM Shields',
@@ -1857,17 +1887,35 @@ export const SETTINGS = [{
   default: 'separate',
   cond: hasMM,
 }, {
-  key: 'progressiveGFS',
+  key: 'progressiveGFSMm',
   name: 'MM Great Fairy Sword',
   category: 'items.progressive',
   type: 'enum',
-  description: 'Controls whether the Great Fairy Sword is included in child sword progression. If child swords and great fairy sword are both added in OoT, this setting also adds Great Fairy Sword to OoT child sword progression.',
+  description: 'Controls whether the Great Fairy Sword in MM is included in child sword progression. If child swords and great fairy sword are shared, this setting will be used in place of the OoT progression setting.',
   values: [
     { value: 'separate', name: 'Separate' },
     { value: 'progressive', name: 'Progressive' },
   ],
   default: 'separate',
-  cond: hasMM,
+  cond: (s: any) => hasMM(s) && s.progressiveChildSwordsMm === 'progressive',
+}, {
+  key: 'progressiveGFSOot',
+  name: 'OoT Great Fairy Sword',
+  category: 'items.progressive',
+  type: 'enum',
+  description: 'Controls whether the Great Fairy Sword in OoT is included in child sword progression. If child swords and great fairy sword are shared, the MM progression setting is used instead.',
+  values: [
+    { value: 'separate', name: 'Separate' },
+    { value: 'progressive', name: 'Progressive' },
+  ],
+  default: 'separate',
+  cond: (s: any) =>
+      hasOoT(s) &&
+      s.progressiveChildSwordsOot === 'progressive' &&
+      !s.sharedChildSwords &&
+      !s.sharedGFS &&
+      s.gfsOot &&
+      s.extraChildSwordsOot,
 }, {
   key: 'progressiveGoronLullabyMm',
   name: 'MM Goron Lullaby',
@@ -2274,7 +2322,7 @@ export const SETTINGS = [{
   type: 'boolean',
   description: "Add the Razor and Gilded Swords in OoT, as upgrades to the Kokiri Sword.",
   default: false,
-  cond: (x: any) => x.progressiveSwordsOot !== 'progressive' && hasOoT(x),
+  cond: (x: any) => hasOoT(x),
 }, {
   key: 'heroShieldOot',
   name: "Hero's Shield (OoT)",

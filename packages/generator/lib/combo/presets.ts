@@ -862,7 +862,7 @@ const PRESET_BEGINNER = makeSettings({
     SHARED_SHIELD_HYLIAN: 1,
     MM_OCARINA: 1,
     OOT_OCARINA: 1,
-    MM_SWORD: 2,
+    MM_SWORD_CHILD: 2,
     SHARED_SONG_SOARING: 1
   },
   junkLocations: [
